@@ -469,7 +469,7 @@ const Empty = ({ el, view, hasHub, hasHarvest }: { el: E; view: PaneView; hasHub
   const { Box, Text } = el
   const ways: [string, string][] = [
     ['//', 'jot a note from the prompt, even mid-turn'],
-    [CHORD.toggle.keys, 'open this pane, keeping your draft'],
+    [CHORD.new.keys, 'new note'],
     ...(hasHub ? ([[`${GLYPH.phone} phone`, 'notes from your phone land here']] as [string, string][]) : []),
     ...(hasHarvest ? ([[GLYPH.claude, 'Claude can leave notes for you']] as [string, string][]) : []),
   ]
@@ -480,7 +480,7 @@ const Empty = ({ el, view, hasHub, hasHarvest }: { el: E; view: PaneView; hasHub
     <Box flexDirection="column" paddingY={view.isInline ? 0 : 1} paddingX={1}>
       <Box>
         <Box width={indent} />
-        <Text bold>{TEXT.emptyTitle(view.ctx.current.name)}</Text>
+        <Text bold>{TEXT.emptyTitle(view.pane.scope === 'project' ? view.ctx.current.name : 'any project')}</Text>
       </Box>
       {!view.isInline && <Box height={1} />}
       <Box>

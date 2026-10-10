@@ -76,7 +76,7 @@ export const TEXT = {
   bundleIntro: 'Please look at these notes from my ostrakon:',
   bundleNote: 'The picked notes are marked sent once the prompt goes in. Nothing is removed before.',
   editHint: 'draft kept if the pane closes',
-  emptyTitle: (project: string) => `Nothing pending in ${project}.`,
+  emptyTitle: (where: string) => `Nothing pending in ${where}.`,
   unfocused: [
     ['ctrl+x tab', 'focus'],
     ['ctrl+x s', 'close'],

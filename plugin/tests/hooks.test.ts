@@ -285,3 +285,15 @@ test('a focus move waiting on the view is already the ring\'s last: the action l
   await landing
   expect(world.focused.slice(-2)).toEqual(['slot-0', 'slot-0'])
 })
+
+test('the empty pane names its scope and offers ctrl+n for a new note', async ($, on) => {
+  await startSession($, on, new MemDir())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  expect(await ui.find({ type: 'Text', text: /^Nothing pending in cc\.$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^new note$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /open this pane/ })).toBeUndefined()
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  expect(await ui.find({ type: 'Text', text: /^Nothing pending in any project\.$/ })).toBeDefined()
+  await ui.unmount()
+})

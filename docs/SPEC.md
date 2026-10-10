@@ -210,7 +210,7 @@ One blank row, then one line: at most four key/label pairs for the focus (key bo
 ### 4.7 Other states
 - **Bundle:** `⇢ bundle  3 notes into one prompt`, then the exact prompt in a quote box: `Please look at these notes from my ostrakon:`, a blank line, one `- ` line per note in pick order (other projects prefixed `[label] `). Focus goes to a `[ send ]` button; ⏎ sends and `t` fills the prompt instead. Picked notes are marked sent only once the prompt goes in.
 - **Edit:** the row becomes a `round` box with a one-line Input prefilled with the text. Newlines show as `↵` and turn back into newlines on save (a note that already contains `↵` can't round-trip, so `e` points you to the file). `[ cancel ]` and `[ save ]` sit below; the draft is kept if the pane closes.
-- **Empty inbox:** `Nothing pending in cc.` and the ways in (`//`, `ctrl+x s`, and the phone and harvest lines when those are configured) in a fixed key column. Docked, a small dim shard sits beside them.
+- **Empty inbox:** `Nothing pending in cc.` (scope all: `Nothing pending in any project.`) and the ways in (`//`, `ctrl+n` new note, and the phone and harvest lines when those are configured) in a fixed key column. Docked, a small dim shard sits beside them.
 - **Toasts** are short and calm (`Archived · u undo`, `Copied`, `note 2 in your prompt · ⏎ to send`). Never `$.ui.status`.
 
 ### 4.8 Paging and the inline pane
