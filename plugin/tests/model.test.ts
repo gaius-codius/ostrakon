@@ -132,7 +132,7 @@ describe('model', () => {
       { kind: 'line', line: { kind: 'note', key: open.id, note: open, hits: [] }, view: 'search', picks: 0 },
       { kind: 'line', line: { kind: 'note', key: open.id, note: open, group: CC.key, hits: [] }, view: 'list', picks: 2 },
       { kind: 'line', line: { kind: 'note', key: 'h', note: { ...open, status: 'archived' }, hits: [] }, view: 'search', picks: 0 },
-      { kind: 'line', line: { kind: 'group', key: 'group:x', group: 'x', project: CC, isFolded: false }, view: 'list', picks: 0 },
+      { kind: 'line', line: { kind: 'group', key: 'group:x', group: 'x', project: CC, isFolded: false, count: 0 }, view: 'list', picks: 0 },
       { kind: 'capture' },
       { kind: 'edit' },
       { kind: 'bundle' },

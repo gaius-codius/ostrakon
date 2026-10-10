@@ -115,9 +115,9 @@ What the mods interface does that shaped the design. Marked *unverified* where u
 
 ### 4.1 Visual language
 - Colour comes only from theme keys, never hex, so both themes work.
-- The accent (`claude`) marks the current project, row numbers, picks, `◆` and search hits. The selected row has a `subtle` background and a focus block in column 0. Metadata (age, preview meta, footer labels, rules) is dim. Other projects get a deterministic colour from a hash of their key; `unfiled` is grey.
-- Two rules only: a heavy `━` under the search row and a light `─` above the preview and the footer.
-- Glyphs: `❯` search, `✎` capture, `⇢` bundle, `◆` from Claude, `▪` from the phone, `●`/`○` picked or not, `↗` sent, `·` archived, `▾`/`▸` group open or folded, `↑`/`↓` more rows, `⚠` storage problem, `✓` saved, `⏎` Enter.
+- The accent (`claude`) marks the current project, row numbers, picks, `◆` and search hits (bold, no underline). The selected row has a `subtle` background and a focus block in column 0. Metadata (age, preview meta, footer labels) is dim. Other projects get a deterministic colour from a hash of their key, drawn on a `●` before their dim name, never on the name; `unfiled` is a grey `○`. `warning` and `error` are kept for real problems.
+- No rules: one blank row separates the search row, the rows, the preview and the footer. Docked, capture is the one framed element (a `round` accent box).
+- Glyphs: `❯` search, `✎` capture, `⇢` bundle, `◆` from Claude, `▪` from the phone, `●`/`○` picked or not (and project dots), `↗` sent, `·` archived, `▸` group folded, `▎` quoted text, `↑`/`↓` more rows, `⚠` storage problem, `✓` saved, `⏎` Enter.
 - Draw to `bodyColumns - 1`: a tree exactly `bodyColumns` wide overflowed by a column.
 - Project labels are the repo basename; two projects with one basename get parent segments until they differ.
 
@@ -136,15 +136,15 @@ you · ~/Work/cc · main · 12m ago                                      ← met
 ──────────────────────────────────────────────────────────────────────
 ctrl+l list view  ctrl+s scope  ctrl+n new  ctrl+q close             ← footer
 ```
-- **Rows** are one line: selection bar, the row's number in the window (1–9, then `·`), a marker (`◆`, `▪`, `●`/`○`, `↗`), the text with search hits highlighted, then the project label and age (`now`, `12m`, `3h`, `2d`, `5w`, `1y`).
-- **Preview** (docked only): the selected note's text, capped at 6 lines, then a meta line `who · path · branch · age ago`.
+- **Rows** are one line: selection bar, the row's number in the window (1–9, then `·`), a marker (`◆`, `▪`, `●`/`○`, `↗`), the text with search hits highlighted, then the project (`● name`) and age (`now`, `12m`, `3h`, `2d`, `5w`, `1y`).
+- **Preview** (docked only): the selected note's text, capped at 6 lines, then a meta line `who · path · branch · age ago`, all behind a dim `▎` bar.
 - **Ordering:** search results by rank, everything else newest `updated` first, ties by id. Ranking is a fuzzy subsequence score with bonuses for word starts, the current project and recency. Query tokens: `@infra`, `is:sent`, `is:archived`, `by:claude`.
 - **Scope** is explicit state, shown at the right of the search row. The pane opens on this project; the first typed character switches to all, and clearing the query switches back, unless the person chose a scope with `ctrl+s`. Choosing all is remembered across sessions (`$.store`).
 - **No match:** `No notes match “kubernetes” in cc.` and, dim, `⏎ saves “kubernetes” as a new note in cc`. Enter saves the query as a note.
 
 ### 4.3 List view
 Reached with `l` on a row or `ctrl+l`; it keeps the query and scope.
-- **Groups** have a header (`▾`/`▸` and the project label, bold, in its colour), no count and no rule. Order: `proposed` first when harvest has any, then the current project, then others by latest activity, then `unfiled`. Within a group: open notes newest first, then history when shown.
+- **Groups** have a header at the left edge: the project's dot and its label, dim, with the group's open count dim on the right and `▸` when folded. `proposed` (with `◆`) and the current project are bold accent. The notes under a header are indented two columns, so note text is the brightest thing in the list. Order: `proposed` first when harvest has any, then the current project, then others by latest activity, then `unfiled`. Within a group: open notes newest first, then history when shown.
 - **Headers are focusable;** `z` folds or unfolds a group.
 - **History:** `h` adds `sent` and `archived` notes (dimmed); `u` on one restores it.
 - **Picking:** `v` picks or unpicks an open or proposed note. Once one is picked every row shows `●`/`○` and the footer leads with `3 picked`. Picks live in `$.state` until sent, cleared (`x`) or the session ends; a picked note that stops being open drops out with a toast. Bundles keep pick order.
@@ -202,14 +202,14 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 - `ctrl+n` → `pane:next`
 
 ### 4.6 Contextual footer
-One blank row, the light rule, then key/label pairs (key bold, label dim, two spaces between). A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning). The legend `◆ from Claude` trails while a `◆` row is drawn. **The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, search row, list row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`.
+One blank row, then one line: at most four key/label pairs for the focus (key bold, label dim, two spaces between) and `i keys` on the right; pairs drop from the right until the line fits. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning). The legend `◆ from Claude` trails while a `◆` row is drawn. **The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, search row, list row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`.
 
 **Storage problems** also draw a focusable problem row above the first result, in `error` (`⚠ 2 unreadable files · ⏎ details`); ⏎ opens a card listing each file and reason.
 
 ### 4.7 Other states
 - **Bundle:** `⇢ bundle  3 notes into one prompt`, then the exact prompt in a quote box: `Please look at these notes from my ostrakon:`, a blank line, one `- ` line per note in pick order (other projects prefixed `[label] `). Focus goes to a `[ send ]` button; ⏎ sends and `t` fills the prompt instead. Picked notes are marked sent only once the prompt goes in.
 - **Edit:** the row becomes a `round` box with a one-line Input prefilled with the text. Newlines show as `↵` and turn back into newlines on save (a note that already contains `↵` can't round-trip, so `e` points you to the file). `[ cancel ]` and `[ save ]` sit below; the draft is kept if the pane closes.
-- **Empty inbox:** `Nothing pending in cc.` and a short key legend (`//`, `ctrl+x s`, and the phone and harvest lines when those are configured).
+- **Empty inbox:** `Nothing pending in cc.` and the ways in (`//`, `ctrl+x s`, and the phone and harvest lines when those are configured) in a fixed key column. Docked, a small dim shard sits beside them.
 - **Toasts** are short and calm (`Archived · u undo`, `Copied`, `note 2 in your prompt · ⏎ to send`). Never `$.ui.status`.
 
 ### 4.8 Paging and the inline pane

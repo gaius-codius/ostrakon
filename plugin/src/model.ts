@@ -197,7 +197,7 @@ export const scoreOf = (ctx: Ctx, note: Note, query: string) => {
 
 export type Line =
   | { kind: 'problem'; key: 'problem'; count: number }
-  | { kind: 'group'; key: string; group: string; project: NoteProject | null; isFolded: boolean }
+  | { kind: 'group'; key: string; group: string; project: NoteProject | null; isFolded: boolean; count: number }
   | { kind: 'note'; key: string; note: Note; group?: string; hits: number[] }
 
 export const groupKeyOf = (note: Note) => (note.status === 'proposed' ? PROPOSED : note.project?.key ?? UNFILED)
@@ -250,11 +250,11 @@ export const linesOf = (ctx: Ctx, pane: PaneState, notes: Note[], problems: Note
     const items = groups.get(group) ?? []
     const isFolded = pane.folded.includes(group)
     const project = group === PROPOSED || group === UNFILED ? null : items[0]?.note.project ?? null
-    lines.push({ kind: 'group', key: `group:${group}`, group, project, isFolded })
-    if (isFolded) continue
     // Open (and proposed) first, then history; each newest first. With a query, by rank.
     const live = items.filter(item => !isHistory(item.note))
     const past = items.filter(item => isHistory(item.note))
+    lines.push({ kind: 'group', key: `group:${group}`, group, project, isFolded, count: live.length })
+    if (isFolded) continue
     for (const { note, hits } of [...live, ...past]) lines.push({ kind: 'note', key: note.id, note, group, hits })
   }
   return lines

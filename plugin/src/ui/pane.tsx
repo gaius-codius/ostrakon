@@ -3,7 +3,7 @@ import type { Elements } from 'claude-code'
 import type { Note, NoteProblem, NoteProject, PaneState } from '../../types'
 import type { Action, Ctx, Focus, Key, Line, Page } from '../model'
 import { ageOf, cells, cut, footerPairs, fitOneLine, fromField, groupLabel, labelOf, oneLine, toField, uniqueKeys } from '../model'
-import { CHORD, COLOUR, GLYPH, RULE, TEXT, WIDTH, colourOf } from './look'
+import { CHORD, COLOUR, GLYPH, SHARD, TEXT, WIDTH, colourOf } from './look'
 
 // The launcher pane's drawing (SPEC §4). Pure: it gets the elements, a computed view and the
 // handlers, and returns the tree. Everything that touches the engine lives in hooks/register.tsx.
@@ -81,13 +81,31 @@ const Hits = ({ el, text, hits, isDim }: { el: E; text: string; hits: number[]; 
     <Text dimColor={isDim}>
       {runs.map(([part, isHit]) =>
         isHit ? (
-          <Text bold color={COLOUR.accent} underline>
+          <Text bold color={COLOUR.accent}>
             {part}
           </Text>
         ) : (
           part
         ),
       )}
+    </Text>
+  )
+}
+
+// A note's project on the right of a row: the colour goes on the dot, the name stays dim, and only
+// the current project's name takes the accent.
+const ProjectCell = ({ el, view, note, isHistory }: { el: E; view: PaneView; note: Note; isHistory: boolean }) => {
+  const { Text } = el
+  const key = note.project?.key ?? null
+  const isCurrent = key === view.ctx.current.key && !isHistory
+  const name = cut(labelOf(view.ctx, note.project), WIDTH.project)
+  return (
+    <Text>
+      {' '.repeat(Math.max(0, WIDTH.project - cells(name)))}
+      <Text color={isHistory ? COLOUR.history : colourOf(key, view.ctx.current.key)}>{key === null ? GLYPH.unfiledDot : GLYPH.dot} </Text>
+      <Text color={isCurrent ? COLOUR.accent : undefined} dimColor={!isCurrent}>
+        {name}
+      </Text>
     </Text>
   )
 }
@@ -101,13 +119,15 @@ const NoteRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; li
   const isHistory = note.status === 'sent' || note.status === 'archived'
   const [marker, markerColour] = markerOf(note, pane)
   const isGrouped = line.group !== undefined
-  const label = labelOf(ctx, note.project)
-  const right = isGrouped ? 1 + WIDTH.age : 1 + WIDTH.project + 1 + WIDTH.age
-  const textWidth = view.width - WIDTH.lead - right
+  // Grouped, a note sits indented under its heading; ungrouped, its project shows on the right.
+  const indent = isGrouped ? 2 : 0
+  const right = isGrouped ? 1 + WIDTH.age : 1 + 2 + WIDTH.project + 1 + WIDTH.age
+  const textWidth = view.width - WIDTH.lead - indent - right
   const text = cut(oneLine(note.text), textWidth)
   return (
     <Box key={`row-${slot}`} width={view.width} backgroundColor={isSelected ? COLOUR.band : undefined}>
       <Button key={slotKey(slot)} plain label=" " onPress={() => handlers.pressSlot(slot)} />
+      {isGrouped && <Text>{' '.repeat(indent)}</Text>}
       {number !== undefined ? (
         <Text color={isSelected ? undefined : COLOUR.accent} bold>
           {String(number)}
@@ -120,7 +140,7 @@ const NoteRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; li
         <Hits el={el} text={text} hits={line.hits.filter(at => at < text.length)} isDim={isHistory} />
       </Box>
       <Text> </Text>
-      {!isGrouped && <Text color={isHistory ? COLOUR.history : colourOf(note.project?.key ?? null, ctx.current.key)}>{cut(label, WIDTH.project).padStart(WIDTH.project)}</Text>}
+      {!isGrouped && <ProjectCell el={el} view={view} note={note} isHistory={isHistory} />}
       {!isGrouped && <Text> </Text>}
       <Text dimColor>{ageOf(note.updated, ctx.now).padStart(WIDTH.age)}</Text>
     </Box>
@@ -130,14 +150,21 @@ const NoteRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; li
 const GroupRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; line: Extract<Line, { kind: 'group' }>; slot: number; handlers: Handlers }) => {
   const { Box, Text, Button } = el
   const isSelected = view.focus.kind === 'line' && view.pane.cursor === line.key
-  const colour = line.group === 'proposed' ? COLOUR.accent : colourOf(line.project?.key ?? null, view.ctx.current.key)
+  // A heading reads apart from its notes: dot and dim name at the left edge, the notes indented
+  // below. Only proposed and the current project are bold accent.
+  const isProposed = line.group === 'proposed'
+  const isAccent = isProposed || (line.project !== null && line.project.key === view.ctx.current.key)
+  const mark = isProposed ? GLYPH.claude : line.project === null ? GLYPH.unfiledDot : GLYPH.dot
   return (
     <Box key={`row-${slot}`} width={view.width} backgroundColor={isSelected ? COLOUR.band : undefined}>
       <Button key={slotKey(slot)} plain label=" " onPress={() => handlers.pressSlot(slot)} />
-      <Text dimColor>{line.isFolded ? GLYPH.folded : GLYPH.open} </Text>
-      <Text color={colour} bold>
+      <Text color={isProposed ? COLOUR.accent : colourOf(line.project?.key ?? null, view.ctx.current.key)}>{mark} </Text>
+      <Text color={isAccent ? COLOUR.accent : undefined} bold={isAccent} dimColor={!isAccent}>
         {cut(groupLabel(view.ctx, line), WIDTH.label)}
       </Text>
+      {line.isFolded && <Text dimColor> {GLYPH.folded}</Text>}
+      <Box flexGrow={1} />
+      {line.count > 0 && <Text dimColor>{String(line.count)}</Text>}
     </Box>
   )
 }
@@ -166,11 +193,6 @@ const Sentinel = ({ el, id, glyph, count, handlers }: { el: E; id: string; glyph
       </Text>
     </Box>
   )
-}
-
-const Rule = ({ el, width, heavy }: { el: E; width: number; heavy?: boolean }) => {
-  const { Text } = el
-  return <Text dimColor>{(heavy ? RULE.heavy : RULE.light).repeat(Math.max(0, width))}</Text>
 }
 
 const rightText = (view: PaneView) => {
@@ -208,17 +230,22 @@ const SearchRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Ha
   )
 }
 
+// Docked, the capture row is the pane's one card: a round accent frame, because it's the one
+// moment the pane is a text field rather than a list.
 const CaptureRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handlers }) => {
   const { Box, Text, Input } = el
+  const isFramed = !view.isInline
+  const inner = view.width - (isFramed ? 4 : 0)
+  const lead = `${GLYPH.capture} ${TEXT.captureLabel} `
   return (
-    <Box width={view.width}>
+    <Box width={view.width} borderStyle={isFramed ? 'round' : undefined} borderColor={isFramed ? COLOUR.accent : undefined} paddingX={isFramed ? 1 : 0}>
       <Box flexShrink={0}>
         <Text color={COLOUR.accent} bold>
-          {GLYPH.capture} {TEXT.captureLabel}{' '}
+          {lead}
         </Text>
       </Box>
       {/* An explicit width: left to flex, the field's own "⏎ save" hint wraps onto a second row. */}
-      <Box width={Math.max(10, view.width - cells(`${GLYPH.capture} ${TEXT.captureLabel} `) - 1 - cells(cut(view.captureLabel, WIDTH.label)))}>
+      <Box width={Math.max(10, inner - cells(lead) - 1 - cells(cut(view.captureLabel, WIDTH.label)))}>
         <Input
           key={CAPTURE_KEY}
           placeholder="write a note"
@@ -230,7 +257,10 @@ const CaptureRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: H
         />
       </Box>
       <Box flexShrink={0}>
-        <Text dimColor> {cut(view.captureLabel, WIDTH.label)}</Text>
+        <Text color={isFramed ? COLOUR.accent : undefined} dimColor={!isFramed}>
+          {' '}
+          {cut(view.captureLabel, WIDTH.label)}
+        </Text>
       </Box>
     </Box>
   )
@@ -246,7 +276,7 @@ const metaOf = (view: PaneView, note: Note, withWho = true) => {
 // Docked, the preview and the footer keep fixed heights, so the rows' window never changes size
 // as the selection moves (and the footer doesn't jump).
 export const PREVIEW_ROWS = 1 + WIDTH.previewLines + 1
-export const FOOTER_ROWS = 2
+export const FOOTER_ROWS = 1
 
 const wrapLines = (text: string, width: number) => {
   const out: string[] = []
@@ -282,17 +312,24 @@ const Preview = ({ el, view, note }: { el: E; view: PaneView; note: Note }) => {
   const { edit } = view.pane
   // While the note is being edited, the preview is the draft, whole.
   const isEditing = view.pane.mode === 'edit' && edit !== null && edit.id === note.id
-  const lines = wrapLines(isEditing ? fromField(edit.draft) : note.text, view.width)
+  // Quoted: a dim bar down the left, the way the bundle shows what it will send.
+  const width = view.width - 2
+  const lines = wrapLines(isEditing ? fromField(edit.draft) : note.text, width)
   let shown = lines.slice(0, WIDTH.previewLines)
-  if (isEditing) shown = draftLines(fromField(edit.draft), view.width, WIDTH.previewLines)
-  else if (lines.length > WIDTH.previewLines) shown[shown.length - 1] = cut(`${shown[shown.length - 1] ?? ''} `, view.width).replace(/ ?$/, GLYPH.more)
+  if (isEditing) shown = draftLines(fromField(edit.draft), width, WIDTH.previewLines)
+  else if (lines.length > WIDTH.previewLines) shown[shown.length - 1] = cut(`${shown[shown.length - 1] ?? ''} `, width).replace(/ ?$/, GLYPH.more)
   return (
     <Box flexDirection="column" width={view.width} height={PREVIEW_ROWS}>
-      <Rule el={el} width={view.width} />
+      <Box height={1} />
       {shown.map(line => (
-        <Text>{line === '' ? ' ' : line}</Text>
+        <Text>
+          <Text dimColor>{GLYPH.quote} </Text>
+          {line === '' ? ' ' : line}
+        </Text>
       ))}
-      <Text dimColor>{cut(metaOf(view, note), view.width)}</Text>
+      <Text dimColor>
+        {GLYPH.quote} {cut(metaOf(view, note), width)}
+      </Text>
     </Box>
   )
 }
@@ -305,25 +342,37 @@ const Footer = ({ el, view }: { el: E; view: PaneView }) => {
   if (view.problems.length > 0 && focus.kind !== 'line') statuses.push([`${view.problems.length} unreadable file${view.problems.length === 1 ? '' : 's'}`, COLOUR.problem])
   if (view.syncStatus !== '') statuses.push([view.syncStatus, COLOUR.offline])
   const lead = statuses.map(([text]) => text).join('  ')
-  let pairs: [string, string][] = focus.kind === 'unfocused' ? TEXT.unfocused : footerPairs(view.keys)
-  if (view.isInline) pairs = fitOneLine(pairs, lead, view.width)
+  // One line: at most WIDTH.footerPairs actions, the legend if there's room, `i keys` on the right.
+  const all: [string, string][] = focus.kind === 'unfocused' ? TEXT.unfocused : footerPairs(view.keys)
+  const keySheet = all.find(([key]) => key === 'i')
+  const actions = all.filter(([key]) => key !== 'i').slice(0, WIDTH.footerPairs)
+  if (view.showLegend && !view.isInline) actions.push([TEXT.legend, ''])
+  // The spacer before `i keys` takes one more gap than fitOneLine counts.
+  const fitted = fitOneLine(keySheet ? [...actions, keySheet] : actions, lead, view.width - 2)
+  const pairs = fitted.filter(([key]) => key !== 'i')
+  const Pair = ({ pair: [key, label] }: { pair: [string, string] }) =>
+    key === TEXT.legend ? (
+      <Text dimColor>{key}</Text>
+    ) : (
+      <Text>
+        <Text bold>{key}</Text>
+        {label !== '' && <Text dimColor> {label}</Text>}
+      </Text>
+    )
   return (
     <Box flexDirection="column" width={view.width}>
       {!view.isInline && <Box height={1} />}
-      {!view.isInline && <Rule el={el} width={view.width} />}
-      <Box flexWrap="wrap" columnGap={2} width={view.width} height={view.isInline ? 1 : FOOTER_ROWS}>
+      <Box columnGap={2} width={view.width} height={FOOTER_ROWS}>
         {statuses.map(([text, colour]) => (
           <Text color={colour} bold>
             {text}
           </Text>
         ))}
-        {pairs.map(([key, label]) => (
-          <Text>
-            <Text bold>{key}</Text>
-            {label !== '' && <Text dimColor> {label}</Text>}
-          </Text>
+        {pairs.map(pair => (
+          <Pair pair={pair} />
         ))}
-        {view.showLegend && !view.isInline && <Text dimColor>{TEXT.legend}</Text>}
+        <Box flexGrow={1} />
+        {keySheet && fitted.includes(keySheet) && <Pair pair={keySheet} />}
       </Box>
     </Box>
   )
@@ -419,23 +468,44 @@ const NoMatch = ({ el, view }: { el: E; view: PaneView }) => {
 const Empty = ({ el, view, hasHub, hasHarvest }: { el: E; view: PaneView; hasHub: boolean; hasHarvest: boolean }) => {
   const { Box, Text } = el
   const ways: [string, string][] = [
-    ['//', 'in the prompt, even while Claude works: // check the flaky test ⏎  (start with a space for a literal //)'],
-    ['ctrl+x s', 'opens this pane, and keeps your prompt draft'],
-    ...(hasHub ? ([['phone', 'notes from your phone land here within seconds']] as [string, string][]) : []),
+    ['//', 'jot a note from the prompt, even mid-turn'],
+    [CHORD.toggle.keys, 'open this pane, keeping your draft'],
+    ...(hasHub ? ([[`${GLYPH.phone} phone`, 'notes from your phone land here']] as [string, string][]) : []),
     ...(hasHarvest ? ([[GLYPH.claude, 'Claude can leave notes for you']] as [string, string][]) : []),
   ]
+  // Docked, a small shard sits beside the ways in; the title and the keys share its right edge,
+  // and the descriptions share one column after the keys.
+  const indent = view.isInline ? 0 : WIDTH.shard
   return (
-    <Box flexDirection="column" paddingY={view.isInline ? 0 : 1} paddingX={2}>
-      <Text bold>{TEXT.emptyTitle(view.ctx.current.name)}</Text>
+    <Box flexDirection="column" paddingY={view.isInline ? 0 : 1} paddingX={1}>
+      <Box>
+        <Box width={indent} />
+        <Text bold>{TEXT.emptyTitle(view.ctx.current.name)}</Text>
+      </Box>
       {!view.isInline && <Box height={1} />}
-      {ways.map(([key, text]) => (
-        <Text>
-          <Text color={COLOUR.accent} bold>
-            {key.padEnd(10)}
-          </Text>
-          <Text dimColor>{cut(text, view.width - 14)}</Text>
-        </Text>
-      ))}
+      <Box>
+        {!view.isInline && (
+          <Box flexDirection="column" width={indent} flexShrink={0}>
+            {SHARD.map(line => (
+              <Text color={COLOUR.accent} dimColor>
+                {line}
+              </Text>
+            ))}
+          </Box>
+        )}
+        <Box flexDirection="column">
+          {ways.map(([key, text]) => (
+            <Box>
+              <Box width={WIDTH.wayKey} flexShrink={0}>
+                <Text color={COLOUR.accent} bold>
+                  {key}
+                </Text>
+              </Box>
+              <Text dimColor>{cut(text, view.width - 2 - indent - WIDTH.wayKey)}</Text>
+            </Box>
+          ))}
+        </Box>
+      </Box>
     </Box>
   )
 }
@@ -451,10 +521,11 @@ const Capture = ({ el, view }: { el: E; view: PaneView }) => {
         <Text>{line === '' ? ' ' : line}</Text>
       ))}
       {draft.length > 0 && !view.isInline && <Box height={1} />}
-      {capture.saved.slice(-keep).map(text => (
+      {/* The newest save is bright; earlier ones step back. */}
+      {capture.saved.slice(-keep).map((text, i, saved) => (
         <Text>
-          <Text color={COLOUR.saved}>{GLYPH.saved} </Text>
-          <Text>{cut(oneLine(text), view.width - 14)}</Text>
+          <Text color={i === saved.length - 1 ? COLOUR.saved : COLOUR.history}>{GLYPH.saved} </Text>
+          <Text dimColor={i !== saved.length - 1}>{cut(oneLine(text), view.width - 14)}</Text>
           <Text dimColor> · just now</Text>
         </Text>
       ))}
@@ -482,7 +553,7 @@ const Bundle = ({ el, view, handlers, rows }: { el: E; view: PaneView; handlers:
         <Box flexGrow={1} />
         {fromOthers.length > 0 && <Text dimColor>{others.length} from {fromOthers.join(', ')}</Text>}
       </Box>
-      <Rule el={el} width={view.width} />
+      <Box height={1} />
       <Box borderStyle="quote" borderColor={COLOUR.history} flexDirection="column" width={view.width}>
         <Text>{TEXT.bundleIntro}</Text>
         <Text> </Text>
@@ -550,9 +621,9 @@ const KeySheet = ({ el, view }: { el: E; view: PaneView }) => {
 
 // Rows the chrome around the lines takes, so the mod can page the lines to fit (SPEC §4.8).
 export const chromeRows = (view: Omit<PaneView, 'page'>) => {
-  const header = 2
+  const header = view.isInline ? 1 : 2
   const preview = view.isInline ? 0 : PREVIEW_ROWS
-  const footer = view.isInline ? 1 : 2 + FOOTER_ROWS
+  const footer = view.isInline ? FOOTER_ROWS : 1 + FOOTER_ROWS
   const edit = view.pane.mode === 'edit' ? 3 : 0
   const move = view.pane.mode === 'move' ? 1 : 0
   return header + preview + footer + edit + move
@@ -573,7 +644,7 @@ export const Pane = ({ el, view, handlers, hasHub, hasHarvest, bundleRows }: { e
   return (
     <Box flexDirection="column" width={view.width}>
       {pane.mode === 'bundle' ? null : pane.mode === 'capture' ? <CaptureRow el={el} view={view} handlers={handlers} /> : <SearchRow el={el} view={view} handlers={handlers} />}
-      {pane.mode !== 'bundle' && <Rule el={el} width={view.width} heavy />}
+      {pane.mode !== 'bundle' && !view.isInline && <Box height={1} />}
       {body()}
       {pane.mode === 'move' && <Move el={el} view={view} handlers={handlers} />}
       {showPreview && (view.preview ? <Preview el={el} view={view} note={view.preview} /> : <Box height={PREVIEW_ROWS} />)}
