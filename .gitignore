@@ -13,3 +13,6 @@ server/data/
 .env.*
 # working notes, reviews, experiments and every screenshot the tools produce stay local
 working-docs/
+# python bytecode
+__pycache__/
+*.pyc
