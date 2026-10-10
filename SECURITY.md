@@ -14,7 +14,7 @@ The hub (`server/hub.ts`) holds your notes and accepts writes, so treat it like 
 - It **binds to `127.0.0.1` only**. Reach it from other devices through `tailscale serve` (see `docs/phone.md`), never by binding it to a public interface or using Tailscale Funnel.
 - Every `/api` call needs the bearer token (`HUB_TOKEN`). Generate a long random one (`openssl rand -hex 24`), keep it in a file only you can read (the systemd unit reads `~/.config/ostrakon-hub/env`), and rotate it if it leaks.
 - The phone's Home Screen app carries the token in its start URL (`?token=…`) because iOS gives it separate storage. Anyone who sees that URL has the token.
-- The QR code from `ostrakon pair` encodes that same URL, so it contains the token. Don't share a screenshot of it, and clear the terminal after scanning.
+- The QR code from `ostrakon pair` carries a one-time code that expires in 5 minutes and works once; the phone trades it for the token. `ostrakon pair --token` prints one that carries the token itself: don't share a screenshot of that, and clear the terminal after scanning. Either way the phone ends up holding the long-lived token, in its storage and, on iOS, in the Home Screen app's start address.
 - `HUB_LOGIN` (trusting the `Tailscale-User-Login` header) is off unless you set it. Set it only where every local user is trusted, because any local process can send that header to `127.0.0.1`.
 - Notes are stored unencrypted in SQLite and as Markdown files. Don't jot secrets.
 

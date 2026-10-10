@@ -731,11 +731,13 @@ const gestures = (row, face, behind, id) => {
 
 // ---- screens ----
 
-const showLogin = isRefused => {
+// `notice`: true for a refused token, or the words to show; false for none.
+const showLogin = notice => {
   pollGen += 1
   $('app').hidden = true
   $('login').hidden = false
-  $('login-error').hidden = !isRefused
+  $('login-error').hidden = !notice
+  if (notice) $('login-error').textContent = typeof notice === 'string' ? notice : 'That token was refused.'
   $('token').focus()
 }
 
@@ -823,15 +825,49 @@ document.addEventListener('visibilitychange', () => {
 const linkManifest = () => {
   if (token !== '') document.querySelector('link[rel=manifest]').href = `manifest.json?token=${encodeURIComponent(token)}`
 }
-const params = new URLSearchParams(location.search)
-if (params.has('token')) {
-  token = params.get('token').trim()
-  store('sp.token', token)
-  if (navigator.standalone || matchMedia('(display-mode: standalone)').matches) history.replaceState(null, '', location.pathname)
+const isStandalone = () => navigator.standalone || matchMedia('(display-mode: standalone)').matches
+
+// `?pair=<code>` (the QR from `ostrakon pair`): the one-time code is traded for the token, with no
+// Authorization header. Resolves to a message for the login screen, or '' when the token is stored.
+const claimPair = async code => {
+  try {
+    const response = await fetch('api/pair/claim', { method: 'POST', cache: 'no-store', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) })
+    if (response.status === 401) return 'That pairing code has expired or was already used. Run ostrakon pair again.'
+    if (!response.ok) return `The hub refused the pairing code (${response.status}).`
+    const body = await response.json()
+    if (typeof body.token !== 'string' || body.token === '') return 'The hub sent no token. Run ostrakon pair again.'
+    token = body.token
+    store('sp.token', token)
+    return ''
+  } catch {
+    return "Couldn't reach the hub to pair. Check that Tailscale is connected, then scan again."
+  }
 }
-linkManifest()
+
+const boot = async () => {
+  const params = new URLSearchParams(location.search)
+  let notice = false
+  if (params.has('pair')) {
+    notice = (await claimPair(params.get('pair').trim())) || false
+    if (notice === false && !isStandalone()) {
+      // iOS gives the Home Screen app storage of its own, so its start address must carry the token:
+      // the page reloads with `?token=` (the hub then links the manifest with it) for Add to Home
+      // Screen. The token is in the address bar on this phone only, never in the QR.
+      location.replace(`./?token=${encodeURIComponent(token)}`)
+      return
+    }
+    history.replaceState(null, '', location.pathname)
+  } else if (params.has('token')) {
+    token = params.get('token').trim()
+    store('sp.token', token)
+    if (isStandalone()) history.replaceState(null, '', location.pathname)
+  }
+  linkManifest()
+  // A failed code on a phone that's already paired keeps its token; a stale one is refused by the hub.
+  if (token === '') showLogin(notice)
+  else start()
+}
 
 if ('serviceWorker' in navigator && isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {})
 
-if (token === '') showLogin(false)
-else start()
+boot()

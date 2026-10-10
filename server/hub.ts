@@ -10,8 +10,9 @@
 //              is trusted; writes it authorizes must come from the hub's own page (no foreign
 //              Origin).
 //
-// `bun server/hub.ts pair [url]` (or `ostrakon pair`, bin/ostrakon) prints a QR code of the phone's `?token=` link (needs HUB_TOKEN
-// and `qrencode`) and exits; the url is the hub's public https address (default: this Tailscale node).
+// `bun server/hub.ts pair [--token] [url]` (or `ostrakon pair`, bin/ostrakon) asks the hub running on this host for a one-time
+// pairing code and prints a QR code of the phone's `?pair=` link (needs HUB_TOKEN and `qrencode`), then exits; the url is the hub's
+// public https address (default: this Tailscale node). `--token` prints the old `?token=` link instead, which carries the token itself.
 
 import { Database } from 'bun:sqlite'
 import { mkdirSync, readdirSync, rmSync } from 'node:fs'
@@ -25,6 +26,8 @@ import { ulid } from '../plugin/src/ulid'
 const MAX_WAIT_S = 25
 const MAX_BATCH = 500
 const KEEP_BACKUPS = 7
+export const PAIR_TTL_MS = 5 * 60 * 1000
+const MAX_PAIR_CODES = 10
 const PUBLIC = join(import.meta.dir, 'public')
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -189,8 +192,13 @@ const sameText = (a: string, b: string) => {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
 
-export const handler = (hub: Hub, auth: { token?: string; login?: string }) => {
+export const handler = (hub: Hub, auth: { token?: string; login?: string }, { now = Date.now }: { now?: () => number } = {}) => {
   const seenLogins = new Set<string>()
+  // One-time pairing codes (code → expiry ms), in memory only: a restart drops them all, which is fine for codes that live 5 minutes.
+  const codes = new Map<string, number>()
+  const expire = () => {
+    for (const [code, expires] of codes) if (expires <= now()) codes.delete(code)
+  }
   return async (request: Request): Promise<Response> => {
     const url = new URL(request.url)
     const path = url.pathname
@@ -238,6 +246,20 @@ export const handler = (hub: Hub, auth: { token?: string; login?: string }) => {
     // come from another site's page.
     const origin = request.headers.get('origin')
     const isOwnPage = origin === null || origin === url.origin || origin === `https://${request.headers.get('host')}`
+    // The one /api call without auth: the phone trades a pairing code (from POST /api/pair) for the token. A code is
+    // 128 random bits looked up whole, so there is nothing to guess a prefix of; unknown, expired and used look alike.
+    if (path === '/api/pair/claim' && request.method === 'POST') {
+      if (!isOwnPage) return json({ error: 'pairing must come from the hub\'s own page' }, 403)
+      expire()
+      const body = (await request.json().catch(() => ({}))) as { code?: unknown }
+      const code = typeof body?.code === 'string' ? body.code : ''
+      if (!codes.delete(code) || !auth.token) {
+        console.log(`pair: claim refused from ${agent}`)
+        return json({ error: 'pairing code expired or already used' }, 401)
+      }
+      console.log(`pair: code claimed by ${agent}`)
+      return json({ token: auth.token })
+    }
     const hasLogin = auth.login !== undefined && auth.login !== '' && login === auth.login && (request.method === 'GET' || isOwnPage)
     if (!hasToken && !hasLogin) return json({ error: 'unauthorized' }, 401)
 
@@ -264,6 +286,16 @@ export const handler = (hub: Hub, auth: { token?: string; login?: string }) => {
         }
         return json({ hub: hub.id, notes: hub.push(accepted), rejected, cursor: hub.cursor() })
       }
+      // A one-time code for the phone's QR (`ostrakon pair`), good for PAIR_TTL_MS; the oldest go first past MAX_PAIR_CODES.
+      if (path === '/api/pair' && request.method === 'POST') {
+        if (!auth.token) return json({ error: 'the hub has no HUB_TOKEN to hand out' }, 400)
+        expire()
+        while (codes.size >= MAX_PAIR_CODES) codes.delete(codes.keys().next().value as string)
+        const code = Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString('base64url')
+        codes.set(code, now() + PAIR_TTL_MS)
+        console.log(`pair: code minted for ${agent}, good for ${PAIR_TTL_MS / 60_000} minutes`)
+        return json({ code, expiresIn: PAIR_TTL_MS / 1000 })
+      }
       if (path === '/api/projects' && request.method === 'GET') return json({ projects: hub.projects() })
       // A note from one line of text: what an iOS Shortcut or a curl sends (docs/phone.md).
       if (path === '/api/jot' && request.method === 'POST') {
@@ -285,9 +317,9 @@ export const handler = (hub: Hub, auth: { token?: string; login?: string }) => {
   }
 }
 
-// The link that stores the token in the phone's page: the hub's public https base plus `?token=`.
-// Throws on a URL that isn't https (an installable PWA needs it).
-export const pairLink = (base: string, token: string) => {
+// The link that pairs the phone's page: the hub's public https base plus `?pair=<code>` or, for the
+// long-lived link, `?token=<token>`. Throws on a URL that isn't https (an installable PWA needs it).
+export const pairLink = (base: string, secret: { pair: string } | { token: string }) => {
   let url: URL
   try {
     url = new URL(base)
@@ -296,14 +328,17 @@ export const pairLink = (base: string, token: string) => {
   }
   if (url.protocol !== 'https:') throw new Error(`the hub URL must be https (a phone page can't be installed from ${url.protocol}//): ${base}`)
   const path = url.pathname.endsWith('/') ? url.pathname : `${url.pathname}/`
-  return `${url.origin}${path}?token=${encodeURIComponent(token)}`
+  const [name, value] = 'pair' in secret ? ['pair', secret.pair] : ['token', secret.token]
+  return `${url.origin}${path}?${name}=${encodeURIComponent(value)}`
 }
 
-const pair = (arg: string | undefined) => {
+const pair = async (args: string[]) => {
   const fail = (message: string): never => {
     console.error(message)
     process.exit(1)
   }
+  const isToken = args.includes('--token')
+  const arg = args.find(a => a !== '--token')
   const token = process.env.HUB_TOKEN
   if (!token) fail('set HUB_TOKEN to the hub\'s token, or put it in ~/.config/ostrakon-hub/env and run `ostrakon pair` (bin/ostrakon), which reads that file')
   let base = arg
@@ -315,9 +350,22 @@ const pair = (arg: string | undefined) => {
     } catch {}
     if (!base) fail('could not get this machine\'s name from `tailscale status --json`; pass the hub\'s URL: ostrakon pair https://<host>.<tailnet>.ts.net:8443')
   }
+  let secret: { pair: string } | { token: string } = { token: token as string }
+  if (!isToken) {
+    const port = process.env.HUB_PORT ?? 8790
+    let response: Response | undefined
+    try {
+      response = await fetch(`http://127.0.0.1:${port}/api/pair`, { method: 'POST', headers: { authorization: `Bearer ${token}` } })
+    } catch {
+      fail(`could not reach the hub on 127.0.0.1:${port}. Is it running? Try \`systemctl --user status ostrakon-hub\` or \`ostrakon hub\`. Without a local hub, \`ostrakon pair --token\` prints a link that carries the token.`)
+    }
+    const body = (await response?.json().catch(() => ({}))) as { code?: string; error?: string }
+    if (response?.status !== 200 || !body.code) fail(`the hub refused to make a pairing code (${response?.status}): ${body.error ?? 'no reason given'}`)
+    secret = { pair: body.code as string }
+  }
   let link = ''
   try {
-    link = pairLink(base as string, token as string)
+    link = pairLink(base as string, secret)
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error))
   }
@@ -328,11 +376,12 @@ const pair = (arg: string | undefined) => {
     console.error('qrencode is not installed (e.g. `sudo pacman -S qrencode` or `sudo apt install qrencode`); use the link below')
   }
   console.log(`\n${link}\n`)
-  console.log('The code and the link carry the hub token. Treat a screenshot of either like the token, clear this terminal after scanning, and rotate HUB_TOKEN if it leaks.')
+  if (isToken) console.log('The code and the link carry the hub token. Treat a screenshot of either like the token, clear this terminal after scanning, and rotate HUB_TOKEN if it leaks.')
+  else console.log('The code and the link work once, within 5 minutes; the phone then holds the hub token.')
 }
 
 if (import.meta.main && process.argv[2] === 'pair') {
-  pair(process.argv[3])
+  await pair(process.argv.slice(3))
 } else if (import.meta.main) {
   const port = Number(process.env.HUB_PORT ?? 8790)
   const dataDir = process.env.HUB_DATA ?? join(process.env.HOME ?? '.', '.local/share/ostrakon-hub')

@@ -93,13 +93,13 @@ The hub is a single Bun file (`server/hub.ts`) with SQLite storage. It listens o
 ./install.sh --hub
 ```
 
-That makes a token in `~/.config/ostrakon-hub/env` (if there isn't one), and installs and starts the systemd user unit (`server/ostrakon-hub.service`). It prints the two steps left to you: `loginctl enable-linger` and `tailscale serve`. Then `ostrakon pair` prints a QR code that pairs a phone (needs `qrencode`). To run the hub in the foreground instead: `HUB_TOKEN=$(openssl rand -hex 24) ostrakon hub`. The `ostrakon` command reads `HUB_TOKEN` from the environment or from `~/.config/ostrakon-hub/env`.
+That makes a token in `~/.config/ostrakon-hub/env` (if there isn't one), and installs and starts the systemd user unit (`server/ostrakon-hub.service`). It prints the two steps left to you: `loginctl enable-linger` and `tailscale serve`. Then `ostrakon pair` prints a QR code that pairs a phone (needs `qrencode`); it carries a one-time code, good for 5 minutes, not the token (`--token` prints one that does). To run the hub in the foreground instead: `HUB_TOKEN=$(openssl rand -hex 24) ostrakon hub`. The `ostrakon` command reads `HUB_TOKEN` from the environment or from `~/.config/ostrakon-hub/env`.
 
 The unit runs `~/.local/bin/ostrakon hub`, so it works wherever the repo is checked out. Setup, the phone's Home Screen app, and an iOS Shortcut are in [`docs/phone.md`](docs/phone.md). See [`SECURITY.md`](SECURITY.md) before exposing it.
 
 ## Development
 
-- Design and platform notes: [`docs/SPEC.md`](docs/SPEC.md).
+- Design and platform notes: [`docs/SPEC.md`](docs/SPEC.md). What might come next: [`ROADMAP.md`](ROADMAP.md).
 - `tools/check.sh` runs `claude plugin validate`, the type-check, `claude plugin test` and the hub's tests. The plugin's tests and type-check need the `claude` CLI, because the mods test kit and type declarations ship inside it.
 - The hub's tests need only [Bun](https://bun.sh): `cd server && bun test`.
 - `tools/` also holds the screenshot pipeline and experiment harnesses; their output goes to `working-docs/`, which is git-ignored.

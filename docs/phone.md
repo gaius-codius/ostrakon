@@ -41,11 +41,19 @@ Every `/api` call carries the hub's token (`HUB_TOKEN` in the hub's environment)
 the page opens it asks for it. Paste it and tap **Connect**; it's kept on the phone.
 
 Easiest: on the hub host, run `ostrakon pair` (`./install.sh` puts the command on your PATH). It
-prints a QR code of the link below, and the phone camera opens it in Safari. It takes the token from `HUB_TOKEN` or from
-`~/.config/ostrakon-hub/env`, the systemd unit's file. If it can't find this machine's Tailscale
-name, pass the hub's address: `ostrakon pair https://<host>.<tailnet>.ts.net:8443`. It needs
-`qrencode`. This fits the Add to Home Screen flow below: the scan opens Safari with the token in
-the address, then you add the page. The code carries the token, so clear the terminal afterwards.
+asks the running hub for a one-time code and prints a QR code of a link that carries it; the phone
+camera opens the link in Safari. The code works once and expires after 5 minutes. The page trades
+it for the token, stores the token, and reloads with the `?token=` address in Safari so Add to
+Home Screen works (below). The QR itself never carries the token. It takes `HUB_TOKEN` from the
+environment or from `~/.config/ostrakon-hub/env`, the systemd unit's file. If it can't find this
+machine's Tailscale name, pass the hub's address: `ostrakon pair https://<host>.<tailnet>.ts.net:8443`.
+It needs `qrencode`. If the code has expired or was used, a phone that isn't paired yet says so on
+the token screen; run `ostrakon pair` again. A phone that had the page before pairing codes existed
+may open its old cached copy, which doesn't know them: open the page once first so it updates.
+
+The fallback is `ostrakon pair --token [url]`, which prints a QR code and link that carry the token
+itself (use it when the hub isn't running on this host, or to make a Shortcut link). Treat a
+screenshot of that like the token, and clear the terminal after scanning.
 
 Or open the page once with the token in the address, and it's stored and removed from the
 address bar straight away:
@@ -63,8 +71,8 @@ In Safari, with the page open: the **Share** button, then **Add to Home Screen**
 opens full screen from its icon, straight into the note field.
 
 iOS gives a Home Screen app storage of its own, apart from Safari's, so the token has to travel in
-the app's start address. Open the `?token=` link in Safari first (the token stays in the address
-bar there), then add it: the page asks the hub for its manifest with the token, and the hub answers
+the app's start address. Scanning the pairing QR leaves Safari on the `?token=` address (the token
+stays in the address bar there, on the phone only); or open that link yourself. Then add it: the page asks the hub for its manifest with the token, and the hub answers
 with a start address that carries it. The installed app stores the token and takes it out of its
 own address bar. If the installed app still asks for the token, remove it, open the link in Safari,
 reload once (the old version may still be cached), and add it again.

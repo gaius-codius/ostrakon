@@ -12,8 +12,11 @@ usage() {
   cat <<EOF
 usage: ostrakon <command>
 
-  pair [url]   print a QR code that pairs a phone with the hub (url: the hub's https
-               address, default this machine's Tailscale name on port 8443)
+  pair [--token] [url]
+               print a QR code that pairs a phone with the hub: a one-time code, good for
+               5 minutes (needs the hub running here). --token prints one that carries the
+               hub token itself instead. url: the hub's https address, default this
+               machine's Tailscale name on port 8443
   hub          run the hub in the foreground
   update       pull this checkout and restart the hub if it's installed (update.sh)
   help         show this

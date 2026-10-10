@@ -5,18 +5,19 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { Note } from '../plugin/types'
-import { handler, openHub, pairLink, toNote } from './hub'
+import { PAIR_TTL_MS, handler, openHub, pairLink, toNote } from './hub'
 
 const dirs: string[] = []
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
-const fresh = () => {
+const fresh = (auth: { token?: string; login?: string } = { token: 'secret', login: 'owner@example.com' }) => {
   const dir = mkdtempSync(join(tmpdir(), 'hub-test-'))
   dirs.push(dir)
   const hub = openHub(dir)
-  const fetch = handler(hub, { token: 'secret', login: 'owner@example.com' })
+  let clock = Date.parse('2026-10-10T00:00:00Z')
+  const fetch = handler(hub, auth, { now: () => clock })
   const call = (path: string, init: RequestInit & { auth?: string | null } = {}) =>
     fetch(
       new Request(`http://hub${path}`, {
@@ -24,7 +25,7 @@ const fresh = () => {
         headers: { ...(init.auth === null ? {} : { authorization: `Bearer ${init.auth ?? 'secret'}` }), ...(init.headers as Record<string, string> | undefined) },
       }),
     )
-  return { dir, hub, call }
+  return { dir, hub, call, advance: (ms: number) => (clock += ms) }
 }
 
 const note = (id: string, fields: Partial<Note> = {}): Note => ({
@@ -214,23 +215,84 @@ describe('hub', () => {
   })
 })
 
+describe('pairing codes', () => {
+  const mint = async (call: ReturnType<typeof fresh>['call']) => ((await (await call('/api/pair', { method: 'POST' })).json()) as { code: string; expiresIn: number })
+  const claim = (call: ReturnType<typeof fresh>['call'], code: string, headers: Record<string, string> = {}) =>
+    call('/api/pair/claim', { method: 'POST', auth: null, headers, body: JSON.stringify({ code }) })
+
+  test('minting needs the token or the owner login, and a hub with no token has none to hand out', async () => {
+    const { call } = fresh()
+    expect((await call('/api/pair', { method: 'POST', auth: null })).status).toBe(401)
+    expect((await call('/api/pair', { method: 'POST', auth: 'wrong' })).status).toBe(401)
+    const minted = await mint(call)
+    expect(minted.code).toMatch(/^[A-Za-z0-9_-]{22}$/)
+    expect(minted.expiresIn).toBe(PAIR_TTL_MS / 1000)
+    const login = fresh({ login: 'owner@example.com' })
+    const response = await login.call('/api/pair', { method: 'POST', auth: null, headers: { 'tailscale-user-login': 'owner@example.com' } })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'the hub has no HUB_TOKEN to hand out' })
+  })
+
+  test('a code gives the token once, with no Authorization header', async () => {
+    const { call } = fresh()
+    const { code } = await mint(call)
+    const first = await claim(call, code)
+    expect(first.status).toBe(200)
+    expect(await first.json()).toEqual({ token: 'secret' })
+    expect((await claim(call, code)).status).toBe(401)
+  })
+
+  test('an unknown code, an expired one and a missing one are all refused alike', async () => {
+    const { call, advance } = fresh()
+    const unknown = await claim(call, 'nope')
+    expect(unknown.status).toBe(401)
+    const { code } = await mint(call)
+    advance(PAIR_TTL_MS + 1)
+    const expired = await claim(call, code)
+    expect(expired.status).toBe(401)
+    expect(await expired.json()).toEqual(await unknown.json())
+    expect((await call('/api/pair/claim', { method: 'POST', auth: null, body: 'not json' })).status).toBe(401)
+  })
+
+  test('a code still works just inside its time, and only the newest few are kept', async () => {
+    const { call, advance } = fresh()
+    const { code } = await mint(call)
+    advance(PAIR_TTL_MS - 1)
+    expect((await claim(call, code)).status).toBe(200)
+    const first = await mint(call)
+    for (let i = 0; i < 10; i++) await mint(call)
+    expect((await claim(call, first.code)).status).toBe(401)
+  })
+
+  test("a claim from another site's page is refused, and the code survives it", async () => {
+    const { call } = fresh()
+    const { code } = await mint(call)
+    expect((await claim(call, code, { origin: 'https://evil.example' })).status).toBe(403)
+    expect((await claim(call, code, { origin: 'http://hub' })).status).toBe(200)
+  })
+})
+
 describe('pairLink', () => {
   test('adds the trailing slash and the token', () => {
-    expect(pairLink('https://hub.example.ts.net:8443', 'abc')).toBe('https://hub.example.ts.net:8443/?token=abc')
-    expect(pairLink('https://hub.example.ts.net:8443/', 'abc')).toBe('https://hub.example.ts.net:8443/?token=abc')
+    expect(pairLink('https://hub.example.ts.net:8443', { token: 'abc' })).toBe('https://hub.example.ts.net:8443/?token=abc')
+    expect(pairLink('https://hub.example.ts.net:8443/', { token: 'abc' })).toBe('https://hub.example.ts.net:8443/?token=abc')
+  })
+
+  test('builds a pairing link', () => {
+    expect(pairLink('https://hub.example.ts.net:8443', { pair: 'abc' })).toBe('https://hub.example.ts.net:8443/?pair=abc')
   })
 
   test('keeps a path and drops any query or fragment', () => {
-    expect(pairLink('https://example.ts.net/hub', 't')).toBe('https://example.ts.net/hub/?token=t')
-    expect(pairLink('https://example.ts.net/hub/?x=1#y', 't')).toBe('https://example.ts.net/hub/?token=t')
+    expect(pairLink('https://example.ts.net/hub', { token: 't' })).toBe('https://example.ts.net/hub/?token=t')
+    expect(pairLink('https://example.ts.net/hub/?x=1#y', { pair: 't' })).toBe('https://example.ts.net/hub/?pair=t')
   })
 
   test('encodes the token', () => {
-    expect(pairLink('https://example.ts.net', 'a b&c=d/+')).toBe('https://example.ts.net/?token=a%20b%26c%3Dd%2F%2B')
+    expect(pairLink('https://example.ts.net', { token: 'a b&c=d/+' })).toBe('https://example.ts.net/?token=a%20b%26c%3Dd%2F%2B')
   })
 
   test('throws on http and on a bad URL', () => {
-    expect(() => pairLink('http://example.ts.net:8443', 't')).toThrow('https')
-    expect(() => pairLink('example.ts.net', 't')).toThrow('not a valid URL')
+    expect(() => pairLink('http://example.ts.net:8443', { token: 't' })).toThrow('https')
+    expect(() => pairLink('example.ts.net', { pair: 't' })).toThrow('not a valid URL')
   })
 })
