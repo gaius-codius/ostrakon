@@ -610,7 +610,7 @@ const KeySheet = ({ el, view }: { el: E; view: PaneView }) => {
   const page = view.focus.kind === 'sheet' ? view.focus.page : 0
   const entries = [...view.problems.map(problem => ({ problem: `${problem.file}: ${problem.reason}`, key: '', label: '' })), ...TEXT.keySheet.map(([key, label]) => ({ problem: '', key, label }))]
   return (
-    <Box position="absolute" top={sheetTop(view.isInline)} left={Math.max(0, view.width - width - 1)} width={width} borderStyle="round" borderColor={COLOUR.accent} flexDirection="column" paddingX={1} backgroundColor={COLOUR.band}>
+    <Box position="absolute" top={sheetTop(view.isInline)} left={Math.max(0, view.width - width)} width={width} borderStyle="round" borderColor={COLOUR.accent} flexDirection="column" paddingX={1} backgroundColor={COLOUR.band}>
       {entries.slice(page * room, (page + 1) * room).map(({ problem, key, label }) =>
         problem !== '' ? (
           <Text color={COLOUR.problem}>{cut(problem, inner)}</Text>
@@ -647,15 +647,19 @@ export const Pane = ({ el, view, handlers, hasHub, hasHarvest, bundleRows }: { e
     return <Rows el={el} view={view} handlers={handlers} />
   }
   const showPreview = !view.isInline && (pane.mode === 'browse' || pane.mode === 'sheet' || pane.mode === 'move' || pane.mode === 'edit') && hasNotes
+  // With the key sheet up the pane takes the whole body and the footer its last row, so the sheet,
+  // paged to the rows between, never covers the footer or runs past a short inline pane.
+  const isSheet = pane.mode === 'sheet'
   return (
-    <Box flexDirection="column" width={view.width}>
+    <Box flexDirection="column" width={view.width} height={isSheet ? view.bodyRows : undefined}>
       {pane.mode === 'bundle' ? null : pane.mode === 'capture' ? <CaptureRow el={el} view={view} handlers={handlers} /> : <SearchRow el={el} view={view} handlers={handlers} />}
       {pane.mode !== 'bundle' && !view.isInline && <Box height={1} />}
       {body()}
       {pane.mode === 'move' && <Move el={el} view={view} handlers={handlers} />}
       {showPreview && (view.preview ? <Preview el={el} view={view} note={view.preview} /> : <Box height={PREVIEW_ROWS} />)}
+      {isSheet && <Box flexGrow={1} />}
       <Footer el={el} view={view} />
-      {pane.mode === 'sheet' && <KeySheet el={el} view={view} />}
+      {isSheet && <KeySheet el={el} view={view} />}
       <ActionLayer el={el} view={view} handlers={handlers} />
     </Box>
   )
