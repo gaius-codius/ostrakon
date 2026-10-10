@@ -31,7 +31,7 @@ test('the pane opens on this project, searches everywhere once typing, and Enter
   await ui.input({ key: 'q', text: 'kubernetes', kind: 'change' })
   expect(await ui.find({ type: 'Text', text: /No notes match “kubernetes” in any project/ })).toBeDefined()
   await ui.input({ key: 'q', text: 'kubernetes', kind: 'submit' })
-  expect(world.toasts.some(toast => toast.includes('saved to cc'))).toBe(true)
+  expect(world.toasts.some(toast => toast.includes('saved to'))).toBe(false)
   expect([...dir.files.values()].some(file => file.text.includes('kubernetes'))).toBe(true)
   await ui.unmount()
 })
@@ -113,7 +113,7 @@ test('/jot saves at once; alone it opens the pane, where ctrl+n captures, saving
   const dir = fixture()
   const { world } = await startSession($, on, dir)
   await run($, 'jot', 'buy milk')
-  expect(world.toasts.some(toast => toast.includes('saved to cc'))).toBe(true)
+  expect(world.toasts.some(toast => toast.includes('saved to'))).toBe(false)
   expect([...dir.files.values()].some(file => file.text.includes('buy milk'))).toBe(true)
 
   await run($, 'jot', '')

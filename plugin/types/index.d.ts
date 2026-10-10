@@ -93,6 +93,10 @@ declare module 'claude-code' {
       sync: SyncState
       // The mirror folder's sync status (SPEC §7.2); isOn false when no mirror is configured.
       mirror: SyncState
+      // Whether the prompt's draft leads with `/jot `, as prompt.edit last saw it (SPEC §4.4).
+      isJotDraft: boolean
+      // When the last /jot save landed, while the hint line still says so; 0 otherwise.
+      savedAt: number
     }
   }
 }

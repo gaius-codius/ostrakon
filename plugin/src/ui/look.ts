@@ -88,8 +88,9 @@ export const TEXT = {
 } as const
 
 // The tail on the hint line under the prompt (SPEC §4.4): what a /jot draft will do, then that
-// it did.
+// it did. `gap` parts it from the engine's line (the engine draws the tail dim, right after it).
 export const HINT = {
+  gap: ' · ',
   capture: (project: string) => `${GLYPH.capture} ${GLYPH.enter} saves to ${project}, Claude won't see it`,
   saved: (project: string) => `${GLYPH.saved} saved to ${project}`,
 } as const
@@ -108,7 +109,6 @@ export const TOAST = {
   pickDropped: (n: number) => `${n} pick${n === 1 ? '' : 's'} dropped: no longer open`,
   mentions: '@ mentions need the prompt: filled instead',
   notSent: (why: string) => `Not sent: ${why}`,
-  saved: (project: string) => `${GLYPH.capture} saved to ${project} · ctrl+x s to view`,
   inPrompt: (n: number) => `note ${n} in your prompt · ⏎ to send`,
   hasNewline: 'Contains ↵: edit the file instead (path copied)',
   moved: (project: string) => `Moved to ${project}`,

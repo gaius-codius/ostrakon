@@ -152,7 +152,8 @@ Reached with `l` on a row or `ctrl+l`; it keeps the query and scope.
 
 ### 4.4 Capture, `//` and the draft stash
 - **In the pane:** `n` on a row or `ctrl+n` turns the search row into the capture row (`✎ new note`, the text, the target project at the right). Enter saves and stays in capture; Enter on an empty line returns to search; `ctrl+s` cycles the target project. The draft shows whole underneath, wrapped. A failed save keeps the text and shows `Couldn't save: <reason>`.
-- **From the prompt:** a prompt that becomes exactly `//` is rewritten to `/jot ` (cursor at the end). `/jot` runs at once even mid-turn. `/jot text` saves to this project and toasts `✎ saved to cc · ctrl+x s to view`; `/jot` alone opens the pane in capture mode. To send a literal `//` prompt, start with a space or paste it: only one typed `/` after a lone `/` triggers the rewrite.
+- **From the prompt:** a prompt that becomes exactly `//` is rewritten to `/jot ` (cursor at the end). `/jot` runs at once even mid-turn. `/jot` is painted in the accent and bold, the note after it italic. `/jot text` saves to this project; `/jot` alone opens the pane in capture mode. To send a literal `//` prompt, start with a space or paste it: only one typed `/` after a lone `/` triggers the rewrite.
+- **Hint line:** the dim line under the prompt gets a tail after ` · `. While the draft leads with `/jot `: `✎ ⏎ saves to cc, Claude won't see it`. For 3 s after a save from the prompt (or a search with no match, saved from the pane): `✓ saved to cc`, in place of a toast. A failed save still says `Couldn't save: <reason>`.
 - **Draft stash.** Every open that asks for focus (`ctrl+x s`, `/jot`) first reads the prompt. If it holds a draft, the draft is kept in `$.state` as the *stash*, the prompt is emptied, and the pane opens focused. Exactly one exit then decides what the prompt holds, and clears the stash:
 
 | Exit | Prompt afterwards |

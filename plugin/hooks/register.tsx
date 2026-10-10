@@ -34,7 +34,7 @@ import { canReview, freshTurns, isHarvestShown, mergeHarvest, sessionEnded, sess
 import type { RunningTurn } from '../src/turns'
 import { HarvestRow, PocketRow, harvestOf, pocketOf } from '../src/ui/band'
 import type { BandHandlers } from '../src/ui/band'
-import { TOAST } from '../src/ui/look'
+import { HINT, MS, TOAST } from '../src/ui/look'
 import { CAPTURE_KEY, EDIT_KEY, MOVE_KEY, Pane, SEARCH_KEY, SEND_KEY, chromeRows, slotKey } from '../src/ui/pane'
 import type { Handlers, PaneView } from '../src/ui/pane'
 
@@ -56,6 +56,9 @@ const harvest = atom({ plugin: 'ostrakon', key: 'harvest' } as const, null, { sh
 const turns = atom({ plugin: 'ostrakon', key: 'turns' } as const, { latest: '', latestOrder: { generation: 0, seq: 0 }, running: '', generation: 0, seq: 0 }, { shape: 'order' })
 const syncState = atom({ plugin: 'ostrakon', key: 'sync' } as const, { isOn: false, isOnline: false, queued: 0, problem: '' })
 const mirrorState = atom({ plugin: 'ostrakon', key: 'mirror' } as const, { isOn: false, isOnline: false, queued: 0, problem: '' })
+// The hint line's tail (SPEC §4.4): a /jot draft says what Enter will do, then that it did.
+const isJotDraft = atom({ plugin: 'ostrakon', key: 'isJotDraft' } as const, false)
+const savedAt = atom({ plugin: 'ostrakon', key: 'savedAt' } as const, 0)
 
 // The pane's last drawn geometry: actions page and focus against what the person sees.
 const geometry = { bodyRows: 30, width: 70, isInline: false, isFocused: true }
@@ -557,6 +560,21 @@ const createNote = async ($: EngineInterface, text: string, target: NoteProject 
   return created
 }
 
+// Written only when it changes: prompt.edit runs on every key.
+const markJotDraft = async ($: EngineInterface, isJot: boolean) => {
+  if ((await read($, isJotDraft)) !== isJot) await update($, isJotDraft, () => isJot)
+}
+
+// A save from the prompt says so on the hint line for MS.saved, in place of a toast. A later save
+// keeps its own time: the earlier one's timer leaves it up.
+const showSaved = async ($: EngineInterface) => {
+  const at = await $.clock.now()
+  await update($, savedAt, () => at)
+  $.clock.after(MS.saved, () => {
+    update($, savedAt, current => (current === at ? 0 : current)).catch(error => reportStorage($, error))
+  })
+}
+
 const notesOf = async ($: EngineInterface, ids: string[]) => {
   const all = await read($, notes)
   return ids.map(id => all[id]).filter((note): note is Note => note !== undefined)
@@ -792,7 +810,7 @@ const searchSubmit = async ($: EngineInterface, value: string) => {
   }
   try {
     await createNote($, text, project)
-    toast($, TOAST.saved(project.name))
+    await showSaved($)
     // Something typed while it saved is a new search: leave it.
     await setPane($, state => (state.query === value ? { ...state, query: '', scope: state.scopeChosen ? state.scope : 'project' } : state))
   } catch (error) {
@@ -1133,13 +1151,15 @@ export const register: Register = (on, options) => {
   // and Enter saves a new note too).
   on('command.run', { command: 'jot' }, async ($, e) => {
     const text = String(e.args ?? '').trim()
+    // The draft went in with the command: the hint line no longer reads it as one.
+    await update($, isJotDraft, () => false)
     if (text === '') {
       const why = await openPane($, 'browse')
       return { text: why === undefined ? '' : `ostrakon: ${why}` }
     }
     try {
       await createNote($, text, project)
-      toast($, TOAST.saved(project.name))
+      await showSaved($)
       return { text: '' }
     } catch (error) {
       return { text: `ostrakon: ${TOAST.failed(messageOf(error))}` }
@@ -1150,10 +1170,28 @@ export const register: Register = (on, options) => {
   // a paste, or `//` inside a draft, is left alone.
   on('prompt.edit', async ($, e, next) => {
     const mark = { start: 0, end: 4, color: 'claude', bold: true } as const
-    if (e.key !== undefined && e.text === '/' && e.inputText === '/' && e.start === 1 && e.end === 1) return { text: '/jot ', cursor: 5, decorations: [mark] }
+    if (e.key !== undefined && e.text === '/' && e.inputText === '/' && e.start === 1 && e.end === 1) {
+      await markJotDraft($, true)
+      return { text: '/jot ', cursor: 5, decorations: [mark] }
+    }
     const edited = await next(e)
-    // Every answer replaces the decorations, so /jot stays marked while it leads the prompt.
-    return edited.text.startsWith('/jot ') ? { ...edited, decorations: [...(edited.decorations ?? []), mark] } : edited
+    const isJot = edited.text.startsWith('/jot ')
+    await markJotDraft($, isJot)
+    if (!isJot) return edited
+    // Every answer replaces the decorations, so /jot stays marked while it leads the prompt, and
+    // the note after it reads as one.
+    const note = { start: 5, end: edited.text.length, italic: true } as const
+    return { ...edited, decorations: [...(edited.decorations ?? []), mark, ...(edited.text.length > 5 ? [note] : [])] }
+  })
+
+  // The hint line under the prompt (SPEC §4.4): a /jot draft says where it saves, then that it did.
+  // Added to the engine's line as its tail, after any other mod's.
+  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+    const said = e.props.isDraft && (await read($, isJotDraft)) ? HINT.capture(project.name) : (await read($, savedAt)) !== 0 ? HINT.saved(project.name) : ''
+    if (said === '') return next(e)
+    const before = e.props.tail ?? ''
+    const gap = before !== '' || e.props.hint !== '' ? HINT.gap : ''
+    return next({ ...e, props: { ...e.props, tail: `${before}${gap}${said}` } })
   })
 
   // A note the pane or band put into the prompt is sent once a submit carrying that text goes in.
