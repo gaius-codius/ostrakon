@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# The ostrakon command line. Install by linking it onto your PATH:
+#   ln -sf "$PWD/bin/ostrakon" ~/.local/bin/ostrakon
+# HUB_* settings come from the environment, else from ~/.config/ostrakon-hub/env (the systemd
+# unit's file, read as KEY=VALUE lines the way systemd reads it, never run as shell).
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
+ENV_FILE=${OSTRAKON_HUB_ENV:-$HOME/.config/ostrakon-hub/env}
+
+usage() {
+  cat <<EOF
+usage: ostrakon <command>
+
+  pair [url]   print a QR code that pairs a phone with the hub (url: the hub's https
+               address, default this machine's Tailscale name on port 8443)
+  hub          run the hub in the foreground
+  help         show this
+
+HUB_* settings are read from the environment, else from $ENV_FILE.
+EOF
+}
+
+load_env() {
+  [ -r "$ENV_FILE" ] || return 0
+  local line key value
+  while IFS= read -r line || [ -n "$line" ]; do
+    [[ $line =~ ^[[:space:]]*(HUB_[A-Z_]+)=(.*)$ ]] || continue
+    key=${BASH_REMATCH[1]} value=${BASH_REMATCH[2]}
+    [[ $value =~ ^\"(.*)\"$ || $value =~ ^\'(.*)\'$ ]] && value=${BASH_REMATCH[1]}
+    [ -n "${!key:-}" ] || export "$key=$value"
+  done < "$ENV_FILE"
+}
+
+command -v bun >/dev/null || { echo "ostrakon: needs Bun (https://bun.sh)" >&2; exit 1; }
+
+case ${1:-help} in
+  pair) shift; load_env; exec bun "$ROOT/server/hub.ts" pair "$@" ;;
+  hub) shift; load_env; exec bun "$ROOT/server/hub.ts" "$@" ;;
+  help | -h | --help) usage ;;
+  *) echo "ostrakon: unknown command: $1" >&2; usage >&2; exit 1 ;;
+esac

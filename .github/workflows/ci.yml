@@ -33,7 +33,7 @@ jobs:
         with:
           persist-credentials: false
       # Errors only: the dev scripts are sourced helpers, so style warnings are noise.
-      - run: shellcheck -s bash -S error tools/check.sh tools/*/*.sh
+      - run: shellcheck -s bash -S error tools/check.sh tools/*/*.sh bin/ostrakon
 
   gitleaks:
     runs-on: ubuntu-latest

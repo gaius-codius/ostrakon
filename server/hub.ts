@@ -10,7 +10,7 @@
 //              is trusted; writes it authorizes must come from the hub's own page (no foreign
 //              Origin).
 //
-// `bun server/hub.ts pair [url]` prints a QR code of the phone's `?token=` link (needs HUB_TOKEN
+// `bun server/hub.ts pair [url]` (or `ostrakon pair`, bin/ostrakon) prints a QR code of the phone's `?token=` link (needs HUB_TOKEN
 // and `qrencode`) and exits; the url is the hub's public https address (default: this Tailscale node).
 
 import { Database } from 'bun:sqlite'
@@ -305,7 +305,7 @@ const pair = (arg: string | undefined) => {
     process.exit(1)
   }
   const token = process.env.HUB_TOKEN
-  if (!token) fail('set HUB_TOKEN to the hub\'s token. With the systemd setup it is in ~/.config/ostrakon-hub/env:\n  set -a; . ~/.config/ostrakon-hub/env; set +a')
+  if (!token) fail('set HUB_TOKEN to the hub\'s token, or put it in ~/.config/ostrakon-hub/env and run `ostrakon pair` (bin/ostrakon), which reads that file')
   let base = arg
   if (!base) {
     try {
@@ -313,7 +313,7 @@ const pair = (arg: string | undefined) => {
       const dns = run.exitCode === 0 ? JSON.parse(run.stdout.toString()).Self?.DNSName : undefined
       if (typeof dns === 'string' && dns) base = `https://${dns.replace(/\.$/, '')}:8443`
     } catch {}
-    if (!base) fail('could not get this machine\'s name from `tailscale status --json`; pass the hub\'s URL: bun server/hub.ts pair https://<host>.<tailnet>.ts.net:8443')
+    if (!base) fail('could not get this machine\'s name from `tailscale status --json`; pass the hub\'s URL: ostrakon pair https://<host>.<tailnet>.ts.net:8443')
   }
   let link = ''
   try {
