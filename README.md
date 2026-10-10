@@ -1,6 +1,6 @@
 # ostrakon
 
-An ostrakon for Claude Code: capture thoughts and follow-ups from within Claude Code without breaking your flow, triage them across projects and machines, and turn them into prompts.
+A scratchpad for Claude Code: capture thoughts and follow-ups from within Claude Code without breaking your flow, triage them across projects and machines, and turn them into prompts. An optional small hub keeps your notes in sync between machines and serves a phone app for capturing and triaging on the go.
 
 ## What it does
 
