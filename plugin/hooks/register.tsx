@@ -1216,7 +1216,8 @@ export const register: Register = (on, options) => {
     const said = e.props.isDraft && (await read($, isJotDraft)) ? HINT.capture(project.name) : (await read($, savedAt)) !== 0 ? HINT.saved(project.name) : ''
     if (said === '') return next(e)
     const before = e.props.tail ?? ''
-    const gap = before !== '' || e.props.hint !== '' ? HINT.gap : ''
+    // The engine parts its own line from the tail; only another mod's tail needs one here.
+    const gap = before !== '' ? HINT.gap : ''
     return next({ ...e, props: { ...e.props, tail: `${before}${gap}${said}` } })
   })
 

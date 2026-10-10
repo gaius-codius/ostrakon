@@ -91,7 +91,7 @@ export const TEXT = {
 } as const
 
 // The tail on the hint line under the prompt (SPEC §4.4): what a /jot draft will do, then that
-// it did. `gap` parts it from the engine's line (the engine draws the tail dim, right after it).
+// it did. The engine parts its line from the tail; `gap` parts ours from another mod's tail.
 export const HINT = {
   gap: ' · ',
   capture: (project: string) => `${GLYPH.capture} ${GLYPH.enter} saves to ${project}, Claude won't see it`,

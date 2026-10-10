@@ -44,7 +44,7 @@ test('a /jot draft marks the command and italicises the note, and the hint line 
     { start: 5, end: 13, italic: true },
   ])
   await ui.redraw(HINT_PROPS)
-  expect(await tailOf(ui)).toBe(`${HINT.gap}${HINT.capture('cc')}`)
+  expect(await tailOf(ui)).toBe(HINT.capture('cc'))
   // A draft that stops leading with /jot is an ordinary prompt again.
   const plain = await edit($, '', 'buy milk')
   expect(plain.decorations).toBeUndefined()
@@ -60,12 +60,12 @@ test('a /jot save says saved on the hint line instead of a toast, until MS.saved
   await edit($, '/jot buy mil', 'k')
   await run($, 'jot', 'buy milk')
   await ui.redraw({ ...HINT_PROPS, isDraft: false })
-  expect(await tailOf(ui)).toBe(`${HINT.gap}${HINT.saved('cc')}`)
+  expect(await tailOf(ui)).toBe(HINT.saved('cc'))
   expect(world.toasts).toEqual([])
   // Typing /jot again within the window: the draft's cue wins.
   await edit($, '/jot', ' ')
   await ui.redraw(HINT_PROPS)
-  expect(await tailOf(ui)).toBe(`${HINT.gap}${HINT.capture('cc')}`)
+  expect(await tailOf(ui)).toBe(HINT.capture('cc'))
   await edit($, '', 'x')
   await clock.advance(MS.saved)
   await ui.redraw({ ...HINT_PROPS, isDraft: false })
