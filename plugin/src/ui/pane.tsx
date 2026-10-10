@@ -2,7 +2,7 @@ import type { Elements } from 'claude-code'
 
 import type { Note, NoteProblem, NoteProject, PaneState } from '../../types'
 import type { Action, Ctx, Focus, Key, Line, Page } from '../model'
-import { ageOf, cells, cut, footerPairs, fitOneLine, fromField, groupLabel, labelOf, oneLine, toField, uniqueKeys } from '../model'
+import { ageOf, cells, cut, fitOneLine, fitStatuses, footerPairs, fromField, groupLabel, labelOf, oneLine, toField, uniqueKeys, wrap } from '../model'
 import { CHORD, COLOUR, GLYPH, SHARD, TEXT, WIDTH, colourOf } from './look'
 
 // The launcher pane's drawing (SPEC §4). Pure: it gets the elements, a computed view and the
@@ -303,29 +303,10 @@ const metaOf = (view: PaneView, note: Note) => {
 export const PREVIEW_ROWS = 1 + WIDTH.previewLines + 1
 export const FOOTER_ROWS = 1
 
-const wrapLines = (text: string, width: number) => {
-  const out: string[] = []
-  for (const paragraph of text.split('\n')) {
-    let line = ''
-    for (const word of paragraph.split(/(\s+)/)) {
-      if ((line + word).length > width && line.trim() !== '') {
-        out.push(line.trimEnd())
-        line = word.trimStart()
-      } else line += word
-      while (line.length > width) {
-        out.push(line.slice(0, width))
-        line = line.slice(width)
-      }
-    }
-    out.push(line.trimEnd())
-  }
-  return out
-}
-
 // A draft being typed, wrapped: the one-line field cuts it off, so this is where it reads whole.
 // Too long for `rows`, it shows its end (where the typing is), led by …
 const draftLines = (text: string, width: number, rows: number) => {
-  const lines = wrapLines(text, width)
+  const lines = wrap(text, width)
   if (lines.length <= rows) return lines
   const tail = lines.slice(-rows)
   tail[0] = `${GLYPH.more}${cut(tail[0] ?? '', width - 1)}`
@@ -339,7 +320,7 @@ const Preview = ({ el, view, note }: { el: E; view: PaneView; note: Note }) => {
   const isEditing = view.pane.mode === 'edit' && edit !== null && edit.id === note.id
   // Quoted: a dim bar down the left, the way the bundle shows what it will send.
   const width = view.width - 2
-  const lines = wrapLines(isEditing ? fromField(edit.draft) : note.text, width)
+  const lines = wrap(isEditing ? fromField(edit.draft) : note.text, width)
   let shown = lines.slice(0, WIDTH.previewLines)
   if (isEditing) shown = draftLines(fromField(edit.draft), width, WIDTH.previewLines)
   else if (lines.length > WIDTH.previewLines) shown[shown.length - 1] = cut(`${shown[shown.length - 1] ?? ''} `, width).replace(/ ?$/, GLYPH.more)
@@ -366,10 +347,12 @@ const Footer = ({ el, view }: { el: E; view: PaneView }) => {
   if (pane.picks.length > 0 && focus.kind === 'line') statuses.push([`${pane.picks.length} picked${view.picksHidden > 0 ? ` (${view.picksHidden} hidden)` : ''}`, COLOUR.accent])
   if (view.problems.length > 0 && focus.kind !== 'line') statuses.push([`${view.problems.length} unreadable file${view.problems.length === 1 ? '' : 's'}`, COLOUR.problem])
   if (view.syncStatus !== '') statuses.push([view.syncStatus, COLOUR.offline])
-  const lead = statuses.map(([text]) => text).join('  ')
   // One line: at most WIDTH.footerPairs actions, the legend if there's room, `i keys` on the right.
   const all: [string, string][] = focus.kind === 'unfocused' ? TEXT.unfocused : footerPairs(view.keys)
   const keySheet = all.find(([key]) => key === 'i')
+  // Statuses are cut, never wrapped, and leave room for `i keys` (two gaps: the spacer's and its own).
+  const shown = fitStatuses(statuses, view.width - 2 - (keySheet ? 2 + cells(keySheet.join(' ')) : 0))
+  const lead = shown.map(([text]) => text).join('  ')
   const actions = all.filter(([key]) => key !== 'i').slice(0, WIDTH.footerPairs)
   if (view.showLegend && !view.isInline) actions.push([TEXT.legend, ''])
   // The spacer before `i keys` takes one more gap than fitOneLine counts.
@@ -388,7 +371,7 @@ const Footer = ({ el, view }: { el: E; view: PaneView }) => {
     <Box flexDirection="column" width={view.width}>
       {!view.isInline && <Box height={1} />}
       <Box columnGap={2} width={view.width} height={FOOTER_ROWS}>
-        {statuses.map(([text, colour]) => (
+        {shown.map(([text, colour]) => (
           <Text color={colour} bold>
             {text}
           </Text>
@@ -499,8 +482,10 @@ const Empty = ({ el, view, hasHub, hasHarvest }: { el: E; view: PaneView; hasHub
     ...(hasHarvest ? ([[GLYPH.claude, 'Claude can leave notes for you']] as [string, string][]) : []),
   ]
   // Docked, a small shard sits beside the ways in; the title and the keys share its right edge,
-  // and the descriptions share one column after the keys.
-  const indent = view.isInline ? 0 : WIDTH.shard
+  // and the descriptions share one column after the keys. Too narrow for that, the shard goes first.
+  const longest = Math.max(...ways.map(([, text]) => cells(text)))
+  const hasShard = !view.isInline && view.width - 2 - WIDTH.shard - WIDTH.wayKey >= longest
+  const indent = hasShard ? WIDTH.shard : 0
   return (
     <Box flexDirection="column" paddingY={view.isInline ? 0 : 1} paddingX={1}>
       <Box>
@@ -509,7 +494,7 @@ const Empty = ({ el, view, hasHub, hasHarvest }: { el: E; view: PaneView; hasHub
       </Box>
       {!view.isInline && <Box height={1} />}
       <Box>
-        {!view.isInline && (
+        {hasShard && (
           <Box flexDirection="column" width={indent} flexShrink={0}>
             {SHARD.map(line => (
               <Text color={COLOUR.accent} dimColor>

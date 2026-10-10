@@ -67,6 +67,35 @@ export const cut = (text: string, width: number) => {
   return `${kept.trimEnd()}${GLYPH.more}`
 }
 
+// Wraps at spaces to `width` cells; a word wider than a line breaks between clusters.
+export const wrap = (text: string, width: number) => {
+  const room = Math.max(1, width)
+  const out: string[] = []
+  for (const paragraph of text.split('\n')) {
+    let line = ''
+    for (const word of paragraph.split(/(\s+)/)) {
+      if (cells(line + word) > room && line.trim() !== '') {
+        out.push(line.trimEnd())
+        line = word.trimStart()
+      } else line += word
+      while (cells(line) > room) {
+        let head = ''
+        let used = 0
+        for (const cluster of clustersOf(line)) {
+          const size = clusterCells(cluster)
+          if (used + size > room && head !== '') break
+          head += cluster
+          used += size
+        }
+        out.push(head)
+        line = line.slice(head.length)
+      }
+    }
+    out.push(line.trimEnd())
+  }
+  return out
+}
+
 export const ageOf = (stamp: string, now: number) => {
   const minutes = Math.max(0, Math.floor((now - Date.parse(stamp)) / 60_000))
   if (minutes < 1) return 'now'
@@ -302,7 +331,7 @@ export const pageOf = (lines: Line[], desired: number, cursor: string | null, ca
 
 // Rows a wrapped text takes at a width.
 export const wrappedRows = (text: string, width: number) =>
-  text.split('\n').reduce((rows, line) => rows + Math.max(1, Math.ceil(line.length / Math.max(1, width))), 0)
+  text.split('\n').reduce((rows, line) => rows + Math.max(1, Math.ceil(cells(line) / Math.max(1, width))), 0)
 
 // ---- keys and footers (SPEC §4.5, §4.6) ----
 
@@ -442,12 +471,23 @@ export const uniqueKeys = (keys: Key[]) => {
 
 export const footerPairs = (keys: Key[]) => uniqueKeys(keys).flatMap(key => (key.shown ? [key.shown] : []))
 
+// Footer statuses ([text, colour]) within `room` cells, two between them: cut, never wrapped, and
+// the last ones go first.
+export const fitStatuses = (statuses: [string, string][], room: number) => {
+  let left = room
+  return statuses.flatMap(([text, colour]): [string, string][] => {
+    const fitted = cut(text, left)
+    left -= cells(fitted) + 2
+    return fitted === '' ? [] : [[fitted, colour]]
+  })
+}
+
 // Footer rows at a width: pairs wrap with two spaces between them.
 export const footerRows = (pairs: [string, string][], lead: string, width: number) => {
   let rows = 1
-  let used = lead.length
+  let used = cells(lead)
   for (const [key, label] of pairs) {
-    const size = key.length + (label === '' ? 0 : 1 + label.length)
+    const size = cells(key) + (label === '' ? 0 : 1 + cells(label))
     const gap = used === 0 ? 0 : 2
     if (used + gap + size > width && used > 0) {
       rows += 1

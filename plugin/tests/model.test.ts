@@ -6,8 +6,10 @@ import {
   ageOf,
   bundleText,
   canEditInline,
+  cells,
   dispatchText,
   fitOneLine,
+  fitStatuses,
   footerPairs,
   freshPane,
   fromField,
@@ -19,6 +21,7 @@ import {
   parseQuery,
   toField,
   uniqueKeys,
+  wrap,
 } from '../src/model'
 
 const NOW = Date.parse('2026-10-09T12:00:00.000Z')
@@ -150,6 +153,24 @@ describe('model', () => {
     expect(searchHistory).toEqual(['u', 'f', 'i'])
     const picked = footerPairs(keysFor(focuses[3] as Focus)).map(([key]) => key)
     expect(picked.slice(0, 3)).toEqual(['b', 'v', 'x'])
+  })
+
+  test('wrapping counts terminal cells: wide characters take two and are never split', () => {
+    expect(wrap('one two three', 7)).toEqual(['one two', 'three'])
+    const wide = wrap('日本語のテキスト', 6)
+    expect(wide).toEqual(['日本語', 'のテキ', 'スト'])
+    for (const line of wrap('🎉🎉🎉 party time 日本語', 5)) expect(cells(line)).toBeLessThanOrEqual(5)
+    expect(wrap('a\n\nb', 10)).toEqual(['a', '', 'b'])
+  })
+
+  test('footer statuses are cut to their room, the last ones first', () => {
+    const offline = 'hub offline · 12 queued · mirror unavailable'
+    expect(fitStatuses([['2 picked', 'a'], [offline, 'w']], 60)).toEqual([['2 picked', 'a'], [offline, 'w']])
+    const cut = fitStatuses([['2 picked', 'a'], [offline, 'w']], 30)
+    expect(cut.map(([text]) => cells(text)).reduce((sum, size) => sum + size + 2, -2)).toBeLessThanOrEqual(30)
+    expect(cut[0]?.[0]).toBe('2 picked')
+    expect(cut[1]?.[0].endsWith('…')).toBe(true)
+    expect(fitStatuses([['2 picked', 'a'], [offline, 'w']], 9)).toEqual([['2 picked', 'a']])
   })
 
   test('inline footers drop pairs from the right and keep i keys', () => {

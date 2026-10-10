@@ -310,3 +310,14 @@ test('the empty pane names its scope and offers ctrl+n for a new note', async ($
   expect(await ui.find({ type: 'Text', text: /^Nothing pending in any project\.$/ })).toBeDefined()
   await ui.unmount()
 })
+
+test('a narrow docked empty pane drops the shard before cutting the ways in', async ($, on) => {
+  await startSession($, on, new MemDir())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  expect(await ui.find({ type: 'Text', text: /╲▁▁▁/ })).toBeDefined()
+  await ui.redraw({ ...PANE.props, bodyColumns: 56 })
+  expect(await ui.find({ type: 'Text', text: /╲▁▁▁/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^jot a note from the prompt, even mid-turn$/ })).toBeDefined()
+  await ui.unmount()
+})
