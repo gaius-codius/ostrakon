@@ -6,6 +6,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Fixed
+
+- The hub no longer sends its internal error messages to callers: a body that isn't JSON gets `invalid JSON body`, and a failure of the hub itself a fixed answer, with the details in its log.
+
 ## [0.1.0] - 2026-10-11
 
 The first public release.
