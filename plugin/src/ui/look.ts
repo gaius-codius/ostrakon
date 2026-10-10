@@ -22,12 +22,15 @@ export const GLYPH = {
   up: '↑',
   down: '↓',
   problem: '⚠',
+  // The project dot before a name: another project's in its colour, unfiled hollow.
+  dot: '●',
+  unfiledDot: '○',
 } as const
 
 export const RULE = { heavy: '━', light: '─' } as const
 
 // Theme keys only: they follow light and dark. `permission` is left out because it matches
-// `suggestion` in the light theme.
+// `suggestion` in the light theme; `warning` because a project shouldn't read as an alarm.
 export const COLOUR = {
   accent: 'claude',
   band: 'subtle',
@@ -36,7 +39,7 @@ export const COLOUR = {
   saved: 'success',
   problem: 'error',
   offline: 'warning',
-  palette: ['suggestion', 'success', 'merged', 'planMode', 'warning', 'autoAccept'],
+  palette: ['suggestion', 'success', 'merged', 'planMode', 'autoAccept'],
 } as const
 
 export const WIDTH = {
@@ -48,6 +51,8 @@ export const WIDTH = {
   label: 24,
   previewLines: 6,
   keySheet: 46,
+  // Footer pairs beside `i keys` (SPEC §4.6).
+  footerPairs: 4,
   savedDocked: 3,
   savedInline: 1,
   // Band chips (SPEC §10): Pocket labels shorten from `chip` to `chipMin` before chips drop.
@@ -76,6 +81,16 @@ export const TEXT = {
   harvestShort: (n: number) => `${GLYPH.claude} ${n}`,
   harvestHint: (n: number) => `${n === 0 ? '' : `${n === 1 ? '1' : `1–${n}`} keep one · `}0 keep all · the rest wait in the pane under “proposed”`,
 } as const
+
+// The tail on the hint line under the prompt (SPEC §4.4): what a /jot draft will do, then that
+// it did.
+export const HINT = {
+  capture: (project: string) => `${GLYPH.capture} ${GLYPH.enter} saves to ${project}, Claude won't see it`,
+  saved: (project: string) => `${GLYPH.saved} saved to ${project}`,
+} as const
+
+// How long a just-saved note stays drawn as new, and the saved tail stays up.
+export const MS = { fresh: 2000, saved: 3000 } as const
 
 export const TOAST = {
   archived: 'Archived · u undo',
