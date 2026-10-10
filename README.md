@@ -2,8 +2,6 @@
 
 An ostrakon for Claude Code: capture thoughts and follow-ups from within Claude Code without breaking your flow, triage them across projects and machines, and turn them into prompts.
 
-Ostrakon is a Claude Code **mod** (a plugin of function hooks that draws a pane and a band inside the terminal UI), plus an optional small hub that keeps your notes in sync between machines and serves a phone app for capturing and triaging on the go.
-
 ## What it does
 
 - **Capture** a note in under two seconds, even while Claude is working, without losing your prompt draft: `/jot text`, or `//` typed into an empty prompt.
