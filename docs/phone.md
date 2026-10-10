@@ -27,8 +27,8 @@ leaves your text in the field.
 Run the hub on a machine that stays on, such as a home server or a desktop that doesn't sleep. The
 phone and your other machines keep working while it's down, but nothing syncs until it's back.
 
-The hub listens on `127.0.0.1` only. `tailscale serve` puts it on the tailnet over HTTPS, which an
-installable web app needs:
+The hub listens on `127.0.0.1` only, so something has to put it on an HTTPS address your devices
+can reach (an installable web app needs HTTPS). Tailscale is the easy option:
 
 ```
 tailscale serve --bg --https=8443 http://127.0.0.1:8790
@@ -37,6 +37,11 @@ tailscale serve --bg --https=8443 http://127.0.0.1:8790
 Then open `https://<host>.<tailnet>.ts.net:8443/` on the phone, for example
 `https://my-server.example-tailnet.ts.net:8443/`. The phone has to be on the tailnet (the Tailscale app
 connected).
+
+**Without Tailscale.** Any HTTPS reverse proxy (Caddy, nginx), tunnel (Cloudflare Tunnel, ngrok) or
+other VPN in front of `127.0.0.1:8790` works too. Set the proxy's timeout above 30 seconds, because
+live sync holds requests open. If your proxy puts the hub on the public internet, only the token
+protects it, so read [`SECURITY.md`](../SECURITY.md) first.
 
 ## First run: the token
 
@@ -48,8 +53,8 @@ asks the running hub for a one-time code and prints a QR code of a link that car
 camera opens the link in Safari. The code works once and expires after 5 minutes. The page trades
 it for the token, stores the token, and reloads with the `?token=` address in Safari so Add to
 Home Screen works (below). The QR itself never carries the token. It takes `HUB_TOKEN` from the
-environment or from `~/.config/ostrakon-hub/env`, the systemd unit's file. If it can't find this
-machine's Tailscale name, pass the hub's address: `ostrakon pair https://<host>.<tailnet>.ts.net:8443`.
+environment or from `~/.config/ostrakon-hub/env`, the systemd unit's file. Without Tailscale, or if it
+can't find this machine's name, pass the hub's address: `ostrakon pair https://<your hub address>`.
 It needs `qrencode`. If the code has expired or was used, a phone that isn't paired yet says so on
 the token screen; run `ostrakon pair` again. A phone that had the page before pairing codes existed
 may open its old cached copy, which doesn't know them: open the page once first so it updates.
@@ -104,7 +109,8 @@ In the **Shortcuts** app:
 
 Try it: say "Jot to ostrakon", dictate a note, and it shows in the pane on the computer within a
 couple of seconds. If it answers `{"error":"unauthorized"}`, the token in the header is wrong; if
-the action fails to connect, check that Tailscale is connected on the phone.
+the action fails to connect, check that the phone can reach the hub (with Tailscale, that the app
+is connected).
 
 The same call from a terminal:
 

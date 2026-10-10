@@ -105,7 +105,7 @@ The hub is a single Bun file (`server/hub.ts`) with SQLite storage. It listens o
 
 That makes a token in `~/.config/ostrakon-hub/env` (if there isn't one), and installs and starts the systemd user unit (`server/ostrakon-hub.service`). It prints the two steps left to you: `loginctl enable-linger` and `tailscale serve`. Then `ostrakon pair` prints a QR code that pairs a phone (needs `qrencode`); it carries a one-time code, good for 5 minutes, not the token (`--token` prints one that does). To run the hub in the foreground instead: `HUB_TOKEN=$(openssl rand -hex 24) ostrakon hub`. The `ostrakon` command reads `HUB_TOKEN` from the environment or from `~/.config/ostrakon-hub/env`.
 
-**Without Tailscale.** Any HTTPS reverse proxy (Caddy, nginx), tunnel (Cloudflare Tunnel, ngrok) or other VPN in front of `127.0.0.1:8790` works too. Give `ostrakon pair` your address (`ostrakon pair https://notes.example.com`), since it can only look it up from Tailscale. The phone app needs HTTPS to install. Set the proxy's timeout above 30 seconds, because live sync holds requests open. If your proxy puts the hub on the public internet, only the token protects it, so read [`SECURITY.md`](SECURITY.md) first.
+Not using Tailscale? Any HTTPS reverse proxy, tunnel or VPN works too; see [Open it](docs/phone.md#open-it).
 
 The unit runs `~/.local/bin/ostrakon hub`, so it works wherever the repo is checked out. Setup, the phone's Home Screen app, and an iOS Shortcut are in [`docs/phone.md`](docs/phone.md). See [`SECURITY.md`](SECURITY.md) before exposing it.
 
