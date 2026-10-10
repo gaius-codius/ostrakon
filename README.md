@@ -83,6 +83,8 @@ The hub is a single Bun file (`server/hub.ts`) with SQLite storage. It listens o
 HUB_TOKEN=$(openssl rand -hex 24) bun server/hub.ts
 ```
 
+`bun server/hub.ts pair` prints a QR code that pairs a phone (needs `qrencode`).
+
 A systemd user unit is in `server/ostrakon-hub.service`. Setup, the phone's Home Screen app, and an iOS Shortcut are in [`docs/phone.md`](docs/phone.md). See [`SECURITY.md`](SECURITY.md) before exposing it.
 
 ## Development

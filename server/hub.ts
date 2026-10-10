@@ -9,6 +9,9 @@
 //              can send that header to 127.0.0.1 itself, so set it only where every local user
 //              is trusted; writes it authorizes must come from the hub's own page (no foreign
 //              Origin).
+//
+// `bun server/hub.ts pair [url]` prints a QR code of the phone's `?token=` link (needs HUB_TOKEN
+// and `qrencode`) and exits; the url is the hub's public https address (default: this Tailscale node).
 
 import { Database } from 'bun:sqlite'
 import { mkdirSync, readdirSync, rmSync } from 'node:fs'
@@ -282,7 +285,55 @@ export const handler = (hub: Hub, auth: { token?: string; login?: string }) => {
   }
 }
 
-if (import.meta.main) {
+// The link that stores the token in the phone's page: the hub's public https base plus `?token=`.
+// Throws on a URL that isn't https (an installable PWA needs it).
+export const pairLink = (base: string, token: string) => {
+  let url: URL
+  try {
+    url = new URL(base)
+  } catch {
+    throw new Error(`not a valid URL: ${base}`)
+  }
+  if (url.protocol !== 'https:') throw new Error(`the hub URL must be https (a phone page can't be installed from ${url.protocol}//): ${base}`)
+  const path = url.pathname.endsWith('/') ? url.pathname : `${url.pathname}/`
+  return `${url.origin}${path}?token=${encodeURIComponent(token)}`
+}
+
+const pair = (arg: string | undefined) => {
+  const fail = (message: string): never => {
+    console.error(message)
+    process.exit(1)
+  }
+  const token = process.env.HUB_TOKEN
+  if (!token) fail('set HUB_TOKEN to the hub\'s token. With the systemd setup it is in ~/.config/ostrakon-hub/env:\n  set -a; . ~/.config/ostrakon-hub/env; set +a')
+  let base = arg
+  if (!base) {
+    try {
+      const run = Bun.spawnSync(['tailscale', 'status', '--json'], { stderr: 'ignore' })
+      const dns = run.exitCode === 0 ? JSON.parse(run.stdout.toString()).Self?.DNSName : undefined
+      if (typeof dns === 'string' && dns) base = `https://${dns.replace(/\.$/, '')}:8443`
+    } catch {}
+    if (!base) fail('could not get this machine\'s name from `tailscale status --json`; pass the hub\'s URL: bun server/hub.ts pair https://<host>.<tailnet>.ts.net:8443')
+  }
+  let link = ''
+  try {
+    link = pairLink(base as string, token as string)
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error))
+  }
+  try {
+    const qr = Bun.spawnSync(['qrencode', '-t', 'ansiutf8', link], { stdout: 'inherit', stderr: 'inherit' })
+    if (qr.exitCode !== 0) console.error('qrencode failed; use the link below')
+  } catch {
+    console.error('qrencode is not installed (e.g. `sudo pacman -S qrencode` or `sudo apt install qrencode`); use the link below')
+  }
+  console.log(`\n${link}\n`)
+  console.log('The code and the link carry the hub token. Treat a screenshot of either like the token, clear this terminal after scanning, and rotate HUB_TOKEN if it leaks.')
+}
+
+if (import.meta.main && process.argv[2] === 'pair') {
+  pair(process.argv[3])
+} else if (import.meta.main) {
   const port = Number(process.env.HUB_PORT ?? 8790)
   const dataDir = process.env.HUB_DATA ?? join(process.env.HOME ?? '.', '.local/share/ostrakon-hub')
   const auth = { token: process.env.HUB_TOKEN, login: process.env.HUB_LOGIN }

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { Note } from '../plugin/types'
-import { handler, openHub, toNote } from './hub'
+import { handler, openHub, pairLink, toNote } from './hub'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -211,5 +211,26 @@ describe('hub', () => {
     expect(await (await call('/?token=secret', { auth: null })).text()).toContain('<link rel="manifest" href="manifest.json?token=secret">')
     expect(await (await call('/?token=nope', { auth: null })).text()).toContain('<link rel="manifest" href="manifest.json">')
     expect(await (await call('/', { auth: null })).text()).toContain('<link rel="manifest" href="manifest.json">')
+  })
+})
+
+describe('pairLink', () => {
+  test('adds the trailing slash and the token', () => {
+    expect(pairLink('https://hub.example.ts.net:8443', 'abc')).toBe('https://hub.example.ts.net:8443/?token=abc')
+    expect(pairLink('https://hub.example.ts.net:8443/', 'abc')).toBe('https://hub.example.ts.net:8443/?token=abc')
+  })
+
+  test('keeps a path and drops any query or fragment', () => {
+    expect(pairLink('https://example.ts.net/hub', 't')).toBe('https://example.ts.net/hub/?token=t')
+    expect(pairLink('https://example.ts.net/hub/?x=1#y', 't')).toBe('https://example.ts.net/hub/?token=t')
+  })
+
+  test('encodes the token', () => {
+    expect(pairLink('https://example.ts.net', 'a b&c=d/+')).toBe('https://example.ts.net/?token=a%20b%26c%3Dd%2F%2B')
+  })
+
+  test('throws on http and on a bad URL', () => {
+    expect(() => pairLink('http://example.ts.net:8443', 't')).toThrow('https')
+    expect(() => pairLink('example.ts.net', 't')).toThrow('not a valid URL')
   })
 })
