@@ -40,9 +40,8 @@ connected).
 Every `/api` call carries the hub's token (`HUB_TOKEN` in the hub's environment). The first time
 the page opens it asks for it. Paste it and tap **Connect**; it's kept on the phone.
 
-Easiest: on the hub host, run `ostrakon pair` (from the repo, link `bin/ostrakon` onto your PATH first:
-`ln -sf "$PWD/bin/ostrakon" ~/.local/bin/ostrakon`). It prints a QR code of the link below, and the
-phone camera opens it in Safari. It takes the token from `HUB_TOKEN` or from
+Easiest: on the hub host, run `ostrakon pair` (`./install.sh` puts the command on your PATH). It
+prints a QR code of the link below, and the phone camera opens it in Safari. It takes the token from `HUB_TOKEN` or from
 `~/.config/ostrakon-hub/env`, the systemd unit's file. If it can't find this machine's Tailscale
 name, pass the hub's address: `ostrakon pair https://<host>.<tailnet>.ts.net:8443`. It needs
 `qrencode`. This fits the Add to Home Screen flow below: the scan opens Safari with the token in

@@ -8,6 +8,7 @@ How ostrakon works: what it does, the data model, sync, and the platform facts i
 |---|---|
 | `plugin/` | The mod (Claude Code plugin): store, merge, sync adapters, pane and band UI |
 | `server/` | The hub (Bun + SQLite) and the phone form (PWA); setup in `docs/phone.md` |
+| `bin/ostrakon`, `install.sh`, `update.sh` | The command line (`pair`, `hub`, `update`) and the install and update scripts |
 | `tools/` | Development tooling: screenshot pipeline, mockups, QA and experiment harnesses (their output goes to the gitignored `working-docs/`) |
 
 ---

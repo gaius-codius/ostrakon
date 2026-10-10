@@ -15,6 +15,7 @@ usage: ostrakon <command>
   pair [url]   print a QR code that pairs a phone with the hub (url: the hub's https
                address, default this machine's Tailscale name on port 8443)
   hub          run the hub in the foreground
+  update       pull this checkout and restart the hub if it's installed (update.sh)
   help         show this
 
 HUB_* settings are read from the environment, else from $ENV_FILE.
@@ -32,11 +33,12 @@ load_env() {
   done < "$ENV_FILE"
 }
 
-command -v bun >/dev/null || { echo "ostrakon: needs Bun (https://bun.sh)" >&2; exit 1; }
+need_bun() { command -v bun >/dev/null || { echo "ostrakon: needs Bun (https://bun.sh)" >&2; exit 1; }; }
 
 case ${1:-help} in
-  pair) shift; load_env; exec bun "$ROOT/server/hub.ts" pair "$@" ;;
-  hub) shift; load_env; exec bun "$ROOT/server/hub.ts" "$@" ;;
+  update) exec "$ROOT/update.sh" ;;
+  pair) shift; need_bun; load_env; exec bun "$ROOT/server/hub.ts" pair "$@" ;;
+  hub) shift; need_bun; load_env; exec bun "$ROOT/server/hub.ts" "$@" ;;
   help | -h | --help) usage ;;
   *) echo "ostrakon: unknown command: $1" >&2; usage >&2; exit 1 ;;
 esac

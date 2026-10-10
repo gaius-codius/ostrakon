@@ -20,18 +20,28 @@ Notes are plain Markdown files with YAML front matter, one per note, in `~/.loca
 
 You need Claude Code with mods support (see the [mods docs](https://code.claude.com/docs/en/plugins/mods/overview)).
 
-Clone this repo and load the `plugin/` directory:
+Clone this repo and run the install script:
 
 ```sh
 git clone https://github.com/gaius-codius/ostrakon.git
-claude --plugin-dir ostrakon/plugin
+cd ostrakon && ./install.sh
 ```
 
-To load it in every session, set `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`:
+It loads the mod in every session (it sets `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`, keeping a `.bak` copy, and only when it isn't set yet) and links the `ostrakon` command into `~/.local/bin`. It's safe to run again. `./install.sh --hub` also sets up the hub (below).
+
+To try it without installing anything, load the folder for one session: `claude --plugin-dir ostrakon/plugin`. To install by hand, put the folder in `~/.claude/settings.json`:
 
 ```json
 { "env": { "CLAUDE_CODE_PLUGIN_DIRS": "/path/to/ostrakon/plugin" } }
 ```
+
+### Updating
+
+```sh
+ostrakon update     # or ./update.sh in the repo
+```
+
+It pulls the repo (fast-forward only, so local commits stop it), restarts the hub if it's installed and running, and lists what changed. Restart running Claude Code sessions to load the new mod.
 
 ### Keybindings
 
@@ -80,12 +90,12 @@ Set these under the plugin's options (`pluginConfigs.ostrakon.options` in your s
 The hub is a single Bun file (`server/hub.ts`) with SQLite storage. It listens on `127.0.0.1` only, requires a bearer token, and is meant to be put on your tailnet with `tailscale serve`.
 
 ```sh
-HUB_TOKEN=$(openssl rand -hex 24) bun server/hub.ts
+./install.sh --hub
 ```
 
-`bin/ostrakon` is a small command line for the hub; link it onto your PATH from the repo with `ln -sf "$PWD/bin/ostrakon" ~/.local/bin/ostrakon`. `ostrakon pair` prints a QR code that pairs a phone (needs `qrencode`), and `ostrakon hub` runs the hub in the foreground. Both read `HUB_TOKEN` from the environment or from `~/.config/ostrakon-hub/env`.
+That makes a token in `~/.config/ostrakon-hub/env` (if there isn't one), and installs and starts the systemd user unit (`server/ostrakon-hub.service`). It prints the two steps left to you: `loginctl enable-linger` and `tailscale serve`. Then `ostrakon pair` prints a QR code that pairs a phone (needs `qrencode`). To run the hub in the foreground instead: `HUB_TOKEN=$(openssl rand -hex 24) ostrakon hub`. The `ostrakon` command reads `HUB_TOKEN` from the environment or from `~/.config/ostrakon-hub/env`.
 
-A systemd user unit is in `server/ostrakon-hub.service`. Setup, the phone's Home Screen app, and an iOS Shortcut are in [`docs/phone.md`](docs/phone.md). See [`SECURITY.md`](SECURITY.md) before exposing it.
+The unit runs `~/.local/bin/ostrakon hub`, so it works wherever the repo is checked out. Setup, the phone's Home Screen app, and an iOS Shortcut are in [`docs/phone.md`](docs/phone.md). See [`SECURITY.md`](SECURITY.md) before exposing it.
 
 ## Development
 
