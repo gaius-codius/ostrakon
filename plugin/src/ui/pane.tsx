@@ -43,6 +43,8 @@ export type PaneView = {
   projects: NoteProject[]
   captureLabel: string
   showLegend: boolean
+  // The rows the engine gives the pane's body.
+  bodyRows: number
   // `hub offline · 3 queued` while a configured hub can't be reached (SPEC §9.4); empty otherwise.
   syncStatus: string
 }
@@ -590,41 +592,35 @@ const Move = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
   )
 }
 
+// The key sheet sits under the search row and above the footer, framed. It pages to fit the rows
+// between (SPEC §4.5): the problems first, then the keys.
+const sheetTop = (isInline: boolean) => (isInline ? 1 : 2)
+export const sheetRoom = (bodyRows: number, isInline: boolean) => Math.max(1, bodyRows - sheetTop(isInline) - FOOTER_ROWS - 2)
+export const sheetPages = (bodyRows: number, isInline: boolean, problems: number) =>
+  Math.max(1, Math.ceil((problems + TEXT.keySheet.length) / sheetRoom(bodyRows, isInline)))
+
+const padCells = (text: string, width: number) => `${text}${' '.repeat(Math.max(0, width - cells(text)))}`
+
 const KeySheet = ({ el, view }: { el: E; view: PaneView }) => {
   const { Box, Text } = el
-  const rows: [string, string][] = [
-    ['↑ ↓ j k', 'move'],
-    ['1–9', 'jump to a row'],
-    ['⏎ / t', 'to prompt'],
-    ['s', 'send'],
-    ['v / x', 'pick / clear picks'],
-    ['b', 'bundle the picks'],
-    ['e', 'edit'],
-    ['d / u', 'archive / undo, restore'],
-    ['m', 'move to a project'],
-    ['y', 'copy'],
-    ['l / ctrl+l', 'list view'],
-    ['h / z', 'history / fold'],
-    ['f / ctrl+f', 'search'],
-    ['n / ctrl+n', 'new note'],
-    ['ctrl+s', 'scope'],
-    ['esc', 'back (to search, then close)'],
-    ['q / ctrl+q', 'close'],
-    ['ctrl+x s', 'open / close'],
-    ['//', 'jot from the prompt; a space first for a literal //'],
-  ]
+  const width = Math.min(WIDTH.keySheet, view.width - 1)
+  const inner = width - 4
+  const keyWidth = Math.min(WIDTH.sheetKey, Math.floor(inner / 2))
+  const room = sheetRoom(view.bodyRows, view.isInline)
+  const page = view.focus.kind === 'sheet' ? view.focus.page : 0
+  const entries = [...view.problems.map(problem => ({ problem: `${problem.file}: ${problem.reason}`, key: '', label: '' })), ...TEXT.keySheet.map(([key, label]) => ({ problem: '', key, label }))]
   return (
-    <Box position="absolute" top={2} left={Math.max(0, view.width - WIDTH.keySheet - 1)} width={WIDTH.keySheet} borderStyle="round" borderColor={COLOUR.accent} flexDirection="column" paddingX={1} backgroundColor={COLOUR.band}>
-      {view.problems.length > 0 &&
-        view.problems.map(problem => (
-          <Text color={COLOUR.problem}>{cut(`${problem.file}: ${problem.reason}`, WIDTH.keySheet - 4)}</Text>
-        ))}
-      {rows.map(([key, label]) => (
-        <Text>
-          <Text bold>{key.padEnd(17)}</Text>
-          <Text dimColor>{cut(label, WIDTH.keySheet - 21)}</Text>
-        </Text>
-      ))}
+    <Box position="absolute" top={sheetTop(view.isInline)} left={Math.max(0, view.width - width - 1)} width={width} borderStyle="round" borderColor={COLOUR.accent} flexDirection="column" paddingX={1} backgroundColor={COLOUR.band}>
+      {entries.slice(page * room, (page + 1) * room).map(({ problem, key, label }) =>
+        problem !== '' ? (
+          <Text color={COLOUR.problem}>{cut(problem, inner)}</Text>
+        ) : (
+          <Text>
+            <Text bold>{padCells(cut(key, keyWidth - 1), keyWidth)}</Text>
+            <Text dimColor>{cut(label, inner - keyWidth)}</Text>
+          </Text>
+        ),
+      )}
     </Box>
   )
 }

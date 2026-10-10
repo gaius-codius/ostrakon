@@ -190,7 +190,7 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 | `f` / `ctrl+f` | focus search |
 | `n` / `ctrl+n` | new note |
 | `ctrl+s` | scope (search, list) or target project (capture) |
-| `i` | key sheet on/off |
+| `i` | key sheet on/off: a framed list of every key (storage problems first) between the search row and the footer, at most 46 columns and never wider than the pane. When it's longer than the rows between, it pages: the footer shows `j more 2/3`, `j` turns to the next page and `k` back, both going round |
 | Esc | **back** one step: edit → the row (draft kept), move / key sheet / bundle → the list, capture → search, a row → the search field, a query → empty, list view → search view; at the top it closes |
 | `q` / `ctrl+q` / `ctrl+x s` | close the pane from anywhere; drafts are kept |
 
@@ -203,7 +203,7 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 - `ctrl+n` → `pane:next`
 
 ### 4.6 Contextual footer
-One blank row, then one line: at most four key/label pairs for the focus (key bold, label dim, two spaces between) and `i keys` on the right; pairs drop from the right until the line fits. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning); a status too long for the line is cut with `…`, leaving room for `i keys`. The legend `◆ from Claude` trails while a `◆` row is drawn. **The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, search row, list row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`.
+One blank row, then one line: at most four key/label pairs for the focus (key bold, label dim, two spaces between) and `i keys` on the right; pairs drop from the right until the line fits. On a row with nothing picked, the note's own actions take the four places (`t to prompt  s send  e edit  d archive`); `v` pick is answered and listed in the key sheet. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning); a status too long for the line is cut with `…`, leaving room for `i keys`. The legend `◆ from Claude` trails while a `◆` row is drawn. **The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, search row, list row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`.
 
 **Storage problems** also draw a focusable problem row above the first result, in `error` (`⚠ 2 unreadable files · ⏎ details`); ⏎ opens a card listing each file and reason.
 

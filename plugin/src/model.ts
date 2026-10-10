@@ -16,6 +16,7 @@ export const freshPane = (): PaneState => ({
   cursor: null,
   focus: 'search',
   offset: 0,
+  sheetPage: 0,
   edit: null,
   moving: null,
   capture: { draft: '', target: null, saved: [], error: null },
@@ -391,7 +392,7 @@ export type Focus =
   | { kind: 'edit' }
   | { kind: 'bundle' }
   | { kind: 'move' }
-  | { kind: 'sheet' }
+  | { kind: 'sheet'; page: number; pages: number }
   | { kind: 'empty' }
 
 // The keys answered in a focus, footer order. The hidden action layer mounts exactly these, so a
@@ -417,7 +418,11 @@ export const keysFor = (focus: Focus): Key[] => {
     case 'move':
       return [{ action: 'move', shown: ['⏎', 'move'] }, { action: 'back', shown: ['esc', 'back'] }, ...CHORDS(false)]
     case 'sheet':
-      return [k('keys', 'i', 'close keys'), ...CHORDS(false)]
+      return [
+        k('keys', 'i', 'close keys'),
+        ...(focus.pages > 1 ? [k('down', 'j', `more ${focus.page + 1}/${focus.pages}`), k('up', 'k', 'back', false)] : []),
+        ...CHORDS(false),
+      ]
     case 'line': {
       const { line } = focus
       const always = [...nav, k('copy', 'y', 'copy', false), k('close', 'q', 'close', false), k('search', 'f', 'search', false), k('new', 'n', 'new', false), ...CHORDS(false)]
@@ -449,9 +454,10 @@ export const keysFor = (focus: Focus): Key[] => {
       if (focus.picks > 0) {
         return [k('bundle', 'b', 'bundle'), k('pick', 'v', 'pick'), k('clearPicks', 'x', 'clear picks'), k('toPrompt', 't', 'to prompt'), k('keys', 'i', 'keys'), ...rest]
       }
+      // Nothing picked: the note's own actions lead, so they are the four the footer has room for.
       const shown = inList
-        ? [k('pick', 'v', 'pick'), k('toPrompt', 't', 'to prompt'), k('send', 's', 'send'), k('edit', 'e', 'edit'), k('archive', 'd', 'archive'), k('fold', 'z', 'fold'), k('history', 'h', 'history'), k('keys', 'i', 'keys')]
-        : [k('pick', 'v', 'pick'), k('toPrompt', 't', 'to prompt'), k('send', 's', 'send'), k('edit', 'e', 'edit'), k('archive', 'd', 'archive'), k('list', 'l', 'list'), k('search', 'f', 'search'), k('keys', 'i', 'keys')]
+        ? [k('toPrompt', 't', 'to prompt'), k('send', 's', 'send'), k('edit', 'e', 'edit'), k('archive', 'd', 'archive'), k('pick', 'v', 'pick'), k('fold', 'z', 'fold'), k('history', 'h', 'history'), k('keys', 'i', 'keys')]
+        : [k('toPrompt', 't', 'to prompt'), k('send', 's', 'send'), k('edit', 'e', 'edit'), k('archive', 'd', 'archive'), k('pick', 'v', 'pick'), k('list', 'l', 'list'), k('search', 'f', 'search'), k('keys', 'i', 'keys')]
       return [...shown, k('bundle', 'b', 'bundle', false), ...rest]
     }
   }

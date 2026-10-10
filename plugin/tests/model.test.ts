@@ -153,6 +153,14 @@ describe('model', () => {
     expect(searchHistory).toEqual(['u', 'f', 'i'])
     const picked = footerPairs(keysFor(focuses[3] as Focus)).map(([key]) => key)
     expect(picked.slice(0, 3)).toEqual(['b', 'v', 'x'])
+    // Nothing picked, the note's own actions take the four footer places, archive among them.
+    const row = footerPairs(keysFor(focuses[2] as Focus)).map(([key]) => key)
+    expect(row.slice(0, 4)).toEqual(['t', 's', 'e', 'd'])
+    expect(footerPairs(keysFor({ kind: 'sheet', page: 0, pages: 1 })).map(([key]) => key)).toEqual(['i'])
+    expect(footerPairs(keysFor({ kind: 'sheet', page: 1, pages: 3 }))).toEqual([
+      ['i', 'close keys'],
+      ['j', 'more 2/3'],
+    ])
   })
 
   test('wrapping counts terminal cells: wide characters take two and are never split', () => {

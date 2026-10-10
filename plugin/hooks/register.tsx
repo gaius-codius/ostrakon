@@ -35,7 +35,7 @@ import type { RunningTurn } from '../src/turns'
 import { HarvestRow, PocketRow, harvestOf, openerOf, pocketOf } from '../src/ui/band'
 import type { BandHandlers } from '../src/ui/band'
 import { HINT, MS, TEXT, TOAST } from '../src/ui/look'
-import { CAPTURE_KEY, EDIT_KEY, MOVE_KEY, Pane, SEARCH_KEY, SEND_KEY, chromeRows, slotKey } from '../src/ui/pane'
+import { CAPTURE_KEY, EDIT_KEY, MOVE_KEY, Pane, SEARCH_KEY, SEND_KEY, chromeRows, sheetPages, slotKey } from '../src/ui/pane'
 import type { Handlers, PaneView } from '../src/ui/pane'
 
 const PANE = 'ostrakon'
@@ -274,9 +274,13 @@ const projectsOf = (all: Note[]) => {
   return [...byKey.values()]
 }
 
-const focusOf = (state: PaneState, lines: Line[]): Focus => {
+const focusOf = (state: PaneState, lines: Line[], problemCount: number): Focus => {
   if (!geometry.isFocused) return { kind: 'unfocused' }
-  if (state.mode === 'capture' || state.mode === 'edit' || state.mode === 'bundle' || state.mode === 'move' || state.mode === 'sheet') return { kind: state.mode }
+  if (state.mode === 'sheet') {
+    const pages = sheetPages(geometry.bodyRows, geometry.isInline, problemCount)
+    return { kind: 'sheet', page: Math.min(Math.max(0, state.sheetPage ?? 0), pages - 1), pages }
+  }
+  if (state.mode === 'capture' || state.mode === 'edit' || state.mode === 'bundle' || state.mode === 'move') return { kind: state.mode }
   const line = state.focus === 'line' ? lines.find(candidate => candidate.key === state.cursor) : undefined
   if (line) return { kind: 'line', line, view: state.view, picks: state.picks.length }
   if (lines.length === 0 && state.query.trim() === '') return { kind: 'empty' }
@@ -295,7 +299,7 @@ const viewOf = async ($: EngineInterface): Promise<PaneView & { bundleRows: numb
     if (at >= 0) lastCursorIndex = at
     else if (lines.length > 0) state = { ...state, cursor: lines[Math.min(lastCursorIndex, lines.length - 1)]?.key ?? null }
   }
-  const focus = focusOf(state, lines)
+  const focus = focusOf(state, lines, broken.length)
   const keys = keysFor(focus)
   const noteLines = lines.filter((line): line is Extract<Line, { kind: 'note' }> => line.kind === 'note')
   const cursorNote = noteLines.find(line => line.key === state.cursor)?.note
@@ -311,6 +315,7 @@ const viewOf = async ($: EngineInterface): Promise<PaneView & { bundleRows: numb
     focus,
     isInline: geometry.isInline,
     width: geometry.width,
+    bodyRows: geometry.bodyRows,
     lines,
     preview,
     keys,
@@ -617,6 +622,12 @@ const act = async ($: EngineInterface, action: Action) => {
     case 'down':
     case 'up': {
       const step = action === 'down' ? 1 : -1
+      // The key sheet pages round instead.
+      if (view.focus.kind === 'sheet') {
+        const { page, pages } = view.focus
+        await setPane($, current => ({ ...current, sheetPage: (page + step + pages) % pages }))
+        return
+      }
       const next = view.lines[Math.max(0, Math.min(view.lines.length - 1, (at < 0 ? -1 : at) + step))]
       if (next) await focusLine($, next.key)
       return
@@ -771,7 +782,7 @@ const act = async ($: EngineInterface, action: Action) => {
       return
     case 'keys':
     case 'details':
-      await setPane($, current => ({ ...current, mode: current.mode === 'sheet' ? 'browse' : 'sheet' }))
+      await setPane($, current => ({ ...current, mode: current.mode === 'sheet' ? 'browse' : 'sheet', sheetPage: 0 }))
       return
     case 'close':
     case 'toggle':
