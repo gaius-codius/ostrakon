@@ -1,0 +1,40 @@
+name: Release
+
+# A pushed v* tag (from tools/release.sh tag) becomes a GitHub release with its CHANGELOG.md section as the notes.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check the tag matches plugin.json
+        run: |
+          version=$(jq -r .version plugin/.claude-plugin/plugin.json)
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "::error::tag $GITHUB_REF_NAME but plugin.json says $version"; exit 1; }
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - name: Take the notes from CHANGELOG.md
+        run: |
+          awk -v v="$VERSION" '
+            index($0, "## [" v "]") == 1 { on = 1; next }
+            on && /^## \[/ { exit }
+            on && /^\[[^]]+\]: / { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          [ -s notes.md ] || { echo "::error::CHANGELOG.md has no notes for $VERSION"; exit 1; }
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=()
+          case $VERSION in *-*) flags+=(--prerelease) ;; esac
+          gh release create "$GITHUB_REF_NAME" --title "ostrakon $GITHUB_REF_NAME" --notes-file notes.md --verify-tag "${flags[@]}"

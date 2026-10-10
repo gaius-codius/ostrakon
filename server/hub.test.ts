@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { Note } from '../plugin/types'
-import { PAIR_TTL_MS, handler, openHub, pairLink, toNote } from './hub'
+import { PAIR_TTL_MS, VERSION, handler, openHub, pairLink, toNote } from './hub'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -85,7 +85,9 @@ describe('hub', () => {
     expect((await call('/api/changes', { auth: 'wrong' })).status).toBe(401)
     expect((await call('/api/changes', { auth: null, headers: { 'tailscale-user-login': 'someone@else.com' } })).status).toBe(401)
     expect((await call('/api/changes', { auth: null, headers: { 'tailscale-user-login': 'owner@example.com' } })).status).toBe(200)
-    expect((await call('/healthz', { auth: null })).status).toBe(200)
+    const health = await call('/healthz', { auth: null })
+    expect(health.status).toBe(200)
+    expect(await health.text()).toBe(`ok ${VERSION}\n`)
     expect((await call('/../hub.ts', { auth: null })).status).toBe(404)
   })
 

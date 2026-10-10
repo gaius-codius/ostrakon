@@ -8,7 +8,7 @@ How ostrakon works: what it does, the data model, sync, and the platform facts i
 |---|---|
 | `plugin/` | The mod (Claude Code plugin): store, merge, sync adapters, pane and band UI |
 | `server/` | The hub (Bun + SQLite) and the phone form (PWA); setup in `docs/phone.md` |
-| `bin/ostrakon`, `install.sh`, `update.sh` | The command line (`pair`, `hub`, `update`) and the install and update scripts |
+| `bin/ostrakon`, `install.sh`, `update.sh` | The command line (`pair`, `hub`, `update`, `version`) and the install and update scripts |
 | `tools/` | Development tooling: screenshot pipeline, mockups, QA and experiment harnesses (their output goes to the gitignored `working-docs/`) |
 
 ---
@@ -357,7 +357,7 @@ A host that is always on, on the tailnet: Bun installed, systemd (for the unit i
   - `GET /` and `/app.js`: the phone form (§9.3).
   - Notes travel as JSON; the hub holds each to the file format and refuses the rest per note.
 - **Network and auth:** bind only to `127.0.0.1` and expose with `tailscale serve --bg --https=8443 http://127.0.0.1:8790` (HTTPS is needed for a PWA; its own port leaves anything on 443 alone). Every `/api` call carries a bearer token (`HUB_TOKEN`). `HUB_LOGIN` can additionally allow a Tailscale login without the token, but tagged devices carry no `Tailscale-User-Login` header, so the token is the auth. `POST /api/pair` (authorized) mints a one-time code, kept in memory for 5 minutes; `POST /api/pair/claim` (the one call without auth, own origin only) trades it for the token. `ostrakon pair` puts the code, not the token, in its QR.
-- **Ops:** a systemd user unit, a daily SQLite backup (7 kept), and `GET /healthz`. No framework.
+- **Ops:** a systemd user unit, a daily SQLite backup (7 kept), and `GET /healthz` (answers `ok <version>`). No framework.
 
 ### 9.3 Phone form (PWA)
 - **Capture first:** one big autofocused text field, a project picker (default `unfiled`; recent projects first), and Save.

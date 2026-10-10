@@ -24,10 +24,10 @@ Clone this repo and run the install script:
 
 ```sh
 git clone https://github.com/gaius-codius/ostrakon.git
-cd ostrakon && ./install.sh
+cd ostrakon && ./install.sh --release
 ```
 
-It loads the mod in every session (it sets `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`, keeping a `.bak` copy, and only when it isn't set yet) and links the `ostrakon` command into `~/.local/bin`. It's safe to run again. `./install.sh --hub` also sets up the hub (below).
+`--release` moves the checkout to the newest [release](https://github.com/gaius-codius/ostrakon/releases) first; leave it out to run what's on `main`. It loads the mod in every session (it sets `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`, keeping a `.bak` copy, and only when it isn't set yet) and links the `ostrakon` command into `~/.local/bin`. It's safe to run again. `./install.sh --hub` also sets up the hub (below).
 
 To try it without installing anything, load the folder for one session: `claude --plugin-dir ostrakon/plugin`. To install by hand, put the folder in `~/.claude/settings.json`:
 
@@ -38,10 +38,13 @@ To try it without installing anything, load the folder for one session: `claude 
 ### Updating
 
 ```sh
-ostrakon update     # or ./update.sh in the repo
+ostrakon update             # or ./update.sh in the repo
+ostrakon update --main      # switch to the newest code on main instead of releases
+ostrakon update --release   # switch back to releases
+ostrakon version
 ```
 
-It pulls the repo (fast-forward only, so local commits stop it), restarts the hub if it's installed and running, and lists what changed. Restart running Claude Code sessions to load the new mod.
+A checkout on a release moves to the newest release; one on a branch pulls that branch (fast-forward only, so local commits stop it). Then it restarts the hub if it's installed and running, and lists what changed. Restart running Claude Code sessions to load the new mod. What each release changed is in [`CHANGELOG.md`](CHANGELOG.md).
 
 ### Keybindings
 
@@ -102,6 +105,7 @@ The unit runs `~/.local/bin/ostrakon hub`, so it works wherever the repo is chec
 - Design and platform notes: [`docs/SPEC.md`](docs/SPEC.md). What might come next: [`ROADMAP.md`](ROADMAP.md).
 - `tools/check.sh` runs `claude plugin validate`, the type-check, `claude plugin test` and the hub's tests. The plugin's tests and type-check need the `claude` CLI, because the mods test kit and type declarations ship inside it.
 - The hub's tests need only [Bun](https://bun.sh): `cd server && bun test`.
+- Contributing, and how releases are cut: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - `tools/` also holds the screenshot pipeline and experiment harnesses; their output goes to `working-docs/`, which is git-ignored.
 
 ## License

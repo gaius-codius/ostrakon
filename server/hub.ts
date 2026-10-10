@@ -22,6 +22,10 @@ import type { Note } from '../plugin/types'
 import { parseNote, serializeNote } from '../plugin/src/frontmatter'
 import { PURGE_AFTER_MS, isPurgeable, nextStamp, winner } from '../plugin/src/merge'
 import { ulid } from '../plugin/src/ulid'
+import manifest from '../plugin/.claude-plugin/plugin.json'
+
+// The release this hub is, from the mod's manifest (one version for the repo); shown on /healthz.
+export const VERSION: string = manifest.version
 
 const MAX_WAIT_S = 25
 const MAX_BATCH = 500
@@ -202,7 +206,7 @@ export const handler = (hub: Hub, auth: { token?: string; login?: string }, { no
   return async (request: Request): Promise<Response> => {
     const url = new URL(request.url)
     const path = url.pathname
-    if (path === '/healthz') return new Response('ok\n')
+    if (path === '/healthz') return new Response(`ok ${VERSION}\n`)
 
     if (!path.startsWith('/api/')) {
       if (request.method !== 'GET') return new Response('method not allowed', { status: 405 })
@@ -390,7 +394,7 @@ if (import.meta.main && process.argv[2] === 'pair') {
   const hub = openHub(dataDir)
   // Long polls hold a request up to MAX_WAIT_S; Bun's default idle timeout is 10 s.
   const server = Bun.serve({ hostname: '127.0.0.1', port, idleTimeout: MAX_WAIT_S + 15, fetch: handler(hub, auth) })
-  console.log(`ostrakon hub on http://127.0.0.1:${server.port} (data ${dataDir})`)
+  console.log(`ostrakon hub ${VERSION} on http://127.0.0.1:${server.port} (data ${dataDir})`)
   // A backup and a tombstone purge at start and once a day.
   const backup = () => {
     try {

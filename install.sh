@@ -2,6 +2,7 @@
 # Installs ostrakon from this checkout. Safe to run again; it skips what is already done.
 #   ./install.sh         the mod (in every Claude Code session) and the `ostrakon` command
 #   ./install.sh --hub   also the hub: a token, the systemd user unit, started now and at login
+#   --release            first move this checkout to the newest release (what the README's install does)
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
@@ -10,17 +11,26 @@ SETTINGS=$HOME/.claude/settings.json
 ENV_FILE=$HOME/.config/ostrakon-hub/env
 UNIT_DIR=$HOME/.config/systemd/user
 
-want_hub=0
+want_hub=0 want_release=0 rest=()
 for arg in "$@"; do
   case $arg in
-    --hub) want_hub=1 ;;
-    -h | --help) sed -n '2,4p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --hub) want_hub=1; rest+=("$arg") ;;
+    --release) want_release=1 ;;
+    -h | --help) sed -n '2,5p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "install.sh: unknown option: $arg" >&2; exit 1 ;;
   esac
 done
 
 say() { printf '%s\n' "$*"; }
 has() { command -v "$1" >/dev/null; }
+
+# Checking out a release rewrites this file, so the move and the re-run are one command bash reads whole.
+if [ $want_release = 1 ]; then
+  {
+    "$ROOT/update.sh" --release && exec "$ROOT/install.sh" ${rest[@]+"${rest[@]}"}
+    exit 1
+  }
+fi
 
 has claude || say "! claude not found: install Claude Code (with mods support) to use the mod"
 

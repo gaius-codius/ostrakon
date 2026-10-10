@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/gaius-codius/ostrakon/security/advisories/new
+    about: Privately, through GitHub's vulnerability reporting, not a public issue.
+  - name: See what's planned
+    url: https://github.com/gaius-codius/ostrakon/blob/main/ROADMAP.md
+    about: Check the roadmap before suggesting a feature; an issue is welcome either way.

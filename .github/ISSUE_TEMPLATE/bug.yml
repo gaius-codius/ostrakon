@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in ostrakon doesn't work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Security problems go through [private vulnerability reporting](https://github.com/gaius-codius/ostrakon/security/advisories/new) instead. Please leave hub tokens and private notes out of logs and screenshots.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the pane with ctrl+x s
+        2. ...
+  - type: input
+    id: ostrakon
+    attributes:
+      label: ostrakon version
+      description: The output of `ostrakon version`, or the commit you run.
+    validations:
+      required: true
+  - type: input
+    id: claude
+    attributes:
+      label: Claude Code version
+      description: The output of `claude --version`. Mods change between versions, so this matters.
+    validations:
+      required: true
+  - type: dropdown
+    id: part
+    attributes:
+      label: Which part
+      multiple: true
+      options:
+        - The mod (pane, Pocket, /jot, harvest)
+        - Sync through the hub
+        - Sync through a folder (Dropbox, Syncthing, Obsidian)
+        - The phone page or Shortcut
+        - Install, update or the ostrakon command
+  - type: input
+    id: os
+    attributes:
+      label: OS and terminal
+      placeholder: e.g. Arch Linux, Ghostty; macOS 26, iTerm2
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Anything relevant from `claude --debug-file`, or `journalctl --user -u ostrakon-hub` for the hub.
+      render: text
