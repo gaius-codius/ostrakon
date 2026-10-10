@@ -286,6 +286,19 @@ test('a focus move waiting on the view is already the ring\'s last: the action l
   expect(world.focused.slice(-2)).toEqual(['slot-0', 'slot-0'])
 })
 
+test('inline, a selected row puts its meta before the scope, and drops it before the scope when short', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const inline = (bodyColumns: number) => ({ ...PANE.props, placement: 'inline' as const, bodyColumns, scroll: { offset: 0, bodyRows: 11 } })
+  const ui = await $.ui.mount({ plugin: 'ostrakon', surface: 'terminal', ...PANE, props: inline(100) })
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  expect(await ui.find({ type: 'Text', text: /^ ~\/Work\/cc · 12m ago · this project · 2 open$/ })).toBeDefined()
+  await ui.redraw(inline(60))
+  expect(await ui.find({ type: 'Text', text: /^ this project · 2 open$/ })).toBeDefined()
+  await ui.unmount()
+})
+
 test('the empty pane names its scope and offers ctrl+n for a new note', async ($, on) => {
   await startSession($, on, new MemDir())
   await run($, 'jot', '')

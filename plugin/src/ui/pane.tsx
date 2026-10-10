@@ -195,20 +195,37 @@ const Sentinel = ({ el, id, glyph, count, handlers }: { el: E; id: string; glyph
   )
 }
 
-const rightText = (view: PaneView) => {
-  const { pane, ctx, counts } = view
+// The search row's right side, within `room` cells. The scope always shows; inline, a selected
+// row's meta leads it, dropping the path, then the age, then the branch to fit.
+const rightText = (view: PaneView, room: number) => {
+  const { pane, counts } = view
   const scope = pane.scope === 'project' ? 'this project' : 'all'
-  const where = view.isInline && view.focus.kind === 'line' && view.preview ? metaOf(view, view.preview, false) : undefined
-  if (where !== undefined) return where
-  if (pane.view === 'list') return `list · ${scope} · ${counts.total} open${pane.history ? ' + history' : ''}`
-  if (pane.query.trim() === '') return `${scope} · ${counts.total} open`
-  return `${scope} · ${counts.shown} of ${counts.total}`
+  const counted =
+    pane.view === 'list'
+      ? `list · ${scope} · ${counts.total} open${pane.history ? ' + history' : ''}`
+      : pane.query.trim() === ''
+        ? `${scope} · ${counts.total} open`
+        : `${scope} · ${counts.shown} of ${counts.total}`
+  if (!(view.isInline && view.focus.kind === 'line' && view.preview)) return cut(counted, room)
+  const { who, path, branch, age } = metaParts(view, view.preview)
+  const mark = who === 'you' ? undefined : who
+  const tries = [
+    [mark, path, branch, age],
+    [mark, branch, age],
+    [mark, branch],
+    [mark],
+  ]
+  for (const parts of tries) {
+    const text = [...parts, counted].filter(Boolean).join(' · ')
+    if (cells(text) <= room) return text
+  }
+  return cut(counted, room)
 }
 
 const SearchRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handlers }) => {
   const { Box, Text, Input } = el
   const isFocused = view.focus.kind === 'search' || view.focus.kind === 'empty'
-  const right = rightText(view)
+  const right = rightText(view, Math.max(10, Math.floor(view.width / 2)))
   return (
     <Box width={view.width}>
       <Text color={isFocused ? COLOUR.accent : COLOUR.history} bold>
@@ -225,7 +242,7 @@ const SearchRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Ha
           onSubmit={value => handlers.searchSubmit(value)}
         />
       </Box>
-      <Text dimColor> {cut(right, Math.max(10, Math.floor(view.width / 2)))}</Text>
+      <Text dimColor> {right}</Text>
     </Box>
   )
 }
@@ -266,11 +283,19 @@ const CaptureRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: H
   )
 }
 
-const metaOf = (view: PaneView, note: Note, withWho = true) => {
-  const who = note.by === 'claude' ? `${GLYPH.claude} claude` : note.by === 'phone' ? 'phone' : 'you'
-  const path = note.project?.path ? note.project.path.replace(/^\/home\/[^/]+/, '~') : 'unfiled'
+const metaParts = (view: PaneView, note: Note) => {
   const age = ageOf(note.updated, view.ctx.now)
-  return [withWho ? who : undefined, path, note.context.branch, age === 'now' ? 'just now' : `${age} ago`].filter(Boolean).join(' · ')
+  return {
+    who: note.by === 'claude' ? `${GLYPH.claude} claude` : note.by === 'phone' ? 'phone' : 'you',
+    path: note.project?.path ? note.project.path.replace(/^\/home\/[^/]+/, '~') : 'unfiled',
+    branch: note.context.branch,
+    age: age === 'now' ? 'just now' : `${age} ago`,
+  }
+}
+
+const metaOf = (view: PaneView, note: Note) => {
+  const { who, path, branch, age } = metaParts(view, note)
+  return [who, path, branch, age].filter(Boolean).join(' · ')
 }
 
 // Docked, the preview and the footer keep fixed heights, so the rows' window never changes size

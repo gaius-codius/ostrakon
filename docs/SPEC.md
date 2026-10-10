@@ -220,7 +220,7 @@ One blank row, then one line: at most four key/label pairs for the focus (key bo
 - **Zero results:** no rows and no sentinels; focus stays in the search field.
 - **When the selected row disappears** (filtered, archived, synced away), selection moves to the row now at the same index, or the last row.
 
-**Inline layout.** Switch on `e.props.placement === 'inline'`, not on a column count. The inline body is about 11 rows and keeps the search row, the rows and a one-line footer; it drops the preview and shows the selected row's meta in place of the scope text. Footer pairs drop from the right until the line fits.
+**Inline layout.** Switch on `e.props.placement === 'inline'`, not on a column count. The inline body is about 11 rows and keeps the search row, the rows and a one-line footer; it drops the preview. The scope and counts stay at the right of the search row in every focus; with a row selected, its meta leads them (`◆ claude` or `phone` when not yours, then path, branch, age), dropping the path, then the age, then the branch when the room runs short. Footer pairs drop from the right until the line fits.
 
 ### 4.9 Construction
 - The search field is an `Input` with no `label` (the terminal would draw `label: `); the glyph is a `Text` before it.
