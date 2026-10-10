@@ -116,6 +116,9 @@ describe('hub', () => {
     const plain = (await (await call('/api/jot', { method: 'POST', body: JSON.stringify({ text: 'x', project: 'nope' }) })).json()) as { note: Note }
     expect(plain.note.project).toBeNull()
     expect((await call('/api/jot', { method: 'POST', body: '{}' })).status).toBe(400)
+    const broken = await call('/api/jot', { method: 'POST', body: '{not json' })
+    expect(broken.status).toBe(400)
+    expect(await broken.json()).toEqual({ error: 'invalid JSON body' })
   })
 
   test('projects come from live notes, most recent first', async () => {

@@ -316,7 +316,11 @@ export const handler = (hub: Hub, auth: { token?: string; login?: string }, { no
       }
       return json({ error: 'not found' }, 404)
     } catch (error) {
-      return json({ error: error instanceof Error ? error.message : String(error) }, 400)
+      // Every check above answers for itself, so what lands here is a body that isn't JSON or the
+      // hub's own failure: the caller gets a fixed answer, the details go to the log only.
+      if (error instanceof SyntaxError) return json({ error: 'invalid JSON body' }, 400)
+      console.error(`${request.method} ${path} failed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`)
+      return json({ error: 'the hub failed; see its log' }, 500)
     }
   }
 }
