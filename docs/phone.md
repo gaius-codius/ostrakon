@@ -24,6 +24,9 @@ leaves your text in the field.
 
 ## Open it
 
+Run the hub on a machine that stays on, such as a home server or a desktop that doesn't sleep. The
+phone and your other machines keep working while it's down, but nothing syncs until it's back.
+
 The hub listens on `127.0.0.1` only. `tailscale serve` puts it on the tailnet over HTTPS, which an
 installable web app needs:
 

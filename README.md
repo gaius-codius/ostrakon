@@ -17,7 +17,7 @@ Notes are plain Markdown files with some YAML. One per note, in `~/.local/share/
 
 Sync is optional and two-way: a note captured, edited, moved or archived on one machine or on your phone shows up everywhere else, and when the same note changes in two places, every machine settles on the same winner (the later change). There are multiple options, use one or combine them:
 
-- **The hub** (`server/`): a small Bun + SQLite service on one always-on machine, reached over your tailnet with Tailscale. Changes reach other sessions within seconds, and the hub also serves the phone app. Setup: [the hub and the phone app](#the-hub-and-the-phone-app-optional).
+- **The hub** (`server/`): a small Bun + SQLite service that your other machines and your phone can reach, over Tailscale (the easy option) or your own HTTPS proxy, tunnel or VPN. Changes reach other sessions within seconds, and the hub also serves the phone app. Setup: [the hub and the phone app](#the-hub-and-the-phone-app-optional).
 - **A folder** (the `mirrorDir` option): ostrakon keeps a folder of readable Markdown notes in step, and whatever syncs that folder carries them between machines: Dropbox, Syncthing or any synced drive. Point it at an Obsidian vault and you can edit notes in Obsidian too; the edits come back. No server needed.
 - **Both at once**: each runs on its own, so a hub for the phone and a folder for Obsidian work side by side.
 
@@ -97,13 +97,15 @@ Set these under the plugin's options (`pluginConfigs.ostrakon.options` in your s
 
 ## The hub and the phone app (optional)
 
-The hub is a single Bun file (`server/hub.ts`) with SQLite storage. It listens on `127.0.0.1` only, requires a bearer token, and is meant to be put on your tailnet with `tailscale serve`.
+The hub is a single Bun file (`server/hub.ts`) with SQLite storage. It listens on `127.0.0.1` only and requires a bearer token, so you choose how other devices reach it. We use Tailscale, the simplest option: `tailscale serve` gives it an HTTPS address only your devices can reach, and `install.sh` and `ostrakon pair` set it up for you.
 
 ```sh
 ./install.sh --hub
 ```
 
 That makes a token in `~/.config/ostrakon-hub/env` (if there isn't one), and installs and starts the systemd user unit (`server/ostrakon-hub.service`). It prints the two steps left to you: `loginctl enable-linger` and `tailscale serve`. Then `ostrakon pair` prints a QR code that pairs a phone (needs `qrencode`); it carries a one-time code, good for 5 minutes, not the token (`--token` prints one that does). To run the hub in the foreground instead: `HUB_TOKEN=$(openssl rand -hex 24) ostrakon hub`. The `ostrakon` command reads `HUB_TOKEN` from the environment or from `~/.config/ostrakon-hub/env`.
+
+**Without Tailscale.** Any HTTPS reverse proxy (Caddy, nginx), tunnel (Cloudflare Tunnel, ngrok) or other VPN in front of `127.0.0.1:8790` works too. Give `ostrakon pair` your address (`ostrakon pair https://notes.example.com`), since it can only look it up from Tailscale. The phone app needs HTTPS to install. Set the proxy's timeout above 30 seconds, because live sync holds requests open. If your proxy puts the hub on the public internet, only the token protects it, so read [`SECURITY.md`](SECURITY.md) first.
 
 The unit runs `~/.local/bin/ostrakon hub`, so it works wherever the repo is checked out. Setup, the phone's Home Screen app, and an iOS Shortcut are in [`docs/phone.md`](docs/phone.md). See [`SECURITY.md`](SECURITY.md) before exposing it.
 
