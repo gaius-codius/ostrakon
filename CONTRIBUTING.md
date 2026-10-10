@@ -1,33 +1,35 @@
 # Contributing
 
-Ostrakon is a small, one-person project, so issues and pull requests are welcome but may take a while to get a reply. For anything bigger than a fix, open an issue first so we can agree on the shape before you write it. Ideas already on the list are in [`ROADMAP.md`](ROADMAP.md).
+Ostrakon is a small, one-person project. Issues and pull requests are welcome, but a reply may take a while. For anything bigger than a fix, please open an issue first, so we can agree on the approach before you write the code. Ideas already on the list are in [`ROADMAP.md`](ROADMAP.md).
 
 Security problems go through [private vulnerability reporting](https://github.com/gaius-codius/ostrakon/security/advisories/new), not an issue (see [`SECURITY.md`](SECURITY.md)).
 
 ## Setting up
 
-You need Claude Code with mods support and [Bun](https://bun.sh). Clone the repo and load the mod from your checkout for one session:
+You need a Claude Code version with mods support, and [Bun](https://bun.sh). Clone the repo, then load the mod from your checkout for one session:
 
 ```sh
 claude --plugin-dir plugin
 ```
 
-Or run `./install.sh` (without `--release`) to load it in every session from this checkout. The design, and the platform facts it depends on, are in [`docs/SPEC.md`](docs/SPEC.md); code comments cite it as `SPEC §n`.
+Or run `./install.sh` (without `--release`) to load it from this checkout in every session.
 
-## Before a pull request
+How it all works, and the Claude Code behaviour it relies on, is written up in [`docs/SPEC.md`](docs/SPEC.md). Code comments point into it as `SPEC §n`.
 
-- `tools/check.sh` runs everything: `claude plugin validate`, the type-check, the mod's tests and the hub's tests. CI runs only the hub's tests, shellcheck and the security scans, because the mod's tests need the `claude` CLI, so run `tools/check.sh` yourself.
+## Before you open a pull request
+
+- Run `tools/check.sh`. It runs everything: `claude plugin validate`, the type-check, the mod's tests and the hub's tests. CI can't run the mod's tests (they need the `claude` CLI), so this step is on you. CI runs the hub's tests, shellcheck and the security scans.
 - Add a line under **Unreleased** in [`CHANGELOG.md`](CHANGELOG.md) for anything a user would notice.
-- Keep to the style around you: short comments that say why, the same naming, and docs in plain, short sentences.
-- `main` takes changes only through pull requests, and CI has to pass.
+- Match the style around you: short comments that explain why, the same naming, and docs in plain, short sentences.
+- Changes reach `main` only through pull requests, and CI has to pass first.
 
 ## Releases
 
-Versions follow [Semantic Versioning](https://semver.org/); before 1.0 a minor version may break things. `plugin/.claude-plugin/plugin.json` holds the one version for the whole repo (the mod, the hub and the `ostrakon` command).
+Versions follow [Semantic Versioning](https://semver.org/); before 1.0, a minor version may break things. There is one version for the whole repo (the mod, the hub and the `ostrakon` command), kept in `plugin/.claude-plugin/plugin.json`.
 
-1. On an up-to-date `main`: `tools/release.sh prepare 0.2.0`. It makes a `release-v0.2.0` branch with one commit that sets the version and moves the Unreleased notes under 0.2.0.
-2. Push the branch, open its pull request and merge it once CI passes.
-3. Back on `main`: `tools/release.sh tag`, then `git push origin v0.2.0`. The tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which publishes a GitHub release with that version's changelog notes. `ostrakon update` then moves release installs to it.
+1. On an up-to-date `main`, run `tools/release.sh prepare 0.2.0`. It makes a `release-v0.2.0` branch with one commit that sets the version and moves the Unreleased notes under 0.2.0.
+2. Push the branch, open a pull request for it, and merge once CI passes.
+3. Back on `main`, run `tools/release.sh tag`, then `git push origin v0.2.0`. Pushing the tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml), which publishes a GitHub release with that version's changelog notes. From then on, `ostrakon update` moves release installs to it.
 
 ## License
 

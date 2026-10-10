@@ -1,118 +1,132 @@
 # Ostrakon on the phone
 
-The hub (`server/hub.ts`) serves a small capture page: write a note, pick a project (or leave it
-`unfiled`), Save. The note lands in every open ostrakon pane within a couple of seconds. Below
-the form is the inbox of open notes, grouped by project as in the pane (each project's heading in
-the colour the pane gives it, `unfiled` last; `◆` marks a note from Claude, `▪` one from the
-phone). A heading stays at the top while you scroll its group; tap it to fold the group (the
-phone remembers which are folded; filtering shows matches in folded groups too). Tap a note to edit it, swipe it left to archive
-(a strip behind the row says `Archive` and turns solid when letting go will archive; Undo in the
-toast). Hold a note still for about half a second and an action sheet comes up: **Edit**, **Copy
-text**, **Move to project…** (the same list as the form's picker; the current one is ticked),
-**Mark sent** (for a note you used somewhere else) and **Archive**, then **Cancel**. A move, Mark
-sent and Archive each come with Undo in the toast. Tap outside the sheet to close it.
+The hub (`server/hub.ts`) serves a small web app for your phone. Write a note, pick a project (or
+leave it `unfiled`) and tap Save; the note shows up in every open ostrakon pane within a couple of
+seconds.
 
-Saving never waits for the network. Notes go into a queue on the phone and are sent as soon as the
-hub answers; while it can't, the page says `Offline · 2 queued` and keeps trying. The inbox is kept
-on the phone too, so it still shows when you're offline, and the page itself opens from the
-phone's cache straight away even when the hub is down.
+Below the note field is your inbox of open notes, grouped by project as in the pane. Each project's
+heading has the same colour the pane gives it, and `unfiled` comes last. `◆` marks a note from
+Claude, `▪` one from the phone.
 
-A note the hub won't accept (it fails the hub's checks) isn't thrown away: it moves to a
-**Not accepted by the hub** box above the inbox with the reason, a **Copy** button and a
-**Dismiss** button. If the phone can't store anything (storage full, or blocked), Save says so and
-leaves your text in the field.
+- **Fold a project**: tap its heading. The phone remembers which are folded, and a search still
+  finds notes in folded groups. A heading stays at the top of the screen while you scroll its group.
+- **Edit**: tap a note.
+- **Archive**: swipe a note left. A strip behind it says `Archive` and turns solid when letting go
+  will archive it.
+- **More actions**: hold a note for about half a second for **Edit**, **Copy text**, **Move to
+  project…**, **Mark sent** (for a note you used somewhere else) and **Archive**. Tap outside the
+  sheet to close it.
+
+Moving, archiving and marking sent can all be undone from the message that pops up afterwards.
+
+**It works offline.** Saving never waits for the network: notes are queued on the phone and sent
+as soon as the hub answers. Until then the page shows something like `Offline · 2 queued` and
+keeps trying. Your inbox is kept on the phone too, and the app opens straight away even when the
+hub is down.
+
+**Nothing gets lost.** If the hub turns a note down (it failed one of the hub's checks), the note
+moves to a **Not accepted by the hub** box above the inbox, with the reason and buttons to
+**Copy** or **Dismiss** it. If the phone can't save anything at all (storage full or blocked),
+Save says so and leaves your text in the field.
 
 ## Open it
 
 Run the hub on a machine that stays on, such as a home server or a desktop that doesn't sleep. The
 phone and your other machines keep working while it's down, but nothing syncs until it's back.
 
-The hub listens on `127.0.0.1` only, so something has to put it on an HTTPS address your devices
-can reach (an installable web app needs HTTPS). Tailscale is the easy option:
+The hub only listens on its own machine (`127.0.0.1`), so something has to give it an HTTPS
+address your devices can reach. It has to be HTTPS, because a phone can't install a web app
+otherwise. Tailscale is the easy option:
 
 ```
 tailscale serve --bg --https=8443 http://127.0.0.1:8790
 ```
 
 Then open `https://<host>.<tailnet>.ts.net:8443/` on the phone, for example
-`https://my-server.example-tailnet.ts.net:8443/`. The phone has to be on the tailnet (the Tailscale app
-connected).
+`https://my-server.example-tailnet.ts.net:8443/`. The phone has to be on your tailnet, with the
+Tailscale app connected.
 
 **Without Tailscale.** Any HTTPS reverse proxy (Caddy, nginx), tunnel (Cloudflare Tunnel, ngrok) or
 other VPN in front of `127.0.0.1:8790` works too. Set the proxy's timeout above 30 seconds, because
 live sync holds requests open. If your proxy puts the hub on the public internet, only the token
 protects it, so read [`SECURITY.md`](../SECURITY.md) first.
 
-## First run: the token
+## Pair your phone
 
-Every `/api` call carries the hub's token (`HUB_TOKEN` in the hub's environment). The first time
-the page opens it asks for it. Paste it and tap **Connect**; it's kept on the phone.
+The hub only answers requests that carry its token (`HUB_TOKEN`). The first time the app opens,
+it asks for the token; paste it and tap **Connect**, and the phone remembers it.
 
-Easiest: on the hub host, run `ostrakon pair` (`./install.sh` puts the command on your PATH). It
-asks the running hub for a one-time code and prints a QR code of a link that carries it; the phone
-camera opens the link in Safari. The code works once and expires after 5 minutes. The page trades
-it for the token, stores the token, and reloads with the `?token=` address in Safari so Add to
-Home Screen works (below). The QR itself never carries the token. It takes `HUB_TOKEN` from the
-environment or from `~/.config/ostrakon-hub/env`, the systemd unit's file. Without Tailscale, or if it
-can't find this machine's name, pass the hub's address: `ostrakon pair https://<your hub address>`.
-It needs `qrencode`. If the code has expired or was used, a phone that isn't paired yet says so on
-the token screen; run `ostrakon pair` again. A phone that had the page before pairing codes existed
-may open its old cached copy, which doesn't know them: open the page once first so it updates.
+**The easy way is a QR code.** On the machine running the hub, run `ostrakon pair` (`./install.sh`
+puts the command on your PATH; it needs `qrencode`). Scan the QR code with the phone's camera and
+the link opens in Safari, which swaps the code for the token and stores it. The code works once
+and expires after 5 minutes, so the QR never contains the token itself. Safari is left on an
+address that does contain it (`?token=…`), which is what makes Add to Home Screen work (below).
 
-The fallback is `ostrakon pair --token [url]`, which prints a QR code and link that carry the token
-itself (use it when the hub isn't running on this host, or to make a Shortcut link). Treat a
-screenshot of that like the token, and clear the terminal after scanning.
+A few details:
 
-Or open the page once with the token in the address, and it's stored and removed from the
-address bar straight away:
+- `ostrakon pair` reads `HUB_TOKEN` from the environment or from `~/.config/ostrakon-hub/env`,
+  the service's settings file.
+- It looks up the hub's address from Tailscale. Without Tailscale, or if that fails, give it the
+  address: `ostrakon pair https://<your hub address>`.
+- If the code expired or was already used, the phone's token screen says so; run `ostrakon pair`
+  again.
+- A phone that opened the app before pairing codes existed may load its old cached copy, which
+  doesn't understand them. Open the app once first so it updates.
+
+**If the hub runs on another machine**, or you want a link for a Shortcut, `ostrakon pair --token
+[url]` prints a QR code and link that contain the token itself. Treat a screenshot of it like the
+token, and clear the terminal after scanning.
+
+**Or type the address yourself** with the token in it. The app stores the token and removes it
+from the address bar straight away:
 
 ```
 https://<host>.<tailnet>.ts.net:8443/?token=<HUB_TOKEN>
 ```
 
-If the token is ever changed on the hub, the page shows the token screen again with
-`That token was refused.`
+If you ever change the token on the hub, the app shows the token screen again with `That token was
+refused.`
 
 ## Add to Home Screen
 
-In Safari, with the page open: the **Share** button, then **Add to Home Screen**, then **Add**. It
-opens full screen from its icon, straight into the note field.
+In Safari, with the app open, tap **Share**, then **Add to Home Screen**, then **Add**. From its
+icon it opens full screen, straight to the note field.
 
-iOS gives a Home Screen app storage of its own, apart from Safari's, so the token has to travel in
-the app's start address. Scanning the pairing QR leaves Safari on the `?token=` address (the token
-stays in the address bar there, on the phone only); or open that link yourself. Then add it: the page asks the hub for its manifest with the token, and the hub answers
-with a start address that carries it. The installed app stores the token and takes it out of its
-own address bar. If the installed app still asks for the token, remove it, open the link in Safari,
-reload once (the old version may still be cached), and add it again.
+On iOS, a Home Screen app doesn't share Safari's storage, so the token has to come along in the
+app's start address. That's why pairing leaves Safari on the `?token=` address (it stays on the
+phone; nothing is sent anywhere). When you add the app, the hub gives it a start address with the
+token in it, and the installed app stores the token and removes it from its own address.
+
+If the installed app still asks for the token, delete it, open the link in Safari, reload once (an
+old version may still be cached), and add it again.
 
 ## iOS Shortcut: "Jot to ostrakon"
 
-A Shortcut can send a note from the share sheet, from Siri ("Jot to ostrakon"), or from the
-Action button, without opening the page. It posts to `/api/jot`, which takes one line of text and
-an optional project (its name, for example `cc`, or its key).
+A Shortcut can send a note without opening the app: from the share sheet, from Siri ("Jot to
+ostrakon"), or from the Action button. It posts to the hub's `/api/jot`, which takes a line of
+text and, optionally, a project (its name, such as `cc`, or its key).
 
 In the **Shortcuts** app:
 
-1. Tap **+** to make a new shortcut. Rename it (tap the name at the top) to **Jot to ostrakon**.
+1. Tap **+** to make a new shortcut. Tap the name at the top and rename it **Jot to ostrakon**.
 2. Tap the **ⓘ** (details) button and turn on **Show in Share Sheet**. Under **Share Sheet Types**
    keep only **Text** and **URLs**. Close the details.
 3. The first action is **Receive Text and URLs input from Share Sheet**. Tap **If there's no input:
-   Continue** and change it to **Ask For** → **Text** (when you run it from Siri or the Home Screen
-   it asks, and Siri takes dictation).
+   Continue** and change it to **Ask For** → **Text**. Now when you run it from Siri or the Home
+   Screen, it asks for the note, and Siri takes dictation.
 4. Add the action **Get Contents of URL**:
    - **URL**: `https://<host>.<tailnet>.ts.net:8443/api/jot`
    - Tap **Show More**. **Method**: **POST**.
-   - **Headers**: add one. Key `Authorization`, value `Bearer <HUB_TOKEN>`.
-   - **Request Body**: **JSON**. Add a field: type **Text**, key `text`, value the
-     **Shortcut Input** variable. (Optional: a second **Text** field, key `project`, value `cc`.)
-5. Add the action **Show Notification** with the text `Jotted` (or leave it out to stay silent).
+   - **Headers**: add one, with key `Authorization` and value `Bearer <HUB_TOKEN>`.
+   - **Request Body**: **JSON**. Add a **Text** field with key `text` and the **Shortcut Input**
+     variable as its value. (Optional: a second **Text** field with key `project` and value `cc`.)
+5. Add the action **Show Notification** with the text `Jotted`, or leave it out to stay silent.
 
-Try it: say "Jot to ostrakon", dictate a note, and it shows in the pane on the computer within a
-couple of seconds. If it answers `{"error":"unauthorized"}`, the token in the header is wrong; if
-the action fails to connect, check that the phone can reach the hub (with Tailscale, that the app
-is connected).
+Try it: say "Jot to ostrakon", dictate a note, and it shows up in the pane on your computer within a
+couple of seconds. If you get `{"error":"unauthorized"}`, the token in the header is wrong. If it
+can't connect, check that the phone can reach the hub (with Tailscale, that the app is connected).
 
-The same call from a terminal:
+The same thing from a terminal:
 
 ```
 curl -H 'Authorization: Bearer <HUB_TOKEN>' -d '{"text":"check the backup job"}' https://<host>.<tailnet>.ts.net:8443/api/jot
