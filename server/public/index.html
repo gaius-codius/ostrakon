@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16161a" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Ostrakon">
+<title>Ostrakon</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="app" hidden>
+  <form id="capture" autocomplete="off">
+    <textarea id="text" rows="4" placeholder="A note…" autofocus enterkeyhint="enter" aria-label="Note"></textarea>
+    <div class="row">
+      <select id="project" aria-label="Project"><option value="">unfiled</option></select>
+      <button id="save" type="submit" class="primary">Save</button>
+    </div>
+    <p id="status" class="status" aria-live="polite"></p>
+  </form>
+  <section id="refused" hidden>
+    <h2>Not accepted by the hub</h2>
+    <ul id="refused-list"></ul>
+  </section>
+  <section id="inbox">
+    <input id="filter" type="search" placeholder="Filter notes" aria-label="Filter notes" autocomplete="off">
+    <ul id="list"></ul>
+    <p id="empty" class="empty" hidden>No open notes.</p>
+  </section>
+</main>
+<form id="login" hidden autocomplete="off">
+  <h1>Ostrakon</h1>
+  <p>Paste the hub token (<code>HUB_TOKEN</code>) to connect this phone.</p>
+  <input id="token" type="password" placeholder="Token" aria-label="Token" autocapitalize="off" spellcheck="false">
+  <button type="submit" class="primary">Connect</button>
+  <p id="login-error" class="error" hidden>That token was refused.</p>
+</form>
+<div id="sheet" class="sheet" hidden>
+  <div id="sheet-scrim" class="scrim"></div>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <div class="group">
+      <p id="sheet-title" class="title"></p>
+      <div id="sheet-actions" class="actions"></div>
+    </div>
+    <button id="sheet-cancel" type="button" class="cancel">Cancel</button>
+  </div>
+</div>
+<div id="toast" class="toast" hidden><span id="toast-text"></span><button id="toast-undo" type="button">Undo</button></div>
+<script src="app.js"></script>
+</body>
+</html>

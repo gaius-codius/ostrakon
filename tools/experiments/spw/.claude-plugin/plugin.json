@@ -1,0 +1,7 @@
+{
+  "name": "spw",
+  "version": "0.0.1",
+  "description": "Ostrakon v2 probe: an Input whose value is a window of the draft",
+  "author": { "name": "gaius-codius" },
+  "types": "./types/index.d.ts"
+}

@@ -1,0 +1,1 @@
+{ "name": "spx0", "version": "0.1.0", "description": "P2 step 0: hidden action-layer buttons and edge sentinels", "author": { "name": "gaius-codius" }, "types": "./types/index.d.ts" }

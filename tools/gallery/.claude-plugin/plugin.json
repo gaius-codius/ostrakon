@@ -1,0 +1,7 @@
+{
+  "name": "spgallery",
+  "version": "0.0.1",
+  "description": "Throwaway gallery: draws everything this Claude Code build can draw",
+  "author": { "name": "gaius-codius" },
+  "types": "./types/index.d.ts"
+}

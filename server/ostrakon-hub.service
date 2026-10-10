@@ -1,0 +1,23 @@
+# systemd user unit for the ostrakon hub (SPEC §9.2). Install:
+#   mkdir -p ~/.config/ostrakon-hub && (umask 077; printf 'HUB_TOKEN=%s\n' "$(openssl rand -hex 24)" > ~/.config/ostrakon-hub/env)
+#   ln -sf "$PWD/server/ostrakon-hub.service" ~/.config/systemd/user/ostrakon-hub.service
+#   systemctl --user daemon-reload && systemctl --user enable --now ostrakon-hub
+#   loginctl enable-linger "$USER"   # keeps it running while logged out (needs no root on most distros)
+# Then expose it on the tailnet (its own HTTPS port, so nothing else served there changes):
+#   tailscale serve --bg --https=8443 http://127.0.0.1:8790
+[Unit]
+Description=ostrakon hub (notes sync and phone form)
+After=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/ostrakon-hub/env
+Environment=HUB_PORT=8790
+WorkingDirectory=%h/code/ostrakon   # your checkout of this repo
+# Bun from mise, ~/.bun or the system, whichever is installed.
+Environment=PATH=%h/.local/share/mise/shims:%h/.bun/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env bun server/hub.ts
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

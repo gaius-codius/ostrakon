@@ -1,0 +1,66 @@
+{
+  "name": "ostrakon",
+  "version": "2.0.0-dev",
+  "description": "Capture thoughts mid-work, triage them across projects and machines, and turn them into prompts",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "gaius-codius"
+  },
+  "userConfig": {
+    "notesDir": {
+      "type": "string",
+      "title": "Notes folder",
+      "description": "Where notes are stored (default ~/.local/share/ostrakon). OSTRAKON_DIR overrides it.",
+      "default": ""
+    },
+    "pocket": {
+      "type": "boolean",
+      "title": "Pocket",
+      "description": "Show this project's open notes as numbered chips above the prompt (a digit in an empty prompt pulls one in). Off keeps only the ✎.",
+      "default": true
+    },
+    "pocketMax": {
+      "type": "number",
+      "title": "Pocket size",
+      "description": "How many notes the band shows (1 to 9).",
+      "default": 5
+    },
+    "harvest": {
+      "type": "boolean",
+      "title": "Harvest",
+      "description": "After each turn, ask the model once (from the cached conversation) for side issues worth keeping; they wait above the prompt for you to keep. Claude's own work is unchanged. Off: notes come only from you, or from Claude when you ask it to jot.",
+      "default": false
+    },
+    "harvestMode": {
+      "type": "string",
+      "title": "Harvest mode",
+      "description": "fork: the review reads the whole cached conversation, so it also sees what Claude read in files and tool results (cost grows with the conversation). light: a small model reads only your prompt, Claude's final answer and the notes already saved (cheap, blind to tool results).",
+      "default": "fork"
+    },
+    "harvestMaxPerTurn": {
+      "type": "number",
+      "title": "Harvest per turn",
+      "description": "Most notes harvest proposes after one turn (1 to 9).",
+      "default": 3
+    },
+    "hubUrl": {
+      "type": "string",
+      "title": "Hub URL",
+      "description": "The ostrakon hub to sync with (server/hub.ts), e.g. https://<host>.<tailnet>.ts.net. Empty: no sync.",
+      "default": ""
+    },
+    "hubToken": {
+      "type": "string",
+      "title": "Hub token",
+      "description": "The hub's HUB_TOKEN.",
+      "default": "",
+      "sensitive": true
+    },
+    "mirrorDir": {
+      "type": "string",
+      "title": "Mirror folder",
+      "description": "Another folder to keep in step with the notes, for Dropbox, Syncthing or an Obsidian vault (e.g. ~/Dropbox/Ostrakon). Made if its parent exists. Empty: none.",
+      "default": ""
+    }
+  }
+}

@@ -1,0 +1,205 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f6f5f2;
+  --surface: #ffffff;
+  --text: #1d1d1f;
+  --dim: #6e6e73;
+  --line: #e2e0da;
+  --accent: #c15f3c;
+  --accent-text: #ffffff;
+  --warn: #a15c00;
+  --error: #c0362c;
+  /* Project colours: Claude Code's light theme keys, as the pane draws them. */
+  --suggestion: rgb(87, 105, 247);
+  --success: rgb(44, 122, 57);
+  --merged: rgb(135, 0, 255);
+  --planMode: rgb(0, 102, 102);
+  --warning: rgb(150, 108, 30);
+  --autoAccept: rgb(135, 0, 255);
+  --inactive: rgb(102, 102, 102);
+  --claude: rgb(215, 119, 87);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16161a;
+    --surface: #222227;
+    --text: #ececf0;
+    --dim: #9a9aa3;
+    --line: #34343b;
+    --accent: #d97757;
+    --accent-text: #16161a;
+    --warn: #e0a243;
+    --error: #ef6b5f;
+    /* The dark theme's. */
+    --suggestion: rgb(177, 185, 249);
+    --success: rgb(78, 186, 101);
+    --merged: rgb(175, 135, 255);
+    --planMode: rgb(72, 150, 140);
+    --warning: rgb(255, 193, 7);
+    --autoAccept: rgb(175, 135, 255);
+    --inactive: rgb(153, 153, 153);
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  -webkit-text-size-adjust: 100%;
+}
+main, #login { max-width: 640px; margin: 0 auto; }
+textarea, input, select, button { font: inherit; font-size: 16px; color: inherit; }
+textarea, input, select {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+textarea:focus, input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+textarea { resize: vertical; min-height: 120px; display: block; }
+button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 18px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+}
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+button:disabled { opacity: .5; }
+.row { display: flex; gap: 10px; margin-top: 10px; }
+.row select { flex: 1; min-height: 44px; padding: 0 12px; }
+.status { min-height: 1.4em; margin: 8px 2px 0; font-size: 14px; color: var(--dim); }
+.status.warn { color: var(--warn); font-weight: 600; }
+#inbox { margin-top: 18px; }
+#refused { margin-top: 18px; padding: 4px 14px; border: 1px solid var(--error); border-radius: 12px; }
+#refused h2 { font-size: 15px; margin: 10px 0 4px; color: var(--error); }
+#refused-list { list-style: none; margin: 0; padding: 0; }
+#refused-list li { padding: 10px 0; border-top: 1px solid var(--line); }
+#refused-list li:first-child { border-top: 0; }
+#refused-list .row { justify-content: flex-end; margin-top: 8px; }
+#list { list-style: none; margin: 12px 0 0; padding: 0; }
+#list li {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+#list li .face {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 2px;
+  min-height: 44px;
+  background: var(--bg);
+  transition: transform .15s ease;
+}
+#list li.dragging .face { transition: none; }
+/* The strip behind a row: shows while it's dragged, faint until letting go would archive. */
+#list li .behind {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg));
+  color: var(--accent);
+  font-weight: 600;
+  transition: background .12s ease, color .12s ease;
+}
+#list li.dragging .behind { display: flex; }
+#list li.armed .behind { background: var(--accent); color: var(--accent-text); }
+#list li .behind span { opacity: 0; transition: opacity .1s ease; }
+#list li.labelled .behind span { opacity: 1; }
+#list li .face .note { flex: 1; min-width: 0; }
+#list .marker { flex: none; width: 1em; text-align: center; }
+#list .marker.claude { color: var(--claude); }
+#list .side { flex: none; display: flex; flex-direction: column; align-items: flex-end; font-size: 13px; line-height: 22px; color: var(--dim); font-variant-numeric: tabular-nums; }
+/* A group heading: the project's name, bold, in its colour, as in the pane. */
+/* Headings stick to the top while their group scrolls under them; a tap folds the group. */
+#list li.group { position: sticky; top: 0; z-index: 1; overflow: visible; border-bottom: 0; padding-top: 10px; background: var(--bg); }
+#list li.group:first-child { padding-top: 0; }
+#list li.group button { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 40px; padding: 0 2px; border: 0; border-radius: 0; background: none; color: inherit; font-weight: 700; font-size: 15px; text-align: left; }
+#list li.group .fold { width: 1em; color: var(--dim); font-weight: 400; }
+#list li.group .count { margin-left: auto; color: var(--dim); font-weight: 400; font-size: 13px; }
+#list li.group.suggestion { color: var(--suggestion); }
+#list li.group.success { color: var(--success); }
+#list li.group.merged { color: var(--merged); }
+#list li.group.planMode { color: var(--planMode); }
+#list li.group.warning { color: var(--warning); }
+#list li.group.autoAccept { color: var(--autoAccept); }
+#list li.group.inactive { color: var(--inactive); }
+.note { white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.meta { display: flex; gap: 8px; align-items: center; margin-top: 4px; font-size: 13px; color: var(--dim); }
+.queued { color: var(--warn); }
+#list li.editing { user-select: auto; -webkit-user-select: auto; padding: 12px 2px; }
+#list li.editing textarea { min-height: 96px; }
+#list li.editing .row { justify-content: flex-end; }
+.empty { color: var(--dim); text-align: center; margin: 32px 0; }
+#login h1 { font-size: 22px; margin: 24px 0 8px; }
+#login p { color: var(--dim); }
+#login input { margin: 8px 0 12px; }
+#login button { width: 100%; }
+.error { color: var(--error) !important; }
+code { font-size: 14px; }
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 4px 4px 16px;
+  border-radius: 14px;
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, .2);
+  width: max-content;
+  max-width: calc(100% - 32px);
+}
+.toast span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.toast button { flex: none; background: transparent; color: inherit; border: 0; font-weight: 600; }
+[hidden] { display: none !important; }
+/* A row whose action sheet is open. */
+#list li.chosen .face { background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
+/* The action sheet (long press on a row): iOS-style, a group of actions and Cancel apart. */
+.sheet { position: fixed; inset: 0; z-index: 10; display: flex; align-items: flex-end; justify-content: center; }
+.sheet .scrim { position: absolute; inset: 0; touch-action: none; background: rgba(0, 0, 0, .35); opacity: 0; transition: opacity .2s ease; }
+.sheet .panel {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  transform: translateY(100%);
+  transition: transform .22s ease;
+}
+.sheet.open .scrim { opacity: 1; }
+.sheet.open .panel { transform: none; }
+.sheet .group { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-radius: 14px; overflow: hidden; }
+.sheet .title { margin: 0; padding: 12px 16px; font-size: 13px; color: var(--dim); text-align: center; border-bottom: 1px solid var(--line); }
+.sheet .title.quote { white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sheet .actions { overflow-y: auto; overscroll-behavior: contain; }
+.sheet button { width: 100%; min-height: 56px; border: 0; border-radius: 0; background: var(--surface); color: var(--accent); font-size: 18px; }
+.sheet .actions button + button { border-top: 1px solid var(--line); }
+.sheet .actions button:active, .sheet .cancel:active { background: color-mix(in srgb, var(--text) 8%, var(--surface)); }
+.sheet .actions button.here { color: var(--dim); }
+.sheet .actions button.here::after { content: "  ✓"; }
+.sheet .cancel { border-radius: 14px; font-weight: 600; }
+/* A drag anywhere on the sheet but its list doesn't scroll the page beneath. */
+.sheet .title, .sheet .cancel { touch-action: none; }
+@media (prefers-reduced-motion: reduce) { .sheet .scrim, .sheet .panel { transition: none; } }

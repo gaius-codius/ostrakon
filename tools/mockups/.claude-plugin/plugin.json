@@ -1,0 +1,7 @@
+{
+  "name": "spmock",
+  "version": "0.0.1",
+  "description": "Ostrakon v2 design mockups (phase D, part 2): static renders of every pane state",
+  "author": { "name": "gaius-codius" },
+  "types": "./types/index.d.ts"
+}

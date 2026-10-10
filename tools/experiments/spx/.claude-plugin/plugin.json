@@ -1,0 +1,7 @@
+{
+  "name": "spx",
+  "version": "0.0.1",
+  "description": "Ostrakon v2 platform experiments",
+  "author": { "name": "gaius-codius" },
+  "types": "./types/index.d.ts"
+}
