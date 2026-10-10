@@ -6,6 +6,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Added
+
+- `get.sh`: install with one command, without cloning the repo first (`curl -fsSL https://raw.githubusercontent.com/gaius-codius/ostrakon/main/get.sh | bash`). It clones into `~/.local/share/ostrakon-src` and runs `install.sh`.
+
 ### Fixed
 
 - The hub no longer sends its internal error messages to callers: a body that isn't JSON gets `invalid JSON body`, and a failure of the hub itself a fixed answer, with the details in its log.
