@@ -1,21 +1,21 @@
 # ostrakon
 
-A scratchpad for Claude Code: capture thoughts and follow-ups from within Claude Code without breaking your flow, triage them across projects and machines, and turn them into prompts. An optional small hub keeps your notes in sync between machines and serves a phone app for capturing and triaging on the go.
+A scratchpad for Claude Code: capture thoughts and follow-ups from within claude code without breaking your flow, triage them across projects and machines, and turn them into prompts. An optional small hub keeps your notes in sync between machines and serves a phone app for capturing and triaging on the go.
 
 ## What it does
 
 - **Capture** a note in under two seconds, even while Claude is working, without losing your prompt draft: `/jot text`, or `//` typed into an empty prompt.
 - **Triage** open notes for this project or across all of them in a searchable pane: edit, move, archive, bundle several into one prompt.
-- **Dispatch** a note into the prompt. A row of numbered chips above the prompt (the "pocket") shows this project's open notes; press its digit in an empty prompt to pull one in. A note is marked sent once the prompt carrying it goes in.
+- **Dispatch** a note into the prompt. A row of numbered chips above the prompt (the "pocket") shows this project's open notes; press its digit in an empty prompt to pull one in.
 - **Harvest** (opt-in): after each turn, one review asks the model for side issues worth keeping and shows them above the prompt for you to keep or dismiss. Claude's own work is unchanged.
 - **Sync** notes both ways between machines, through a small hub, a plain folder, or both ([Sync](#sync)).
 - **Phone**: capture and triage from your phone with the hub's web app, installed to the Home Screen, or send a note from the share sheet or Siri with an iOS Shortcut.
 
-Notes are plain Markdown files with YAML front matter, one per note, in `~/.local/share/ostrakon/` by default, so they are yours to read, grep and back up.
+Notes are plain Markdown files with some YAML. One per note, in `~/.local/share/ostrakon/` by default, so they are yours to read, grep and back up.
 
 ## Sync
 
-Sync is optional and two-way: a note captured, edited, moved or archived on one machine or on your phone shows up everywhere else, and when the same note changes in two places, every machine settles on the same winner (the later change). Use one way or combine them:
+Sync is optional and two-way: a note captured, edited, moved or archived on one machine or on your phone shows up everywhere else, and when the same note changes in two places, every machine settles on the same winner (the later change). There are multiple options, use one or combine them:
 
 - **The hub** (`server/`): a small Bun + SQLite service on one always-on machine, reached over your tailnet with Tailscale. Changes reach other sessions within seconds, and the hub also serves the phone app. Setup: [the hub and the phone app](#the-hub-and-the-phone-app-optional).
 - **A folder** (the `mirrorDir` option): ostrakon keeps a folder of readable Markdown notes in step, and whatever syncs that folder carries them between machines: Dropbox, Syncthing or any synced drive. Point it at an Obsidian vault and you can edit notes in Obsidian too; the edits come back. No server needed.
