@@ -1,10 +1,8 @@
 # ostrakon
 
-An ostrakon for Claude Code: capture thoughts and follow-ups mid-work, triage them across projects and machines, and turn them into prompts.
+An ostrakon for Claude Code: capture thoughts and follow-ups from within Claude Code without breaking your flow, triage them across projects and machines, and turn them into prompts.
 
-Ostrakon is a Claude Code **mod** (a plugin of function hooks that draws a pane and a band inside the terminal UI), plus an optional small hub that syncs notes between machines and serves a phone capture form.
-
-> **Status:** experimental. It builds on Claude Code's mods interface, which is still changing, so expect rough edges and breakage across Claude Code versions.
+Ostrakon is a Claude Code **mod** (a plugin of function hooks that draws a pane and a band inside the terminal UI), plus an optional small hub that keeps your notes in sync between machines and serves a phone app for capturing and triaging on the go.
 
 ## What it does
 
@@ -12,9 +10,20 @@ Ostrakon is a Claude Code **mod** (a plugin of function hooks that draws a pane 
 - **Triage** open notes for this project or across all of them in a searchable pane: edit, move, archive, bundle several into one prompt.
 - **Dispatch** a note into the prompt. A row of numbered chips above the prompt (the "pocket") shows this project's open notes; press its digit in an empty prompt to pull one in. A note is marked sent once the prompt carrying it goes in.
 - **Harvest** (opt-in): after each turn, one review asks the model for side issues worth keeping and shows them above the prompt for you to keep or dismiss. Claude's own work is unchanged.
-- **Sync** notes between machines through a small hub (Bun + SQLite, reached over Tailscale), through a plain folder (Dropbox, Syncthing, an Obsidian vault), or both. Capture from your phone with the hub's installable web page.
+- **Sync** notes both ways between machines, through a small hub, a plain folder, or both ([Sync](#sync)).
+- **Phone**: capture and triage from your phone with the hub's web app, installed to the Home Screen, or send a note from the share sheet or Siri with an iOS Shortcut.
 
 Notes are plain Markdown files with YAML front matter, one per note, in `~/.local/share/ostrakon/` by default, so they are yours to read, grep and back up.
+
+## Sync
+
+Sync is optional and two-way: a note captured, edited, moved or archived on one machine or on your phone shows up everywhere else, and when the same note changes in two places, every machine settles on the same winner (the later change). Use one way or combine them:
+
+- **The hub** (`server/`): a small Bun + SQLite service on one always-on machine, reached over your tailnet with Tailscale. Changes reach other sessions within seconds, and the hub also serves the phone app. Setup: [the hub and the phone app](#the-hub-and-the-phone-app-optional).
+- **A folder** (the `mirrorDir` option): ostrakon keeps a folder of readable Markdown notes in step, and whatever syncs that folder carries them between machines: Dropbox, Syncthing or any synced drive. Point it at an Obsidian vault and you can edit notes in Obsidian too; the edits come back. No server needed.
+- **Both at once**: each runs on its own, so a hub for the phone and a folder for Obsidian work side by side.
+
+**On your phone**, the hub's web app installs to the Home Screen and opens straight into a note field. It lists and triages your notes as well (edit, move, archive, mark sent), and keeps what you capture offline until the hub is back. Pair a phone by scanning the QR code from `ostrakon pair`. An iOS Shortcut can send a note from the share sheet or Siri without opening the app. Details: [`docs/phone.md`](docs/phone.md).
 
 ## Install
 
@@ -88,7 +97,7 @@ Set these under the plugin's options (`pluginConfigs.ostrakon.options` in your s
 | `hubUrl` / `hubToken` | empty | The hub to sync with, and its token. Empty: no hub. |
 | `mirrorDir` | empty | A second folder kept in step with the notes: Dropbox, Syncthing, an Obsidian vault subfolder. |
 
-## The hub and the phone form (optional)
+## The hub and the phone app (optional)
 
 The hub is a single Bun file (`server/hub.ts`) with SQLite storage. It listens on `127.0.0.1` only, requires a bearer token, and is meant to be put on your tailnet with `tailscale serve`.
 
