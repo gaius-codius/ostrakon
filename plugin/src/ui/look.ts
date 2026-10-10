@@ -29,7 +29,7 @@ export const GLYPH = {
 } as const
 
 // The empty pane's ostrakon, drawn dim beside the ways in.
-export const SHARD = ['  ▁▁▁▁▁', ' ╱  ✎  ╲▁', ' ╲▁▁▁▁▁▁╱'] as const
+export const SHARD = ['   ▁▁▁▁▁', '  ╱ ══╴═ ╲▁', ' ╱ ═╶══ ═  ╲', ' ╲▁▁▁▁▁▁▁▁▁╱'] as const
 
 // Theme keys only: they follow light and dark. `permission` is left out because it matches
 // `suggestion` in the light theme; `warning` because a project shouldn't read as an alarm.
@@ -54,7 +54,7 @@ export const WIDTH = {
   previewLines: 6,
   keySheet: 46,
   // The empty pane's shard column, and the key column beside it.
-  shard: 13,
+  shard: 14,
   wayKey: 10,
   // Footer pairs beside `i keys` (SPEC §4.6).
   footerPairs: 4,
