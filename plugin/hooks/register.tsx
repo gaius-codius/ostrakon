@@ -32,15 +32,17 @@ import type { MirrorIO } from '../src/sync/folder'
 import { hubAdapter } from '../src/sync/hub'
 import { canReview, freshTurns, isHarvestShown, mergeHarvest, sessionEnded, sessionRestored, sessionStarted, turnCompleted, turnProposals, turnStarted, waitingProposals } from '../src/turns'
 import type { RunningTurn } from '../src/turns'
-import { HarvestRow, PocketRow, harvestOf, pocketOf } from '../src/ui/band'
+import { HarvestRow, PocketRow, harvestOf, openerOf, pocketOf } from '../src/ui/band'
 import type { BandHandlers } from '../src/ui/band'
-import { HINT, MS, TOAST } from '../src/ui/look'
+import { HINT, MS, TEXT, TOAST } from '../src/ui/look'
 import { CAPTURE_KEY, EDIT_KEY, MOVE_KEY, Pane, SEARCH_KEY, SEND_KEY, chromeRows, slotKey } from '../src/ui/pane'
 import type { Handlers, PaneView } from '../src/ui/pane'
 
 const PANE = 'ostrakon'
 // $.store key: the scope the pane opens on, when the person chose all (SPEC §4.2).
 const SCOPE_KEY = 'scope'
+// $.store key: how many harvests have shown the hint line (SPEC §10).
+const HARVEST_HINTS_KEY = 'harvestHints'
 const POLL_MS = 2000
 // After a refused close (Esc as back), when the keys have gone back to the prompt.
 const REFOCUS_MS = 60
@@ -59,6 +61,10 @@ const mirrorState = atom({ plugin: 'ostrakon', key: 'mirror' } as const, { isOn:
 // The hint line's tail (SPEC §4.4): a /jot draft says what Enter will do, then that it did.
 const isJotDraft = atom({ plugin: 'ostrakon', key: 'isJotDraft' } as const, false)
 const savedAt = atom({ plugin: 'ostrakon', key: 'savedAt' } as const, 0)
+// The band (SPEC §10): the note just saved, whose chip stands out for MS.fresh, and the turn whose
+// harvest still carries the dim hint line.
+const fresh = atom({ plugin: 'ostrakon', key: 'fresh' } as const, '')
+const harvestHint = atom({ plugin: 'ostrakon', key: 'harvestHint' } as const, '')
 
 // The pane's last drawn geometry: actions page and focus against what the person sees.
 const geometry = { bodyRows: 30, width: 70, isInline: false, isFocused: true }
@@ -555,8 +561,13 @@ const openPane = async ($: EngineInterface, mode: 'browse' | 'capture') => {
   return undefined
 }
 
+// The person's note; its chip draws fresh for MS.fresh, until a later save takes over.
 const createNote = async ($: EngineInterface, text: string, target: NoteProject | null) => {
   const created = await store.create(await storeIO($), { text, by: 'you', project: target, context: {} })
+  await update($, fresh, () => created.id)
+  $.clock.after(MS.fresh, () => {
+    update($, fresh, current => (current === created.id ? '' : current)).catch(error => reportStorage($, error))
+  })
   return created
 }
 
@@ -948,7 +959,22 @@ const collectHarvest = async ($: EngineInterface, turn: RunningTurn) => {
   if (made.length === 0) return
   const all = await read($, notes)
   const created = (id: string) => all[id]?.created ?? ''
-  await update($, harvest, current => mergeHarvest(current, turn.prompt, made, created))
+  let started = ''
+  await update($, harvest, current => {
+    const merged = mergeHarvest(current, turn.prompt, made, created)
+    started = merged !== null && merged.turnId !== current?.turnId ? merged.turnId : ''
+    return merged
+  })
+  if (started !== '') await countHarvest($, started)
+}
+
+// A new turn's harvest, counted once: the first few carry the hint line (SPEC §10).
+const countHarvest = async ($: EngineInterface, turnId: string) => {
+  const stored = await $.store.get(HARVEST_HINTS_KEY).catch(() => undefined)
+  const shown = typeof stored === 'number' && Number.isFinite(stored) ? stored : 0
+  if (shown >= TEXT.harvestHintTimes) return
+  await update($, harvestHint, () => turnId)
+  await $.store.set(HARVEST_HINTS_KEY, shown + 1).catch(error => reportStorage($, error))
 }
 
 // Harvest's review of a finished turn (SPEC §8): one fork over the session's transcript (or, in
@@ -1265,6 +1291,8 @@ export const register: Register = (on, options) => {
       work.catch(error => reportStorage($, error))
     }
     const proposals = await proposalsOf($)
+    const opener = openerOf(project.name)
+    const look = { isWorking: e.props.isWorking, fresh: await read($, fresh) }
     const handlers: BandHandlers = {
       chip: (n, id) => run(serially(() => pocketChip($, n, id))),
       keep: id => run(serially(() => keep($, [id]))),
@@ -1273,10 +1301,11 @@ export const register: Register = (on, options) => {
     }
     let row
     if (proposals.length > 0) {
-      row = <HarvestRow el={el} proposals={proposals} harvest={harvestOf(proposals, columns)} columns={columns} handlers={handlers} />
+      const hasHint = (await read($, harvest))?.turnId === (await read($, harvestHint))
+      row = <HarvestRow el={el} proposals={proposals} harvest={harvestOf(proposals, columns, opener)} opener={opener} look={look} hasHint={hasHint} columns={columns} handlers={handlers} />
     } else {
       const all = pocketOptions.isOn ? Object.values(await read($, notes)) : []
-      row = <PocketRow el={el} pocket={pocketOf(all, project.key, pocketOptions.max, columns)} handlers={handlers} />
+      row = <PocketRow el={el} pocket={pocketOf(all, project.key, pocketOptions.max, columns, opener)} opener={opener} look={look} handlers={handlers} />
     }
     return (
       <Box flexDirection="column">

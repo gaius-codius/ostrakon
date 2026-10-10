@@ -147,7 +147,7 @@ test('harvest on: a finished turn is reviewed once, and what the review finds is
     ['proposed', 'cli.py "N items" now counts units', 'turn-1'],
   ])
   const ui = await $.ui.mount(BAND)
-  expect(await ui.find({ type: 'Text', text: '◆ 2 notes from this turn' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
   await ui.unmount()
 })
 
@@ -294,7 +294,7 @@ test('harvest on: a late review of an earlier turn doesn\'t take the band from a
     ['from the first turn', 'turn-1'],
   ])
   const ui = await $.ui.mount(BAND)
-  expect(await ui.find({ type: 'Text', text: '◆ 1 note from this turn' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
   const labels = (await ui.findAll({ type: 'Button' })).map(found => (found.props as { label?: string }).label)
   expect(labels).toContain('from the second turn')
   expect(labels).not.toContain('from the first turn')
@@ -368,7 +368,7 @@ test('harvest on: a continuation\'s proposals join its prompt\'s, whichever revi
   await until(() => proposed(dir).length === 2, 'the continuation\'s proposal')
   await settle()
   const ui = await $.ui.mount(BAND)
-  expect(await ui.find({ type: 'Text', text: '◆ 2 notes from this turn' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
   const labels = (await ui.findAll({ type: 'Button' })).map(found => (found.props as { label?: string }).label)
   expect(labels).toContain("from the prompt's turn")
   expect(labels).toContain('from the continuation')
@@ -397,7 +397,7 @@ test('harvest on: a continuation reviewed before its prompt\'s late review keeps
   await until(() => proposed(dir).length === 2, 'the late proposal')
   await settle()
   const ui = await $.ui.mount(BAND)
-  expect(await ui.find({ type: 'Text', text: '◆ 2 notes from this turn' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
   await ui.unmount()
 })
 
@@ -528,7 +528,7 @@ test('harvest light: a finished turn is reviewed by one small-model completion, 
     ['proposed', 'the tax rate is global', 'turn-1'],
   ])
   const ui = await $.ui.mount(BAND)
-  expect(await ui.find({ type: 'Text', text: '◆ 2 notes from this turn' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
   await ui.unmount()
 })
 

@@ -97,6 +97,10 @@ declare module 'claude-code' {
       isJotDraft: boolean
       // When the last /jot save landed, while the hint line still says so; 0 otherwise.
       savedAt: number
+      // The note just saved, whose band chip draws fresh for a moment; '' when none (SPEC §10).
+      fresh: string
+      // The turn whose harvest carries the dim hint line: one of the first few harvests ever.
+      harvestHint: string
     }
   }
 }

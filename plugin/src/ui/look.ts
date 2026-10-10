@@ -60,8 +60,9 @@ export const WIDTH = {
   footerPairs: 4,
   savedDocked: 3,
   savedInline: 1,
-  // Band chips (SPEC §10): Pocket labels shorten from `chip` to `chipMin` before chips drop.
-  chip: 18,
+  // Band chips (SPEC §10): Pocket labels shorten from `chip` to `chipMin` before chips drop; a
+  // label cuts at a word unless that leaves it under `chipMin`.
+  chip: 24,
   chipMin: 10,
   harvestChip: 22,
 } as const
@@ -82,9 +83,11 @@ export const TEXT = {
   ] as [string, string][],
   legend: '◆ from Claude',
   keepAll: 'keep all',
-  harvestTitle: (n: number) => `${GLYPH.claude} ${n} note${n === 1 ? '' : 's'} from this turn`,
-  harvestShort: (n: number) => `${GLYPH.claude} ${n}`,
+  harvestTitle: `${GLYPH.claude} from this turn`,
+  harvestShort: GLYPH.claude,
   harvestHint: (n: number) => `${n === 0 ? '' : `${n === 1 ? '1' : `1–${n}`} keep one · `}0 keep all · the rest wait in the pane under “proposed”`,
+  // The hint shows under the first few harvests ever, then the row speaks for itself.
+  harvestHintTimes: 3,
 } as const
 
 // The tail on the hint line under the prompt (SPEC §4.4): what a /jot draft will do, then that
