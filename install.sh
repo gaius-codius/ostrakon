@@ -85,7 +85,9 @@ fi
 mkdir -p "$UNIT_DIR"
 ln -sfn "$ROOT/server/ostrakon-hub.service" "$UNIT_DIR/ostrakon-hub.service"
 systemctl --user daemon-reload
-systemctl --user enable --now ostrakon-hub >/dev/null 2>&1 || true
+# Restart rather than start, so a hub already running picks up the current unit and code.
+systemctl --user enable ostrakon-hub >/dev/null 2>&1 || true
+systemctl --user restart ostrakon-hub || true
 if systemctl --user is-active --quiet ostrakon-hub; then say "ostrakon-hub is running"; else say "! ostrakon-hub didn't start: journalctl --user -u ostrakon-hub"; fi
 say "Next, by hand (they change what's reachable, so they're yours to run):"
 say "  loginctl enable-linger \"\$USER\"                                     # keep it running while logged out"
