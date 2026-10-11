@@ -6,9 +6,15 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Added
+
+- `get.sh`: install with one command, without cloning the repo first (`curl -fsSL https://raw.githubusercontent.com/gaius-codius/ostrakon/main/get.sh | bash`). It clones into `~/.local/share/ostrakon-src` and runs `install.sh`.
+- `ostrakon doctor`: checks that the mod loads, your notes folder, the hub and its token, and the tools ostrakon needs, and says what to fix. It changes nothing and never prints the token.
+- A load report: each session start records which Claude Code version ran the mod, and what went wrong since, in `~/.cache/ostrakon/report.json`. `ostrakon doctor` shows it, so you can see the mod actually works in your version.
+
 ### Fixed
 
-- The hub no longer sends its internal error messages to callers: a body that isn't JSON gets `invalid JSON body`, and a failure of the hub itself a fixed answer, with the details in its log.
+- The hub no longer shows its internal error messages to callers. A request that isn't valid JSON now gets `invalid JSON body`, and any other failure gets a plain error, with the details in the hub's log.
 
 ## [0.1.0] - 2026-10-11
 
@@ -20,7 +26,7 @@ The first public release.
 - Harvest (opt-in): one review after each turn proposes side issues worth keeping, in `fork` or `light` mode.
 - Notes as Markdown files with YAML front matter, merged with the same rules everywhere.
 - Sync through the hub (Bun and SQLite, over Tailscale), through a plain folder (Dropbox, Syncthing, an Obsidian vault), or both.
-- The phone form: an installable web page for capture and triage, and an iOS Shortcut.
+- The phone app: an installable web page for capture and triage, and an iOS Shortcut.
 - `ostrakon pair`: a QR code with a one-time code (5 minutes, works once) pairs a phone with the hub; `--token` prints the long-lived link instead.
 - The `ostrakon` command (`pair`, `hub`, `update`, `version`), `install.sh` and `update.sh`.
 

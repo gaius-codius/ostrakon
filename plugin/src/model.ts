@@ -16,6 +16,7 @@ export const freshPane = (): PaneState => ({
   cursor: null,
   focus: 'search',
   offset: 0,
+  sheetPage: 0,
   edit: null,
   moving: null,
   capture: { draft: '', target: null, saved: [], error: null },
@@ -39,7 +40,10 @@ const cellsOf = (char: string) => (ZERO.test(char) ? 0 : WIDE.test(char) ? 2 : 1
 const segmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : undefined
 export const clustersOf = (text: string) => (segmenter ? Array.from(segmenter.segment(text), part => part.segment) : Array.from(text))
 // A cluster is as wide as its widest character: a joined emoji sequence is two cells, not six.
+// A narrow character drawn as emoji (❤️, 1️⃣: a VS16 or a keycap after it) is two as well.
+const EMOJI_STYLE = /[\uFE0F\u20E3]/u
 const clusterCells = (cluster: string) => {
+  if (cluster.length > 1 && EMOJI_STYLE.test(cluster)) return 2
   let widest = 0
   for (const char of cluster) widest = Math.max(widest, cellsOf(char))
   return widest
@@ -65,6 +69,35 @@ export const cut = (text: string, width: number) => {
   }
   // A cut word ends at the …; a cut space doesn't sit in front of it.
   return `${kept.trimEnd()}${GLYPH.more}`
+}
+
+// Wraps at spaces to `width` cells; a word wider than a line breaks between clusters.
+export const wrap = (text: string, width: number) => {
+  const room = Math.max(1, width)
+  const out: string[] = []
+  for (const paragraph of text.split('\n')) {
+    let line = ''
+    for (const word of paragraph.split(/(\s+)/)) {
+      if (cells(line + word) > room && line.trim() !== '') {
+        out.push(line.trimEnd())
+        line = word.trimStart()
+      } else line += word
+      while (cells(line) > room) {
+        let head = ''
+        let used = 0
+        for (const cluster of clustersOf(line)) {
+          const size = clusterCells(cluster)
+          if (used + size > room && head !== '') break
+          head += cluster
+          used += size
+        }
+        out.push(head)
+        line = line.slice(head.length)
+      }
+    }
+    out.push(line.trimEnd())
+  }
+  return out
 }
 
 export const ageOf = (stamp: string, now: number) => {
@@ -197,7 +230,7 @@ export const scoreOf = (ctx: Ctx, note: Note, query: string) => {
 
 export type Line =
   | { kind: 'problem'; key: 'problem'; count: number }
-  | { kind: 'group'; key: string; group: string; project: NoteProject | null; isFolded: boolean }
+  | { kind: 'group'; key: string; group: string; project: NoteProject | null; isFolded: boolean; count: number }
   | { kind: 'note'; key: string; note: Note; group?: string; hits: number[] }
 
 export const groupKeyOf = (note: Note) => (note.status === 'proposed' ? PROPOSED : note.project?.key ?? UNFILED)
@@ -250,11 +283,11 @@ export const linesOf = (ctx: Ctx, pane: PaneState, notes: Note[], problems: Note
     const items = groups.get(group) ?? []
     const isFolded = pane.folded.includes(group)
     const project = group === PROPOSED || group === UNFILED ? null : items[0]?.note.project ?? null
-    lines.push({ kind: 'group', key: `group:${group}`, group, project, isFolded })
-    if (isFolded) continue
     // Open (and proposed) first, then history; each newest first. With a query, by rank.
     const live = items.filter(item => !isHistory(item.note))
     const past = items.filter(item => isHistory(item.note))
+    lines.push({ kind: 'group', key: `group:${group}`, group, project, isFolded, count: live.length })
+    if (isFolded) continue
     for (const { note, hits } of [...live, ...past]) lines.push({ kind: 'note', key: note.id, note, group, hits })
   }
   return lines
@@ -302,7 +335,7 @@ export const pageOf = (lines: Line[], desired: number, cursor: string | null, ca
 
 // Rows a wrapped text takes at a width.
 export const wrappedRows = (text: string, width: number) =>
-  text.split('\n').reduce((rows, line) => rows + Math.max(1, Math.ceil(line.length / Math.max(1, width))), 0)
+  text.split('\n').reduce((rows, line) => rows + Math.max(1, Math.ceil(cells(line) / Math.max(1, width))), 0)
 
 // ---- keys and footers (SPEC §4.5, §4.6) ----
 
@@ -362,7 +395,8 @@ export type Focus =
   | { kind: 'edit' }
   | { kind: 'bundle' }
   | { kind: 'move' }
-  | { kind: 'sheet' }
+  // `lead`: the hotkeys of the row the sheet was opened on, its own actions; none off a row.
+  | { kind: 'sheet'; page: number; pages: number; lead: string[] }
   | { kind: 'empty' }
 
 // The keys answered in a focus, footer order. The hidden action layer mounts exactly these, so a
@@ -388,7 +422,11 @@ export const keysFor = (focus: Focus): Key[] => {
     case 'move':
       return [{ action: 'move', shown: ['⏎', 'move'] }, { action: 'back', shown: ['esc', 'back'] }, ...CHORDS(false)]
     case 'sheet':
-      return [k('keys', 'i', 'close keys'), ...CHORDS(false)]
+      return [
+        k('keys', 'i', 'close keys'),
+        ...(focus.pages > 1 ? [k('down', 'j', `more ${focus.page + 1}/${focus.pages}`), k('up', 'k', 'back', false)] : []),
+        ...CHORDS(false),
+      ]
     case 'line': {
       const { line } = focus
       const always = [...nav, k('copy', 'y', 'copy', false), k('close', 'q', 'close', false), k('search', 'f', 'search', false), k('new', 'n', 'new', false), ...CHORDS(false)]
@@ -420,9 +458,10 @@ export const keysFor = (focus: Focus): Key[] => {
       if (focus.picks > 0) {
         return [k('bundle', 'b', 'bundle'), k('pick', 'v', 'pick'), k('clearPicks', 'x', 'clear picks'), k('toPrompt', 't', 'to prompt'), k('keys', 'i', 'keys'), ...rest]
       }
+      // Nothing picked: the note's own actions lead, so they are the four the footer has room for.
       const shown = inList
-        ? [k('pick', 'v', 'pick'), k('toPrompt', 't', 'to prompt'), k('send', 's', 'send'), k('edit', 'e', 'edit'), k('archive', 'd', 'archive'), k('fold', 'z', 'fold'), k('history', 'h', 'history'), k('keys', 'i', 'keys')]
-        : [k('pick', 'v', 'pick'), k('toPrompt', 't', 'to prompt'), k('send', 's', 'send'), k('edit', 'e', 'edit'), k('archive', 'd', 'archive'), k('list', 'l', 'list'), k('search', 'f', 'search'), k('keys', 'i', 'keys')]
+        ? [k('toPrompt', 't', 'to prompt'), k('send', 's', 'send'), k('edit', 'e', 'edit'), k('archive', 'd', 'archive'), k('pick', 'v', 'pick'), k('fold', 'z', 'fold'), k('history', 'h', 'history'), k('keys', 'i', 'keys')]
+        : [k('toPrompt', 't', 'to prompt'), k('send', 's', 'send'), k('edit', 'e', 'edit'), k('archive', 'd', 'archive'), k('pick', 'v', 'pick'), k('list', 'l', 'list'), k('search', 'f', 'search'), k('keys', 'i', 'keys')]
       return [...shown, k('bundle', 'b', 'bundle', false), ...rest]
     }
   }
@@ -442,12 +481,42 @@ export const uniqueKeys = (keys: Key[]) => {
 
 export const footerPairs = (keys: Key[]) => uniqueKeys(keys).flatMap(key => (key.shown ? [key.shown] : []))
 
+// The keys a row's footer leads with, its own actions, up to the first of the pane's own.
+const PANE_ACTIONS: Action[] = ['list', 'search', 'fold', 'history', 'keys']
+export const ownKeys = (keys: Key[]) => {
+  const own: string[] = []
+  for (const key of uniqueKeys(keys)) {
+    if (key.shown === undefined || key.hotkey === undefined) continue
+    if (PANE_ACTIONS.includes(key.action)) break
+    own.push(key.hotkey)
+  }
+  return own
+}
+
+// The key sheet's lines with the row's own keys first, in its footer's order, then the rest as
+// they are. A line is a row's when one of its keys (`d / u`) is.
+export const sheetLines = (lines: [string, string][], lead: string[]) => {
+  const own = [...new Set(lead.flatMap(hotkey => lines.filter(([keys]) => keys.split(' / ').includes(hotkey))))]
+  return [...own, ...lines.filter(line => !own.includes(line))]
+}
+
+// Footer statuses ([text, colour]) within `room` cells, two between them: cut, never wrapped, and
+// the last ones go first.
+export const fitStatuses = (statuses: [string, string][], room: number) => {
+  let left = room
+  return statuses.flatMap(([text, colour]): [string, string][] => {
+    const fitted = cut(text, left)
+    left -= cells(fitted) + 2
+    return fitted === '' ? [] : [[fitted, colour]]
+  })
+}
+
 // Footer rows at a width: pairs wrap with two spaces between them.
 export const footerRows = (pairs: [string, string][], lead: string, width: number) => {
   let rows = 1
-  let used = lead.length
+  let used = cells(lead)
   for (const [key, label] of pairs) {
-    const size = key.length + (label === '' ? 0 : 1 + label.length)
+    const size = cells(key) + (label === '' ? 0 : 1 + cells(label))
     const gap = used === 0 ? 0 : 2
     if (used + gap + size > width && used > 0) {
       rows += 1
