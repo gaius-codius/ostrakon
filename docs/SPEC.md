@@ -2,12 +2,12 @@
 
 Status: in development · Last revised 2026-10-11
 
-How ostrakon works: what it does, the data model, sync, and the platform facts it depends on. Code comments cite sections of this file as `SPEC §n`.
+How ostrakon works: what it does, how notes are stored and synced, and the facts about Claude Code it depends on. Code comments point to sections of this file as `SPEC §n`.
 
 | Path | What it is |
 |---|---|
 | `plugin/` | The mod (Claude Code plugin): store, merge, sync adapters, pane and band UI |
-| `server/` | The hub (Bun + SQLite) and the phone form (PWA); setup in `docs/phone.md` |
+| `server/` | The hub (Bun + SQLite) and the phone app (PWA); setup in `docs/phone.md` |
 | `bin/ostrakon`, `install.sh`, `update.sh` | The command line (`pair`, `hub`, `update`, `version`) and the install and update scripts |
 | `tools/` | Development tooling: screenshot pipeline, mockups, QA and experiment harnesses (their output goes to the gitignored `working-docs/`) |
 
@@ -15,7 +15,7 @@ How ostrakon works: what it does, the data model, sync, and the platform facts i
 
 ## 1. Product
 
-An ostrakon inside Claude Code for the thoughts, follow-ups and ideas that come up while working with Claude, so they get written down instead of derailing the current task or being forgotten.
+A scratchpad inside Claude Code for the thoughts, follow-ups and ideas that come up while you work with Claude, so they get written down instead of derailing the current task or being forgotten.
 
 Three jobs, in priority order:
 
@@ -23,23 +23,23 @@ Three jobs, in priority order:
 2. **Triage**: see what's pending in this project and across every project and machine; find, edit, tidy and decide.
 3. **Dispatch**: turn one note, or a hand-picked set, into a prompt. Never lose a note if dispatch fails.
 
-Goals: keyboard-first, calm when idle, quick.
+Throughout, it should be keyboard-first, quick, and calm when you aren't using it.
 
 ### Shape
 - **Pane = Launcher**: search-first, fzf-style, with multi-pick and bundle.
 - **List view** inside the pane: a grouped browse view reached by a hotkey. No tab bar.
 - **Resting state = Pocket**: numbered note chips above the prompt. A digit in an empty prompt pulls that note in (§10).
 - **Harvest** (opt-in): after a turn, side issues worth keeping are proposed above the prompt, with **no change to how Claude works** (§8).
-- **Sync**: pluggable adapters. A Tailscale hub with a phone capture form, and a folder adapter for Dropbox, Syncthing and Obsidian (§7).
+- **Sync**: pluggable adapters. A hub (usually reached over Tailscale) that also serves a phone capture form, and a folder adapter for Dropbox, Syncthing and Obsidian (§7).
 
 ### Non-goals
-A full task manager (due dates, priorities, assignees). A board view. Sharing notes with other people. Pointer drag-and-drop.
+Ostrakon is not a full task manager: no due dates, priorities or assignees. It also has no board view, no sharing notes with other people, and no drag-and-drop with the mouse.
 
 ---
 
 ## 2. Platform facts
 
-What the mods interface does that shaped the design. Marked *unverified* where untested.
+Claude Code's mods interface has rules and limits that aren't obvious from its API, and many choices later in this document follow from them. This section collects the ones that mattered. Anything marked *unverified* hasn't been tested.
 
 ### 2.1 Loading, checks and tests
 - A mod is a plugin folder: `.claude-plugin/plugin.json`, `hooks/hooks.json` (`{"modules":["./register.tsx"]}`), the hooks module, and `types/index.d.ts` (required when using `$.state`; named by `"types"` in `plugin.json`).
@@ -50,15 +50,20 @@ What the mods interface does that shaped the design. Marked *unverified* where u
   - `$.state` keys are literals declared in the contract;
   - `$.env.get` names are literals.
 - Runtime errors show as dim transcript lines. `claude --debug-file <path>` logs every refusal (`ui.open … asked|unasked`, `ui.focus … moved|denied`).
-- A rejected `$` promise that nothing catches fails tests, so `.catch` fire-and-forget calls (especially `$.ui.focus`).
-- Test kit (`claude-code/testing`): mock every noun you touch (`mock.clock`, `mock.env`, `mock.store`); op events answer `{ value }`; `session.start` needs a bottom (`on('session.start', ($, e) => ({ cwd: e.cwd }))`); `$.fs` has no implementation, so tests use an in-memory one (`plugin/tests/memdir.ts`); `$.clock.sleep` blocks until `clock.advance(ms)`.
+- A rejected `$` promise that nothing catches fails tests, so add a `.catch` to every call you don't await (especially `$.ui.focus`).
+- The test kit (`claude-code/testing`):
+  - mock every noun you touch (`mock.clock`, `mock.env`, `mock.store`);
+  - op events answer `{ value }`;
+  - `session.start` needs a bottom (`on('session.start', ($, e) => ({ cwd: e.cwd }))`);
+  - `$.fs` has no implementation, so tests use an in-memory one (`plugin/tests/memdir.ts`);
+  - `$.clock.sleep` blocks until `clock.advance(ms)`.
 
 ### 2.2 Focus, keys and opening
 - **When a pane appears:** one opened in direct response to the person's input (a command, a button press) is placed at any width. One the mod opens "on its own" (a timer, a delayed call) only appears from **144 columns** (110 once the person has opened it). So open inside the triggering handler and check `isPlaced`.
 - **When focus is granted:** `focus: true` is honoured only while the prompt is empty and nothing else holds the keys. A band Button press holds the keys, so `onPress` must return the open's promise for the pane to count as asked.
 - **Inputs swallow keys:** while an Input has focus every printable key goes to it, so letter hotkeys only work when a Button has focus. The UI therefore always shows which mode you're in and which keys work now.
 - **Hotkeys:** a Button `hotkey` is a single lowercase letter or digit and only works while the pane or band holds focus. Tab/Shift+Tab and Up/Down move between controls natively.
-- **Esc:** with `closeOnEscape: true`, Esc raises `ui.close` with origin `person`, the same as the close mark, `ctrl+x x` and the engine's `pane:close`. A `ui.close` hook may refuse it (answer without `next`); the keys still go to the prompt, so take them back with `$.ui.open({ id, focus: true })` a moment later. This is how Esc means "back".
+- **Esc:** with `closeOnEscape: true`, Esc raises `ui.close` with origin `person`, the same as the close mark, `ctrl+x x` and the engine's `pane:close`. A `ui.close` hook may refuse it by answering without `next`. The keys still go to the prompt, though, so take them back with `$.ui.open({ id, focus: true })` a moment later. That is how Esc can mean "back" instead of "close".
 - **Ctrl chords:** mods can't define global shortcuts. A Button's `action` prop names an *existing* keybinding action, and the person's chord for it presses the button while it's mounted. Ostrakon borrows actions with no default key (table in §4.5). Contexts: `Pane` (a pane control has focus), `PaneField` (a pane Input or Select has focus), `Chat` (the main prompt).
 - A bare `ctrl+x` can't be bound (it prefixes every engine chord), and `ctrl+x x` only closes a pane that holds the keyboard.
 
@@ -77,8 +82,8 @@ What the mods interface does that shaped the design. Marked *unverified* where u
 - A `prompt.submit` hook returning `{ drop: '…' }` prints "Prompt dropped by a hook" in warning colour. A plugin's own submit has `e.origin.kind === 'plugin'`; the person's has `'composer'`.
 
 ### 2.5 State and storage
-- **`$.state` resets** on `/clear`, `/resume` and `/branch`, and `session.start` does not refire. Reload on `session.start` and after `session.end` with reasons `clear` and `resume`; a poll also restores lost state. `classic.SessionStart` is not reliable (an organization's policy plugin can bypass user plugins' classic hooks).
-- **`$.store`** is per config dir. Fine for preferences, not for notes.
+- **`$.state` resets** on `/clear`, `/resume` and `/branch`, and `session.start` doesn't fire again. So reload on `session.start` and after `session.end` with reasons `clear` and `resume`; a poll also restores lost state. Don't rely on `classic.SessionStart`: an organization's policy plugin can bypass user plugins' classic hooks.
+- **`$.store`** is kept per config directory. That's fine for preferences, but not for notes.
 - **`$.fs.write` is not atomic:** a reader can see a half-written file. Rule: **a file that fails to parse aborts the operation; never write a default over it.** For atomic replacement, write a temp file and `$.process.run(['mv', tmp, final])`.
 - Writing inside the plugin folder triggers hot reloads, so keep data outside it.
 - There are no file-change events, so poll `$.fs.stat` mtimes.
@@ -163,7 +168,7 @@ Reached with `l` on a row or `ctrl+l`; it keeps the query and scope.
 | close (`q`, `ctrl+q`, `ctrl+x s`, Esc at the top) | the stash goes back |
 | open refused or not placed | the stash goes straight back |
 
-  The `ui.close` hook restores the stash only if the prompt is still empty; otherwise it appends it after a blank line, so nothing is overwritten.
+  The `ui.close` hook puts the stash back as the whole prompt only if the prompt is still empty. Otherwise it adds the stash after a blank line, so nothing is overwritten.
 - The capture draft and the edit draft live in `$.state` and are restored when the pane reopens.
 
 ### 4.5 Keys and actions
@@ -203,7 +208,9 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 - `ctrl+n` → `pane:next`
 
 ### 4.6 Contextual footer
-One blank row, then one line: at most four key/label pairs for the focus (key bold, label dim, two spaces between) and `i keys` on the right; pairs drop from the right until the line fits. On a row with nothing picked, the note's own actions take the four places (`t to prompt  s send  e edit  d archive`); `v` pick is answered and listed in the key sheet. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning); a status too long for the line is cut with `…`, leaving room for `i keys`. The legend `◆ from Claude` trails while a `◆` row is drawn. **The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, search row, list row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`.
+One blank row, then one line: at most four key/label pairs for the focus (key bold, label dim, two spaces between) and `i keys` on the right; pairs drop from the right until the line fits. On a row with nothing picked, the note's own actions take the four places (`t to prompt  s send  e edit  d archive`); `v` pick is answered and listed in the key sheet. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning); a status too long for the line is cut with `…`, leaving room for `i keys`. The legend `◆ from Claude` trails while a `◆` row is drawn.
+
+**The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, search row, list row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`.
 
 **Storage problems** also draw a focusable problem row above the first result, in `error` (`⚠ 2 unreadable files · ⏎ details`); ⏎ opens a card listing each file and reason.
 
@@ -214,7 +221,7 @@ One blank row, then one line: at most four key/label pairs for the focus (key bo
 - **Toasts** are short and calm (`Archived · u undo`, `Copied`, `note 2 in your prompt · ⏎ to send`). Never `$.ui.status`.
 
 ### 4.8 Paging and the inline pane
-**The mod pages the rows, never the engine.** It draws only the rows that fit in `scroll.bodyRows` minus the chrome, so content always fits. (Arrows walk controls only while content fits, so this is what makes selection-follows-focus work.)
+**The mod pages the rows, never the engine.** It draws only the rows that fit in `scroll.bodyRows` minus the chrome, so the content always fits. This matters because the arrow keys only move between controls while the content fits; it's what lets the selection follow the focus.
 - Numbers 1–9 count from the top of the window.
 - **Edge sentinels:** when rows exist below the window a dim `↓ 4 more` button sits under the last row; above, `↑ 2 more`. Focus arriving on one shifts the window by a row and moves focus to the new edge row; `j`/`k` page directly.
 - **Zero results:** no rows and no sentinels; focus stays in the search field.
@@ -225,7 +232,8 @@ One blank row, then one line: at most four key/label pairs for the focus (key bo
 ### 4.9 Construction
 - The search field is an `Input` with no `label` (the terminal would draw `label: `); the glyph is a `Text` before it.
 - A row is a keyed `Box` whose focus target is a one-space `plain` Button in column 0; focus inverts it into the selection bar. Rows are keyed by *slot in the window*, not by note, so paging doesn't move the ring.
-- Keys with no visible control (letter actions, digits, borrowed chords) are Buttons in an **action layer**, a `display: 'none'` Box drawn last. A `ui.focus` hook redirects any move onto it. While a row, the bundle or the key sheet holds the ring, the layer also answers every other letter and digit by doing nothing, because an unanswered printable key would go to the prompt and take the keyboard with it.
+- Keys with no visible control (letter actions, digits, borrowed chords) are Buttons in an **action layer**, a `display: 'none'` Box drawn last. A `ui.focus` hook redirects any move onto it.
+- While a row, the bundle or the key sheet holds the ring, the layer also answers every other letter and digit by doing nothing, because an unanswered printable key would go to the prompt and take the keyboard with it.
 - Docked, the preview and footer have fixed heights, so the window never changes size as the selection moves. In a body too short for the preview and three rows besides, the preview goes, as inline, so the footer stays on screen.
 - Each open draws exactly one `autoFocus` element. Every in-pane view change calls `$.ui.focus` on its target (search → first result, list toggle → selected row, capture, edit, bundle → `[ send ]`, back out → the row it came from, fold → the header).
 
@@ -274,7 +282,7 @@ check why the cache test is flaky on CI. started after the redis bump, only on t
 ```
 - **Flat keys:** the project and context are written as flat keys because Obsidian's Properties shows nested blocks as raw JSON. Older nested `project:`/`context:` blocks are still read.
 - **Parsing:** a strict, small YAML subset with its own parser and serializer (no dependency). An unparseable file is **skipped and reported**, never overwritten. Keys this mod doesn't own are kept verbatim.
-- **Writes:** to a temp file of the write's own, then `mv` (atomic). Read back after the rename; if another writer replaced the file meanwhile, re-read it on the next poll.
+- **Writes** go to a temp file of their own, then `mv` puts it in place in one step. The file is read back after the rename; if another writer replaced it meanwhile, it's re-read on the next poll.
 - **Changing a note** takes a per-note lock, reads every copy of that id fresh, merges them, applies the change and writes `<id>.md`.
 - **Locks** coordinate the sessions on one machine only; machines reconcile through copies and the merge, never through locks on a synced folder. They live in `~/.cache/ostrakon/locks/<id>/` (`mkdir` plus an `owner` file with a random token, the owning process id and its start time).
   - A lock is taken over **only when that exact process is confirmed gone**; a failed lookup never counts as gone. A live owner keeps its lock however long it stalls, and waiters give up after about 3 s.
@@ -284,7 +292,7 @@ check why the cache test is flaky on CI. started after the redis bump, only on t
 ### 6.3 Merge rules (local, and every sync adapter)
 - Notes are matched by `id`.
 - **Winner** (`plugin/src/merge.ts`, shared by the mod, the hub and every adapter): the later `updated` wins. On a tie, the more final status wins: `deleted` > `archived` > `sent` > `dismissed` > `open` > `proposed`. Then the higher `origin`, then the whole serialized file, so the order is total and every machine picks the same winner.
-- **Clock:** `updated = max(now, previous.updated + 1ms)` on every local change, a hybrid-logical-clock-style step against skew.
+- **Clock:** every local change sets `updated = max(now, previous.updated + 1ms)`. So a change always moves the note's clock forward, even when this machine's clock is behind the one that made the last change (the idea behind a hybrid logical clock).
 - **Purge:** tombstones are removed 60 days after `updated`.
 
 ### 6.4 Live updates between sessions
@@ -312,7 +320,7 @@ type SyncAdapter = {
 - **Offline first:** the local directory is always the truth for the UI; adapters only reconcile.
 
 ### 7.2 Adapters
-- **Hub adapter:** HTTP to the Tailscale service (§9).
+- **Hub adapter:** HTTP to the hub (§9).
 - **Folder adapter** (`plugin/src/sync/folder.ts`, option `mirrorDir`): mirrors notes to another directory and merges back. One adapter covers **Dropbox**, **Obsidian** (point it at a vault subfolder; Obsidian then edits the very same files), **Syncthing** and any synced drive. It can run alongside the hub, each with its own sync core.
   - **The mirror is a store of its own** (`plugin/src/mirror.ts`): the plain store plus what only the mirror needs. Writes are whole files renamed into place, with per-note locks between this machine's sessions; conflict copies merge by id; edits made in place count as changes at their mtime.
   - **File names:** a note's first file in the mirror is named after its first line (`Buy milk.md`, then `Buy milk 2.md`), placed with a hard link so it never replaces a file (falling back to `mv -n` where there are none). The name stays when the text changes, and a note renamed in Obsidian lives on under its new name. The notes folder keeps `<id>.md`.
@@ -325,7 +333,7 @@ type SyncAdapter = {
 - **Git adapter** (not built): the folder adapter plus `git add/commit/pull --rebase/push` through `$.process.run`.
 
 ### 7.3 Notion
-Not built; the only adapter with real ongoing maintenance (a separate data model and API). Two routes: the Notion API through `$.http.fetch` with a token in a `sensitive` option, or the claude.ai Notion connector through `$.mcp.call` (declared in the API but *unverified* at runtime). Last writer wins on Notion's `last_edited_time` mapped into `updated`. A one-way export is the cheap first step.
+Not built. It would be the only adapter that needs real upkeep, because Notion has its own data model and API. There are two routes: the Notion API through `$.http.fetch` with a token in a `sensitive` option, or the claude.ai Notion connector through `$.mcp.call` (declared in the API but *unverified* at runtime). The last writer would win, with Notion's `last_edited_time` mapped into `updated`. A one-way export is the cheap first step.
 
 ---
 
@@ -335,7 +343,7 @@ Not built; the only adapter with real ongoing maintenance (a separate data model
 
 - **Options:** `harvest` (boolean, default `false`), `harvestMaxPerTurn` (default 3, 1 to 9) and `harvestMode`, `fork` (default) or `light`.
 - **The `jot` tool** (`mcp__ostrakon__jot`) is registered always and is the same with harvest on or off: it is what "jot that down" calls. A jot is an `open` note of Claude's (`by: claude`) in this project, with a toast `◆ Claude jotted: …`.
-- **Mechanism:** when a main turn ends (`turn.complete`, an answer, not interrupted, at least 5 s), the mod asks one tool-less question over the session's own transcript (`$.model.fork`, served from the prompt cache): the turn's final reply, the notes Claude already jotted in it, and a request for up to `harvestMaxPerTurn` side issues worth keeping, as a JSON array of strings in a fenced block (`[]` for none). The array becomes `proposed` notes (`by: claude`) in this project. Claude's own requests are identical with harvest on and off.
+- **Mechanism:** when a main turn ends (`turn.complete`, an answer, not interrupted, at least 5 s), the mod asks one question with no tools over the session's own transcript (`$.model.fork`, served from the prompt cache). The question carries the turn's final reply and the notes Claude already jotted in it, and asks for up to `harvestMaxPerTurn` side issues worth keeping, as a JSON array of strings in a fenced block (`[]` for none). The array becomes `proposed` notes (`by: claude`) in this project. Claude's own requests are identical with harvest on and off.
   - **Why a review rather than prompt text:** the engine's security default skips a user-tier plugin's `prompt.compose` and `prompt.context` hooks (only a tool's description reaches the model), and in live turns no wording in the tool's description got Claude to jot on its own.
   - **Cost:** one fork per reviewed turn, mostly cache reads (about 45k cached, 0.5k new input, 0.1k output tokens, 2 s, after the turn).
   - **`light` mode** replaces the fork with one `$.model.complete` on a small model, shown only the turn's prompt, its final reply (cut in the middle beyond a limit) and the notes already jotted, and told it can't see files or tool output. It costs about a sixtieth as much but finds fewer proposals and none that depend on files or tool results.
@@ -343,10 +351,10 @@ Not built; the only adapter with real ongoing maintenance (a separate data model
 
 ---
 
-## 9. The hub: Tailscale service plus the phone form
+## 9. The hub: sync service plus the phone app
 
 ### 9.1 Requirements
-A host that is always on, on the tailnet: Bun installed, systemd (for the unit in `server/`), `tailscale serve` allowed by the tailnet policy, and a free port.
+A machine that stays on, with Bun installed, systemd (for the unit in `server/`), a free port, and a way for your devices to reach it over HTTPS. `tailscale serve` is the easy way (the tailnet's policy has to allow it); any HTTPS reverse proxy, tunnel or VPN works too (`docs/phone.md`).
 
 ### 9.2 Service (`server/`)
 - **Runtime:** Bun, a single file (`server/hub.ts`), and `bun:sqlite` (table `notes(id PRIMARY KEY, doc TEXT, updated TEXT, origin TEXT, seq INTEGER)`; `seq` is a server-assigned, monotonic change counter used as the pull cursor).
@@ -355,9 +363,11 @@ A host that is always on, on the tailnet: Bun installed, systemd (for the unit i
   - `POST /api/notes`: a batch upsert. The server applies §6.3 per note and returns the winners.
   - `GET /api/projects`: known projects, for the phone's picker.
   - `POST /api/jot`: `{ text, project? }` makes one phone note; what an iOS Shortcut or `curl` sends.
-  - `GET /` and the files in `server/public/` (one folder down at most: `fonts/`, `vendor/`): the phone form (§9.3).
+  - `GET /` and the files in `server/public/` (one folder down at most: `fonts/`, `vendor/`): the phone app (§9.3).
   - Notes travel as JSON; the hub holds each to the file format and refuses the rest per note.
-- **Network and auth:** bind only to `127.0.0.1` and expose with `tailscale serve --bg --https=8443 http://127.0.0.1:8790` (HTTPS is needed for a PWA; its own port leaves anything on 443 alone). Every `/api` call carries a bearer token (`HUB_TOKEN`). `HUB_LOGIN` can additionally allow a Tailscale login without the token, but tagged devices carry no `Tailscale-User-Login` header, so the token is the auth. `POST /api/pair` (authorized) mints a one-time code, kept in memory for 5 minutes; `POST /api/pair/claim` (the one call without auth, own origin only) trades it for the token. `ostrakon pair` puts the code, not the token, in its QR.
+- **Network:** the hub binds only to `127.0.0.1`. With Tailscale it's exposed by `tailscale serve --bg --https=8443 http://127.0.0.1:8790`: HTTPS, because a PWA needs it, on its own port so anything on 443 is left alone.
+- **Auth:** every `/api` call carries a bearer token (`HUB_TOKEN`). `HUB_LOGIN` can also let a Tailscale login in without the token, but tagged devices carry no `Tailscale-User-Login` header, so the token is the real auth.
+- **Pairing:** `POST /api/pair` (authorized) mints a one-time code, kept in memory for 5 minutes. `POST /api/pair/claim` trades it for the token; it's the one call without auth, and a browser may make it only from the hub's own origin. `ostrakon pair` puts the code, not the token, in its QR.
 - **Ops:** a systemd user unit, a daily SQLite backup (7 kept), and `GET /healthz` (answers `ok <version>`). No framework.
 
 ### 9.3 Phone form (PWA)
@@ -430,7 +440,7 @@ ostrakon/
 - A plugin may import its own files, but `import()` is not allowed.
 - A `.claude-plugin/marketplace.json` at the repo root would make it installable with `/plugin install ostrakon --marketplace gaius-codius/ostrakon`.
 
-**Built:** the storage core, the launcher pane, the Pocket band and `sent` tracking, the hub with the phone form and hub adapter, harvest, and the folder adapter. **Not built:** the git adapter and Notion.
+**Built:** the storage core, the launcher pane, the Pocket band and `sent` tracking, the hub with the phone app and hub adapter, harvest, and the folder adapter. **Not built:** the git adapter and Notion.
 
 ## 12. Verification
 - **Static checks:** `tools/check.sh` runs `claude plugin validate plugin/`, the type-check, `claude plugin test plugin/`, the hub's `bun test` and `tools/check-design.ts` (DESIGN.md against the code, §11 of it for the changelog rules). Type-checking needs `plugin/.claude-plugin/types/`, which the engine writes when it loads the mod.
@@ -439,6 +449,8 @@ ostrakon/
 - **States worth a screenshot:** search (empty, typing, no match), list view (grouped, folded, history), picked plus bundle, capture, edit, Pocket (0, 3, 9+ notes), the harvest band, a narrow terminal (100 columns, inline), and the light theme.
 
 ## 13. Targets (keystrokes, from a closed pane)
+How many keystrokes common flows should take, starting with the pane closed. N is the length of the note, Q of the search query, and R the moves to reach the row.
+
 | Flow | Target |
 |---|---|
 | Capture mid-turn | N+3 (`// text ⏎`), and no loss of an existing draft |
