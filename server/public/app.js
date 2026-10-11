@@ -827,7 +827,10 @@ const motion = {
   // The search bar and its matches settle in (entering search can't wait for a View Transition:
   // the field must take focus at once for the keyboard to come up).
   searchIn: () => {
-    for (const node of [$('search-bar'), $('main')]) run(node, { opacity: [0, 1], transform: ['translateY(-6px)', 'translateY(0px)'] }, { duration: 0.18, ease: 'easeOut' })
+    // Not #main, which holds the toast: a transform there would carry the fixed toast with it.
+    for (const node of [$('search-bar'), $('search-status'), $('inbox')]) {
+      run(node, { opacity: [0, 1], transform: ['translateY(-6px)', 'translateY(0px)'] }, { duration: 0.18, ease: 'easeOut' }).finished.then(() => (node.style.transform = ''))
+    }
   },
   toastIn: node => (reduced.matches ? run(node, { opacity: [0, 1] }, { duration: 0.15 }) : run(node, { opacity: [0, 1], transform: ['translateY(12px)', 'translateY(0px)'] }, SPRING)),
   toastOut: (node, done) => run(node, { opacity: 0 }, { duration: 0.15 }).finished.then(done, done),
@@ -1416,7 +1419,8 @@ $('capture').addEventListener('submit', event => {
   }
   isJustSaved = true
   field.blur()
-  setMode('list')
+  // Back to the top, where the form says it's saved (the keyboard may have scrolled the page).
+  setMode('list', () => scrollTo({ top: 0, behavior: reduced.matches ? 'auto' : 'smooth' }))
 })
 
 // ---- the project picker (File under, Move to) ----
