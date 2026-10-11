@@ -1,33 +1,39 @@
 # Ostrakon on the phone
 
-The hub (`server/hub.ts`) serves a small web app for your phone. Write a note, pick a project (or
-leave it `unfiled`) and tap Save; the note shows up in every open ostrakon pane within a couple of
-seconds.
+The hub (`server/hub.ts`) serves a small web app for your phone. Tap the note field and write;
+project chips come up under it, the project you used last first. Tap one to file the note there
+(tap it again for `unfiled`, the default), or `N more` for the full list with a search. Save, and
+the note shows up in every open ostrakon pane within a couple of seconds; until the hub has it,
+the form says `✓ saved · waiting to sync`. **Close** puts the form away and keeps what you typed.
 
-Below the note field is your inbox of open notes, grouped by project as in the pane. Each project's
-heading has the same colour the pane gives it, and `unfiled` comes last. `◆` marks a note from
-Claude, `▪` one from the phone.
+Below the form is your inbox of open notes, grouped by project as in the pane. Each heading has
+the project's dot, its name and how many notes it holds, and `unfiled` comes last. `◆` marks a
+note from Claude, `▪` one from the phone. Notes Claude proposed (harvest) come first, under
+**Proposed by Claude**, with **Keep** and **Dismiss**.
 
-- **Fold a project**: tap its heading. The phone remembers which are folded, and a search still
-  finds notes in folded groups. A heading stays at the top of the screen while you scroll its group.
+- **Fold a project**: tap its heading. The phone remembers which are folded. A heading stays at
+  the top of the screen while you scroll its group.
+- **Search**: the search button at the top filters open notes, folded groups included.
 - **Edit**: tap a note.
-- **Archive**: swipe a note left. A strip behind it says `Archive` and turns solid when letting go
-  will archive it.
-- **More actions**: hold a note for about half a second for **Edit**, **Copy text**, **Move to
-  project…**, **Mark sent** (for a note you used somewhere else) and **Archive**. Tap outside the
-  sheet to close it.
+- **Archive**: swipe a note left. A strip behind it says `Archive` and turns solid while letting go
+  will archive it; drag back right to change your mind.
+- **More actions**: tap a note's `⋯` button (or hold the note for about half a second) for
+  **Edit**, **Copy text**, **Move to project**, **Mark sent** (for a note you used somewhere else)
+  and **Archive**.
 
 Moving, archiving and marking sent can all be undone from the message that pops up afterwards.
 
 **It works offline.** Saving never waits for the network: notes are queued on the phone and sent
-as soon as the hub answers. Until then the page shows something like `Offline · 2 queued` and
-keeps trying. Your inbox is kept on the phone too, and the app opens straight away even when the
-hub is down.
+as soon as the hub answers. Until then the page shows something like `hub offline · 2 queued` and
+keeps trying. Your inbox is kept on the phone too, and the app (fonts and all) opens straight away
+even when the hub is down.
 
 **Nothing gets lost.** If the hub turns a note down (it failed one of the hub's checks), the note
-moves to a **Not accepted by the hub** box above the inbox, with the reason and buttons to
-**Copy** or **Dismiss** it. If the phone can't save anything at all (storage full or blocked),
-Save says so and leaves your text in the field.
+stays in a box above the inbox, `The hub wouldn't take 1 note`, with the hub's reason and
+**Edit**, **Retry** and **Discard local copy**. If the phone can't save anything at all (storage
+full or blocked), Save says so and leaves your text in the field.
+
+The app follows the phone's light or dark setting, its text size, and Reduce Motion.
 
 ## Open it
 
@@ -55,8 +61,9 @@ protects it, so read [`SECURITY.md`](../SECURITY.md) first.
 
 ## Pair your phone
 
-The hub only answers requests that carry its token (`HUB_TOKEN`). The first time the app opens,
-it asks for the token; paste it and tap **Connect**, and the phone remembers it.
+The hub only answers requests that carry its token (`HUB_TOKEN`). The first time the app opens, it
+shows **Connect this phone** with the pairing steps below. To paste the token instead, open
+**Paste a hub token instead**, paste it and tap **Connect**; the phone remembers it.
 
 **The easy way is a QR code.** On the machine running the hub, run `ostrakon pair` (`./install.sh`
 puts the command on your PATH; it needs `qrencode`). Scan the QR code with the phone's camera and
@@ -70,7 +77,7 @@ A few details:
   the service's settings file.
 - It looks up the hub's address from Tailscale. Without Tailscale, or if that fails, give it the
   address: `ostrakon pair https://<your hub address>`.
-- If the code expired or was already used, the phone's token screen says so; run `ostrakon pair`
+- If the code expired or was already used, the **Connect this phone** screen says so; run `ostrakon pair`
   again.
 - A phone that opened the app before pairing codes existed may load its old cached copy, which
   doesn't understand them. Open the app once first so it updates.
@@ -86,8 +93,8 @@ address as it is, so Add to Home Screen can use it; the installed app removes it
 https://<host>.<tailnet>.ts.net:8443/?token=<HUB_TOKEN>
 ```
 
-If you ever change the token on the hub, the app shows the token screen again with `That token was
-refused.`
+If you ever change the token on the hub, the app shows the **Connect this phone** screen again,
+with `That token was refused.`
 
 ## Add to Home Screen
 

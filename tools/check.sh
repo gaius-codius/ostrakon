@@ -9,6 +9,11 @@ claude plugin validate "$P" >/dev/null
 echo "== names"; name=$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["name"])' "$P/.claude-plugin/plugin.json")
 grep -q "TOOL_PREFIX = 'mcp__${name}__'" "$P/tests/world.tsx" || { echo "tests/world.tsx TOOL_PREFIX doesn't match plugin.json's name ($name)"; exit 1; }
 echo "names ok"
-echo "== tsc"; npx -y -p typescript@5.6.3 tsc -p "$P" && echo "tsc ok"
+# docs/DESIGN.md against the code, and its changelog against origin/main's when there is one.
+echo "== design"; bun "$P/../tools/check-design.ts" --base origin/main
+bun test "$P/../tools/check-design.test.ts"
+# On its own line: set -e ignores a failure on the left of &&.
+echo "== tsc"; npx -y -p typescript@5.6.3 tsc -p "$P"
+echo "tsc ok"
 echo "== test"; claude plugin test "$P"
 echo "== hub test"; (cd "$P/../server" && bun test)

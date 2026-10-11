@@ -15,6 +15,7 @@ import {
   labelOf,
   labelsOf,
   linesOf,
+  ownKeys,
   pageOf,
   parseQuery,
   toField,
@@ -32,15 +33,18 @@ import type { MirrorIO } from '../src/sync/folder'
 import { hubAdapter } from '../src/sync/hub'
 import { canReview, freshTurns, isHarvestShown, mergeHarvest, sessionEnded, sessionRestored, sessionStarted, turnCompleted, turnProposals, turnStarted, waitingProposals } from '../src/turns'
 import type { RunningTurn } from '../src/turns'
-import { HarvestRow, PocketRow, harvestOf, pocketOf } from '../src/ui/band'
+import { HarvestRow, PocketRow, harvestOf, openerOf, pocketOf } from '../src/ui/band'
 import type { BandHandlers } from '../src/ui/band'
-import { TOAST } from '../src/ui/look'
-import { CAPTURE_KEY, EDIT_KEY, MOVE_KEY, Pane, SEARCH_KEY, SEND_KEY, chromeRows, slotKey } from '../src/ui/pane'
+import { HINT, MS, TEXT, TOAST, toneOf } from '../src/ui/look'
+import type { Tone } from '../src/ui/look'
+import { CAPTURE_KEY, EDIT_KEY, MOVE_KEY, Pane, SEARCH_KEY, SEND_KEY, chromeRows, sheetPages, slotKey } from '../src/ui/pane'
 import type { Handlers, PaneView } from '../src/ui/pane'
 
 const PANE = 'ostrakon'
 // $.store key: the scope the pane opens on, when the person chose all (SPEC §4.2).
 const SCOPE_KEY = 'scope'
+// $.store key: how many harvests have shown the hint line (SPEC §10).
+const HARVEST_HINTS_KEY = 'harvestHints'
 const POLL_MS = 2000
 // After a refused close (Esc as back), when the keys have gone back to the prompt.
 const REFOCUS_MS = 60
@@ -56,6 +60,13 @@ const harvest = atom({ plugin: 'ostrakon', key: 'harvest' } as const, null, { sh
 const turns = atom({ plugin: 'ostrakon', key: 'turns' } as const, { latest: '', latestOrder: { generation: 0, seq: 0 }, running: '', generation: 0, seq: 0 }, { shape: 'order' })
 const syncState = atom({ plugin: 'ostrakon', key: 'sync' } as const, { isOn: false, isOnline: false, queued: 0, problem: '' })
 const mirrorState = atom({ plugin: 'ostrakon', key: 'mirror' } as const, { isOn: false, isOnline: false, queued: 0, problem: '' })
+// The hint line's tail (SPEC §4.4): a /jot draft says what Enter will do, then that it did.
+const isJotDraft = atom({ plugin: 'ostrakon', key: 'isJotDraft' } as const, false)
+const savedAt = atom({ plugin: 'ostrakon', key: 'savedAt' } as const, 0)
+// The band (SPEC §10): the note just saved, whose chip stands out for MS.fresh, and the turn whose
+// harvest still carries the dim hint line.
+const fresh = atom({ plugin: 'ostrakon', key: 'fresh' } as const, '')
+const harvestHint = atom({ plugin: 'ostrakon', key: 'harvestHint' } as const, '')
 
 // The pane's last drawn geometry: actions page and focus against what the person sees.
 const geometry = { bodyRows: 30, width: 70, isInline: false, isFocused: true }
@@ -63,6 +74,8 @@ const geometry = { bodyRows: 30, width: 70, isInline: false, isFocused: true }
 let project: NoteProject = { key: 'path:/', name: '/', path: '/' }
 // False until session start finds the project: harvest proposes nothing under the placeholder.
 let isProjectKnown = false
+// How the person's theme draws project colours: read at session start and when /config changes it.
+let tone: Tone = 'dark'
 // The element the ring was last on: Shift+Tab off the search field lands on the action layer,
 // and is sent to the last row instead of back.
 let lastElement: string | undefined
@@ -228,6 +241,31 @@ const currentProject = async ($: EngineInterface): Promise<NoteProject> => {
   return { key: `path:${root}`, name: basename(root), path: root }
 }
 
+// The theme's base as the engine resolves it. A custom theme's file names one; one that can't be
+// read draws as dark. `auto` follows the terminal's background, which the engine asks the terminal
+// for and a mod can't: COLORFGBG, the engine's own fallback, decides it when set, else dark.
+const toneOfTheme = async ($: EngineInterface, theme: string): Promise<Tone> => {
+  if (theme === 'auto') {
+    // As the engine reads it: the background's colour index, dark for 0–6 and 8.
+    const index = Number((await $.env.get('COLORFGBG'))?.split(';').at(-1) ?? '')
+    return Number.isInteger(index) && index > 6 && index !== 8 && index <= 15 ? 'light' : 'dark'
+  }
+  if (!theme.startsWith('custom:')) return toneOf(theme)
+  const dir = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${(await $.env.get('HOME')) ?? ''}/.claude`
+  const file = await $.fs.read(`${dir}/themes/${theme.slice('custom:'.length)}.json`).then(String, () => '')
+  try {
+    const { base } = JSON.parse(file) as { base?: unknown }
+    return toneOf(typeof base === 'string' ? base : 'dark')
+  } catch {
+    return 'dark'
+  }
+}
+
+const themeTone = async ($: EngineInterface) => {
+  const theme = (await $.config.list()).find(row => row.key === 'theme')?.value
+  return toneOfTheme($, typeof theme === 'string' ? theme : 'dark')
+}
+
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
 const reportStorage = ($: EngineInterface, error: unknown) => $.ui.log(`ostrakon: storage: ${messageOf(error)}`, { to: 'debug' })
@@ -265,9 +303,16 @@ const projectsOf = (all: Note[]) => {
   return [...byKey.values()]
 }
 
-const focusOf = (state: PaneState, lines: Line[]): Focus => {
+const focusOf = (state: PaneState, lines: Line[], problemCount: number): Focus => {
   if (!geometry.isFocused) return { kind: 'unfocused' }
-  if (state.mode === 'capture' || state.mode === 'edit' || state.mode === 'bundle' || state.mode === 'move' || state.mode === 'sheet') return { kind: state.mode }
+  if (state.mode === 'sheet') {
+    const pages = sheetPages(geometry.bodyRows, geometry.isInline, problemCount)
+    // Opened on a row, the sheet leads with that row's own keys, as its footer does.
+    const row = state.focus === 'line' ? lines.find(candidate => candidate.key === state.cursor) : undefined
+    const lead = row ? ownKeys(keysFor({ kind: 'line', line: row, view: state.view, picks: state.picks.length })) : []
+    return { kind: 'sheet', page: Math.min(Math.max(0, state.sheetPage ?? 0), pages - 1), pages, lead }
+  }
+  if (state.mode === 'capture' || state.mode === 'edit' || state.mode === 'bundle' || state.mode === 'move') return { kind: state.mode }
   const line = state.focus === 'line' ? lines.find(candidate => candidate.key === state.cursor) : undefined
   if (line) return { kind: 'line', line, view: state.view, picks: state.picks.length }
   if (lines.length === 0 && state.query.trim() === '') return { kind: 'empty' }
@@ -286,7 +331,7 @@ const viewOf = async ($: EngineInterface): Promise<PaneView & { bundleRows: numb
     if (at >= 0) lastCursorIndex = at
     else if (lines.length > 0) state = { ...state, cursor: lines[Math.min(lastCursorIndex, lines.length - 1)]?.key ?? null }
   }
-  const focus = focusOf(state, lines)
+  const focus = focusOf(state, lines, broken.length)
   const keys = keysFor(focus)
   const noteLines = lines.filter((line): line is Extract<Line, { kind: 'note' }> => line.kind === 'note')
   const cursorNote = noteLines.find(line => line.key === state.cursor)?.note
@@ -302,6 +347,7 @@ const viewOf = async ($: EngineInterface): Promise<PaneView & { bundleRows: numb
     focus,
     isInline: geometry.isInline,
     width: geometry.width,
+    bodyRows: geometry.bodyRows,
     lines,
     preview,
     keys,
@@ -315,10 +361,12 @@ const viewOf = async ($: EngineInterface): Promise<PaneView & { bundleRows: numb
     syncStatus: [syncStatusOf(await read($, syncState), 'hub offline'), syncStatusOf(await read($, mirrorState), 'mirror unavailable')]
       .filter(text => text !== '')
       .join(' · '),
+    tone,
   }
   const capacity = Math.max(1, geometry.bodyRows - chromeRows(partial))
-  // The window follows the focused row, or the note being edited or moved.
-  const anchor = state.mode === 'edit' ? (state.edit?.id ?? null) : state.mode === 'move' ? state.moving : focus.kind === 'line' ? state.cursor : null
+  // The window follows the focused row (under the key sheet too), or the note being edited or moved.
+  const isOnLine = focus.kind === 'line' || (focus.kind === 'sheet' && state.focus === 'line')
+  const anchor = state.mode === 'edit' ? (state.edit?.id ?? null) : state.mode === 'move' ? state.moving : isOnLine ? state.cursor : null
   const page = pageOf(lines, state.offset, anchor, capacity)
   return { ...partial, page, bundleRows: Math.max(1, geometry.bodyRows - 11) }
 }
@@ -552,9 +600,29 @@ const openPane = async ($: EngineInterface, mode: 'browse' | 'capture') => {
   return undefined
 }
 
+// The person's note; its chip draws fresh for MS.fresh, until a later save takes over.
 const createNote = async ($: EngineInterface, text: string, target: NoteProject | null) => {
   const created = await store.create(await storeIO($), { text, by: 'you', project: target, context: {} })
+  await update($, fresh, () => created.id)
+  $.clock.after(MS.fresh, () => {
+    update($, fresh, current => (current === created.id ? '' : current)).catch(error => reportStorage($, error))
+  })
   return created
+}
+
+// Written only when it changes: prompt.edit runs on every key.
+const markJotDraft = async ($: EngineInterface, isJot: boolean) => {
+  if ((await read($, isJotDraft)) !== isJot) await update($, isJotDraft, () => isJot)
+}
+
+// A save from the prompt says so on the hint line for MS.saved, in place of a toast. A later save
+// keeps its own time: the earlier one's timer leaves it up.
+const showSaved = async ($: EngineInterface) => {
+  const at = await $.clock.now()
+  await update($, savedAt, () => at)
+  $.clock.after(MS.saved, () => {
+    update($, savedAt, current => (current === at ? 0 : current)).catch(error => reportStorage($, error))
+  })
 }
 
 const notesOf = async ($: EngineInterface, ids: string[]) => {
@@ -588,6 +656,12 @@ const act = async ($: EngineInterface, action: Action) => {
     case 'down':
     case 'up': {
       const step = action === 'down' ? 1 : -1
+      // The key sheet pages round instead.
+      if (view.focus.kind === 'sheet') {
+        const { page, pages } = view.focus
+        await setPane($, current => ({ ...current, sheetPage: (page + step + pages) % pages }))
+        return
+      }
       const next = view.lines[Math.max(0, Math.min(view.lines.length - 1, (at < 0 ? -1 : at) + step))]
       if (next) await focusLine($, next.key)
       return
@@ -742,7 +816,7 @@ const act = async ($: EngineInterface, action: Action) => {
       return
     case 'keys':
     case 'details':
-      await setPane($, current => ({ ...current, mode: current.mode === 'sheet' ? 'browse' : 'sheet' }))
+      await setPane($, current => ({ ...current, mode: current.mode === 'sheet' ? 'browse' : 'sheet', sheetPage: 0 }))
       return
     case 'close':
     case 'toggle':
@@ -792,7 +866,7 @@ const searchSubmit = async ($: EngineInterface, value: string) => {
   }
   try {
     await createNote($, text, project)
-    toast($, TOAST.saved(project.name))
+    await showSaved($)
     // Something typed while it saved is a new search: leave it.
     await setPane($, state => (state.query === value ? { ...state, query: '', scope: state.scopeChosen ? state.scope : 'project' } : state))
   } catch (error) {
@@ -930,7 +1004,22 @@ const collectHarvest = async ($: EngineInterface, turn: RunningTurn) => {
   if (made.length === 0) return
   const all = await read($, notes)
   const created = (id: string) => all[id]?.created ?? ''
-  await update($, harvest, current => mergeHarvest(current, turn.prompt, made, created))
+  let started = ''
+  await update($, harvest, current => {
+    const merged = mergeHarvest(current, turn.prompt, made, created)
+    started = merged !== null && merged.turnId !== current?.turnId ? merged.turnId : ''
+    return merged
+  })
+  if (started !== '') await countHarvest($, started)
+}
+
+// A new turn's harvest, counted once: the first few carry the hint line (SPEC §10).
+const countHarvest = async ($: EngineInterface, turnId: string) => {
+  const stored = await $.store.get(HARVEST_HINTS_KEY).catch(() => undefined)
+  const shown = typeof stored === 'number' && Number.isFinite(stored) ? stored : 0
+  if (shown >= TEXT.harvestHintTimes) return
+  await update($, harvestHint, () => turnId)
+  await $.store.set(HARVEST_HINTS_KEY, shown + 1).catch(error => reportStorage($, error))
 }
 
 // Harvest's review of a finished turn (SPEC §8): one fork over the session's transcript (or, in
@@ -1063,9 +1152,13 @@ export const register: Register = (on, options) => {
     const stored = await read($, turns)
     const shown = await read($, harvest)
     turnState = sessionRestored(turnState, stored, shown)
+    // The fresh chip and the saved hint end on timers, which stopped with the old module: they end now.
+    await update($, fresh, () => '')
+    await update($, savedAt, () => 0)
     project = await currentProject($)
       .then(found => ((isProjectKnown = true), found))
       .catch(() => project)
+    tone = await themeTone($).catch(() => 'dark')
     await store.loadAll(await storeIO($)).catch(error => reportStorage($, error))
     // Timers stop when the module reloads; a reload runs session.start again and re-arms this.
     $.clock.every(POLL_MS, () => {
@@ -1106,6 +1199,15 @@ export const register: Register = (on, options) => {
     return ended
   })
 
+  // The theme changed: project colours follow it.
+  on('config.set', { key: 'theme' }, async ($, e, next) => {
+    const set = await next(e)
+    if (set.deny !== undefined) return set
+    tone = await toneOfTheme($, String(set.value)).catch(() => 'dark')
+    $.ui.invalidate('ui.render')
+    return set
+  })
+
   // Claude's jot (SPEC §8): an open note in this project and a toast, as v1; harvest on or off.
   // Matched by pattern: the engine's tool-name type lists only the tools it knew when the types
   // were written.
@@ -1133,13 +1235,15 @@ export const register: Register = (on, options) => {
   // and Enter saves a new note too).
   on('command.run', { command: 'jot' }, async ($, e) => {
     const text = String(e.args ?? '').trim()
+    // The draft went in with the command: the hint line no longer reads it as one.
+    await update($, isJotDraft, () => false)
     if (text === '') {
       const why = await openPane($, 'browse')
       return { text: why === undefined ? '' : `ostrakon: ${why}` }
     }
     try {
       await createNote($, text, project)
-      toast($, TOAST.saved(project.name))
+      await showSaved($)
       return { text: '' }
     } catch (error) {
       return { text: `ostrakon: ${TOAST.failed(messageOf(error))}` }
@@ -1150,10 +1254,29 @@ export const register: Register = (on, options) => {
   // a paste, or `//` inside a draft, is left alone.
   on('prompt.edit', async ($, e, next) => {
     const mark = { start: 0, end: 4, color: 'claude', bold: true } as const
-    if (e.key !== undefined && e.text === '/' && e.inputText === '/' && e.start === 1 && e.end === 1) return { text: '/jot ', cursor: 5, decorations: [mark] }
+    if (e.key !== undefined && e.text === '/' && e.inputText === '/' && e.start === 1 && e.end === 1) {
+      await markJotDraft($, true)
+      return { text: '/jot ', cursor: 5, decorations: [mark] }
+    }
     const edited = await next(e)
-    // Every answer replaces the decorations, so /jot stays marked while it leads the prompt.
-    return edited.text.startsWith('/jot ') ? { ...edited, decorations: [...(edited.decorations ?? []), mark] } : edited
+    const isJot = edited.text.startsWith('/jot ')
+    await markJotDraft($, isJot)
+    if (!isJot) return edited
+    // Every answer replaces the decorations, so /jot stays marked while it leads the prompt, and
+    // the note after it reads as one.
+    const note = { start: 5, end: edited.text.length, italic: true } as const
+    return { ...edited, decorations: [...(edited.decorations ?? []), mark, ...(edited.text.length > 5 ? [note] : [])] }
+  })
+
+  // The hint line under the prompt (SPEC §4.4): a /jot draft says where it saves, then that it did.
+  // Added to the engine's line as its tail, after any other mod's.
+  on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
+    const said = e.props.isDraft && (await read($, isJotDraft)) ? HINT.capture(project.name) : (await read($, savedAt)) !== 0 ? HINT.saved(project.name) : ''
+    if (said === '') return next(e)
+    const before = e.props.tail ?? ''
+    // The engine parts its own line from the tail; only another mod's tail needs one here.
+    const gap = before !== '' ? HINT.gap : ''
+    return next({ ...e, props: { ...e.props, tail: `${before}${gap}${said}` } })
   })
 
   // A note the pane or band put into the prompt is sent once a submit carrying that text goes in.
@@ -1227,6 +1350,8 @@ export const register: Register = (on, options) => {
       work.catch(error => reportStorage($, error))
     }
     const proposals = await proposalsOf($)
+    const opener = openerOf(project.name)
+    const look = { isWorking: e.props.isWorking, fresh: await read($, fresh) }
     const handlers: BandHandlers = {
       chip: (n, id) => run(serially(() => pocketChip($, n, id))),
       keep: id => run(serially(() => keep($, [id]))),
@@ -1235,10 +1360,11 @@ export const register: Register = (on, options) => {
     }
     let row
     if (proposals.length > 0) {
-      row = <HarvestRow el={el} proposals={proposals} harvest={harvestOf(proposals, columns)} columns={columns} handlers={handlers} />
+      const hasHint = (await read($, harvest))?.turnId === (await read($, harvestHint))
+      row = <HarvestRow el={el} proposals={proposals} harvest={harvestOf(proposals, columns, opener)} look={look} hasHint={hasHint} columns={columns} handlers={handlers} />
     } else {
       const all = pocketOptions.isOn ? Object.values(await read($, notes)) : []
-      row = <PocketRow el={el} pocket={pocketOf(all, project.key, pocketOptions.max, columns)} handlers={handlers} />
+      row = <PocketRow el={el} pocket={pocketOf(all, project.key, pocketOptions.max, columns, opener)} opener={opener} look={look} handlers={handlers} />
     }
     return (
       <Box flexDirection="column">

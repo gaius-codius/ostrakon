@@ -13,7 +13,6 @@ export const GLYPH = {
   sent: '↗',
   archived: '·',
   pastNine: '·',
-  open: '▾',
   folded: '▸',
   saved: '✓',
   more: '…',
@@ -22,12 +21,21 @@ export const GLYPH = {
   up: '↑',
   down: '↓',
   problem: '⚠',
+  // The project dot before a name: another project's in its colour, unfiled hollow.
+  dot: '●',
+  unfiledDot: '○',
+  // The bar down the left of quoted text: the preview and the bundle.
+  quote: '▎',
 } as const
 
-export const RULE = { heavy: '━', light: '─' } as const
+// The empty pane's ostrakon, drawn dim beside the ways in.
+export const SHARD = ['   ▁▁▁▁▁', '  ╱ ≡ ≈ ╲▁', ' ╱ ≈≡ ≈≡  ╲', ' ╲▁▁▁▁▁▁▁▁╱'] as const
 
-// Theme keys only: they follow light and dark. `permission` is left out because it matches
-// `suggestion` in the light theme.
+// Theme keys follow light and dark. Projects take the palette instead, raw colours so the phone
+// draws the same ones: server/public/app.js names them in this order and style.css holds the values
+// (tools/check.sh fails when the three differ). Each reads at 4.5:1 on its theme's background. A
+// 16-colour theme can't draw hex: projects take theme keys there, never `suggestion`, which a
+// Button's hotkey digit is drawn in.
 export const COLOUR = {
   accent: 'claude',
   band: 'subtle',
@@ -36,7 +44,17 @@ export const COLOUR = {
   saved: 'success',
   problem: 'error',
   offline: 'warning',
-  palette: ['suggestion', 'success', 'merged', 'planMode', 'warning', 'autoAccept'],
+  palette: [
+    { name: 'teal', dark: '#4cc2b4', light: '#00756d' },
+    { name: 'sky', dark: '#5aaeeb', light: '#1565a8' },
+    { name: 'violet', dark: '#b08cf5', light: '#6f3fd1' },
+    { name: 'magenta', dark: '#de7fe0', light: '#9b2ea6' },
+    { name: 'pink', dark: '#f283ac', light: '#b52f68' },
+    { name: 'gold', dark: '#e0bf4c', light: '#7f6400' },
+    { name: 'lime', dark: '#a9cc55', light: '#4f7410' },
+    { name: 'sand', dark: '#cfae86', light: '#7e5e38' },
+  ],
+  ansiPalette: ['success', 'merged', 'planMode', 'warning'],
 } as const
 
 export const WIDTH = {
@@ -47,11 +65,19 @@ export const WIDTH = {
   // Labels outside rows (group headers, the capture row, bundle lines).
   label: 24,
   previewLines: 6,
+  // The key sheet at most, and its key column; narrower panes get a narrower sheet.
   keySheet: 46,
+  sheetKey: 12,
+  // The empty pane's shard column, and the key column beside it.
+  shard: 13,
+  wayKey: 10,
+  // Footer pairs beside `i keys` (SPEC §4.6).
+  footerPairs: 4,
   savedDocked: 3,
   savedInline: 1,
-  // Band chips (SPEC §10): Pocket labels shorten from `chip` to `chipMin` before chips drop.
-  chip: 18,
+  // Band chips (SPEC §10): Pocket labels shorten from `chip` to `chipMin` before chips drop; a
+  // label cuts at a word unless that leaves it under `chipMin`.
+  chip: 24,
   chipMin: 10,
   harvestChip: 22,
 } as const
@@ -65,17 +91,51 @@ export const TEXT = {
   bundleIntro: 'Please look at these notes from my ostrakon:',
   bundleNote: 'The picked notes are marked sent once the prompt goes in. Nothing is removed before.',
   editHint: 'draft kept if the pane closes',
-  emptyTitle: (project: string) => `Nothing pending in ${project}.`,
+  emptyTitle: (where: string) => `Nothing pending in ${where}.`,
   unfocused: [
     ['ctrl+x tab', 'focus'],
     ['ctrl+x s', 'close'],
   ] as [string, string][],
   legend: '◆ from Claude',
+  keySheet: [
+    ['↑ ↓ j k', 'move'],
+    ['1–9', 'jump to a row'],
+    ['⏎ / t', 'to prompt'],
+    ['s', 'send'],
+    ['v / x', 'pick / clear picks'],
+    ['b', 'bundle the picks'],
+    ['e', 'edit'],
+    ['d / u', 'archive / undo, restore'],
+    ['m', 'move to a project'],
+    ['y', 'copy'],
+    ['l / ctrl+l', 'list view'],
+    ['h / z', 'history / fold'],
+    ['f / ctrl+f', 'search'],
+    ['n / ctrl+n', 'new note'],
+    ['ctrl+s', 'scope'],
+    ['esc', 'back (to search, then close)'],
+    ['q / ctrl+q', 'close'],
+    ['ctrl+x s', 'open / close'],
+    ['//', 'jot from the prompt; a space first for a literal //'],
+  ] as [string, string][],
   keepAll: 'keep all',
-  harvestTitle: (n: number) => `${GLYPH.claude} ${n} note${n === 1 ? '' : 's'} from this turn`,
-  harvestShort: (n: number) => `${GLYPH.claude} ${n}`,
+  harvestTitle: `${GLYPH.claude} from this turn`,
+  harvestShort: GLYPH.claude,
   harvestHint: (n: number) => `${n === 0 ? '' : `${n === 1 ? '1' : `1–${n}`} keep one · `}0 keep all · the rest wait in the pane under “proposed”`,
+  // The hint shows under the first few harvests ever, then the row speaks for itself.
+  harvestHintTimes: 3,
 } as const
+
+// The tail on the hint line under the prompt (SPEC §4.4): what a /jot draft will do, then that
+// it did. The engine parts its line from the tail; `gap` parts ours from another mod's tail.
+export const HINT = {
+  gap: ' · ',
+  capture: (project: string) => `${GLYPH.capture} ${GLYPH.enter} saves to ${project}, Claude won't see it`,
+  saved: (project: string) => `${GLYPH.saved} saved to ${project}`,
+} as const
+
+// How long a just-saved note stays drawn as new, and the saved tail stays up.
+export const MS = { fresh: 2000, saved: 3000 } as const
 
 export const TOAST = {
   archived: 'Archived · u undo',
@@ -88,7 +148,6 @@ export const TOAST = {
   pickDropped: (n: number) => `${n} pick${n === 1 ? '' : 's'} dropped: no longer open`,
   mentions: '@ mentions need the prompt: filled instead',
   notSent: (why: string) => `Not sent: ${why}`,
-  saved: (project: string) => `${GLYPH.capture} saved to ${project} · ctrl+x s to view`,
   inPrompt: (n: number) => `note ${n} in your prompt · ⏎ to send`,
   hasNewline: 'Contains ↵: edit the file instead (path copied)',
   moved: (project: string) => `Moved to ${project}`,
@@ -110,11 +169,22 @@ export const CHORD = {
   new: { action: 'pane:next', keys: 'ctrl+n' },
 } as const
 
-// Deterministic colour for a project: the current one is the accent, unfiled is grey.
-export const colourOf = (key: string | null, current: string) => {
+// How the person's theme draws: `dark` and `light` take the palette's hex, `ansi` its theme keys.
+export type Tone = 'dark' | 'light' | 'ansi'
+
+// A theme's base as the engine names it; anything it doesn't know draws as dark, as there.
+export const toneOf = (base: string): Tone => {
+  if (base === 'dark-ansi' || base === 'light-ansi') return 'ansi'
+  return base === 'light' || base === 'light-daltonized' ? 'light' : 'dark'
+}
+
+// Deterministic colour for a project: the current one is the accent, unfiled is grey. The phone
+// hashes the same way.
+export const colourOf = (key: string | null, current: string, tone: Tone) => {
   if (key === null) return COLOUR.unfiled
   if (key === current) return COLOUR.accent
   let hash = 0
   for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
-  return COLOUR.palette[hash % COLOUR.palette.length] ?? COLOUR.palette[0]
+  if (tone === 'ansi') return COLOUR.ansiPalette[hash % COLOUR.ansiPalette.length] ?? COLOUR.ansiPalette[0]
+  return (COLOUR.palette[hash % COLOUR.palette.length] ?? COLOUR.palette[0])[tone]
 }
