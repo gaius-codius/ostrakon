@@ -79,3 +79,22 @@ test('without a hub nothing is fetched and the footer stays quiet', async ($, on
   expect(fetched).toBe(0)
   await ui.unmount()
 })
+
+// The load report (src/report.ts) for `ostrakon doctor`.
+const reportOf = (dir: MemDir) => JSON.parse(dir.get('/home/me/.cache/ostrakon/report.json') ?? '{}')
+
+test('a hub refusing the token goes in the load report after the next poll', { options: HUB }, async ($, on) => {
+  const dir = new MemDir()
+  on('http.fetch', () => ({ value: { status: 401, ok: false, headers: {}, text: '{"error":"unauthorized"}' } }))
+  const { clock } = await startSession($, on, dir)
+  await clock.advance(4100)
+  expect(reportOf(dir).problems).toMatchObject([{ where: 'hub', message: 'hub refused the token' }])
+})
+
+test('a hub out of reach is only the footer, never the load report', { options: HUB }, async ($, on) => {
+  const dir = new MemDir()
+  on('http.fetch', () => ({ deny: 'connect ECONNREFUSED' }))
+  const { clock } = await startSession($, on, dir)
+  await clock.advance(4100)
+  expect(reportOf(dir).problems).toEqual([])
+})

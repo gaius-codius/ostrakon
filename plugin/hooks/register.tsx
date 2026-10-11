@@ -118,8 +118,12 @@ const saveReport = async ($: EngineInterface) => {
 
 // A problem worth knowing about: a debug line, as before, and a line in the load report.
 const noteProblem = ($: EngineInterface, where: string, error: unknown) => {
-  const message = messageOf(error)
-  $.ui.log(`ostrakon: ${where}: ${message}`, { to: 'debug' })
+  $.ui.log(`ostrakon: ${where}: ${messageOf(error)}`, { to: 'debug' })
+  recordProblem($, where, messageOf(error))
+}
+
+// Only the report's line: for what the footer already shows, each poll.
+const recordProblem = ($: EngineInterface, where: string, message: string) => {
   // The clock can refuse once the module is gone (a reload, the session's end); the line is lost then.
   void $.clock.now().then(
     now => {
@@ -222,6 +226,9 @@ const syncIO = ($: EngineInterface, syncing: Syncing): SyncIO => ({
     await $.process.run(['mv', '-f', tmp, path])
   },
   status: async status => {
+    // A refusal (a wrong token, a note the hub won't take) goes in the load report too; being
+    // offline is ordinary (a laptop away from home), so it stays in the footer only.
+    if (status.problem !== '' && status.problem !== 'offline') recordProblem($, syncing.name, status.problem)
     await setSyncState($, syncing, () => ({ isOn: true, ...status }))
   },
   warn: text => noteProblem($, 'sync', text),
