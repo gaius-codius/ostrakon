@@ -307,6 +307,9 @@ const metaOf = (view: PaneView, note: Note) => {
 // as the selection moves (and the footer doesn't jump).
 export const PREVIEW_ROWS = 1 + WIDTH.previewLines + 1
 export const FOOTER_ROWS = 1
+// Docked in a body too short for the preview and three rows (one between the ↑ and ↓ counts)
+// besides, the preview goes, as inline, so the footer stays on screen.
+const hasPreview = (view: { isInline: boolean; bodyRows: number }) => !view.isInline && view.bodyRows >= 2 + PREVIEW_ROWS + 3 + 1 + FOOTER_ROWS
 
 // A draft being typed, wrapped: the one-line field cuts it off, so this is where it reads whole.
 // Too long for `rows`, it shows its end (where the typing is), led by …
@@ -635,7 +638,7 @@ const KeySheet = ({ el, view }: { el: E; view: PaneView }) => {
 // Rows the chrome around the lines takes, so the mod can page the lines to fit (SPEC §4.8).
 export const chromeRows = (view: Omit<PaneView, 'page'>) => {
   const header = view.isInline ? 1 : 2
-  const preview = view.isInline ? 0 : PREVIEW_ROWS
+  const preview = hasPreview(view) ? PREVIEW_ROWS : 0
   const footer = view.isInline ? FOOTER_ROWS : 1 + FOOTER_ROWS
   const edit = view.pane.mode === 'edit' ? 3 : 0
   const move = view.pane.mode === 'move' ? 1 : 0
@@ -653,7 +656,7 @@ export const Pane = ({ el, view, handlers, hasHub, hasHarvest, bundleRows }: { e
     if (view.lines.length === 0 && pane.query.trim() === '') return <Empty el={el} view={view} hasHub={hasHub} hasHarvest={hasHarvest} />
     return <Rows el={el} view={view} handlers={handlers} />
   }
-  const showPreview = !view.isInline && (pane.mode === 'browse' || pane.mode === 'sheet' || pane.mode === 'move' || pane.mode === 'edit') && hasNotes
+  const showPreview = hasPreview(view) && (pane.mode === 'browse' || pane.mode === 'sheet' || pane.mode === 'move' || pane.mode === 'edit') && hasNotes
   const middle = [
     body(),
     pane.mode === 'move' && <Move el={el} view={view} handlers={handlers} />,

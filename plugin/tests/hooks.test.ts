@@ -329,6 +329,25 @@ test('the key sheet pages to fit the inline body, j and k turning the pages roun
   await ui.unmount()
 })
 
+test('docked in a body too short for the preview and three rows besides, the preview goes', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  const at = async (bodyRows: number) => {
+    const props = { ...PANE.props, scroll: { offset: 0, bodyRows } }
+    await ui.redraw(props)
+    await ui.redraw(props)
+    return (await ui.find({ type: 'Text', text: /you · ~\/Work\/cc/ })) !== undefined
+  }
+  // The search row and a blank, the preview's 8, a row between ↑ and ↓ counts, the blank and the footer.
+  expect(await at(15)).toBe(true)
+  expect(await at(14)).toBe(false)
+  expect(await ui.find({ type: 'Text', text: /rename the store helpers/ })).toBeDefined()
+  await ui.unmount()
+})
+
 test('at the shortest heights the key sheet drops its frame and stays off the footer', async ($, on) => {
   const dir = fixture()
   await startSession($, on, dir)
