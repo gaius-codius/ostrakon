@@ -52,3 +52,7 @@ time. The steps that actually cut the release are at the end, and in [`CONTRIBUT
 2. Back on `main`: `tools/release.sh tag`, then `git push origin v<x.y.z>`. The release workflow
    publishes the GitHub release from the changelog.
 3. On a machine with a release install, run `ostrakon update` and `ostrakon doctor` to see it land.
+
+People who installed the mod with `claude plugin install` get the new version once `prepare`'s
+version change reaches `main`: Claude Code only copies a plugin again when `plugin.json`'s version
+changes.

@@ -42,15 +42,16 @@ except ValueError:
     print('invalid\t1'); sys.exit(0)
 print('dirs\t' + str(s.get('env', {}).get('CLAUDE_CODE_PLUGIN_DIRS', '')))
 print('envDir\t' + str(s.get('env', {}).get('OSTRAKON_DIR', '')))
+print('market\t' + ('1' if s.get('enabledPlugins', {}).get('ostrakon@ostrakon') else ''))
 configs = s.get('pluginConfigs', {})
 for key in ('hubUrl', 'hubToken', 'notesDir', 'mirrorDir'):
-    value = next((c.get('options', {}).get(key) for c in (configs.get('ostrakon', {}), configs.get('ostrakon@inline', {})) if c.get('options', {}).get(key)), '')
+    value = next((c.get('options', {}).get(key) for c in (configs.get(n, {}) for n in ('ostrakon', 'ostrakon@inline', 'ostrakon@ostrakon')) if c.get('options', {}).get(key)), '')
     print(f'{key}\t{value}')
 EOF
 }
-dirs='' envDir='' hubUrl='' hubToken='' notesDir='' mirrorDir='' invalid=''
+dirs='' envDir='' market='' hubUrl='' hubToken='' notesDir='' mirrorDir='' invalid=''
 while IFS=$'\t' read -r key value; do
-  case $key in dirs | envDir | hubUrl | hubToken | notesDir | mirrorDir | invalid) printf -v "$key" '%s' "$value" ;; esac
+  case $key in dirs | envDir | market | hubUrl | hubToken | notesDir | mirrorDir | invalid) printf -v "$key" '%s' "$value" ;; esac
 done < <(settings)
 expand() { case $1 in '~') echo "$HOME" ;; '~/'*) echo "$HOME/${1#'~/'}" ;; *) echo "$1" ;; esac; }
 
@@ -70,11 +71,18 @@ elif ! has python3; then
   note "python3 not found, so the settings weren't checked"
 else
   loaded=${CLAUDE_CODE_PLUGIN_DIRS:-$dirs}
-  case $loaded in
-    *"$ROOT/plugin"*) ok "the mod loads in every session (CLAUDE_CODE_PLUGIN_DIRS)" ;;
-    '') bad "the mod isn't loaded: run $ROOT/install.sh, or start claude with --plugin-dir $ROOT/plugin" ;;
-    *) bad "CLAUDE_CODE_PLUGIN_DIRS names other folders ($loaded), not $ROOT/plugin" ;;
-  esac
+  if [ -n "$market" ]; then
+    case $loaded in
+      *"$ROOT/plugin"*) bad "the mod loads twice, from the marketplace and from CLAUDE_CODE_PLUGIN_DIRS; keep one (claude plugin uninstall ostrakon@ostrakon, or remove $ROOT/plugin from CLAUDE_CODE_PLUGIN_DIRS)" ;;
+      *) ok "the mod is installed from the marketplace (ostrakon@ostrakon)" ;;
+    esac
+  else
+    case $loaded in
+      *"$ROOT/plugin"*) ok "the mod loads in every session (CLAUDE_CODE_PLUGIN_DIRS)" ;;
+      '') bad "the mod isn't loaded: run $ROOT/install.sh, or start claude with --plugin-dir $ROOT/plugin" ;;
+      *) bad "CLAUDE_CODE_PLUGIN_DIRS names other folders ($loaded), not $ROOT/plugin" ;;
+    esac
+  fi
 fi
 
 # What the mod itself last saw (plugin/src/report.ts): proof it runs, not just that it validates.
