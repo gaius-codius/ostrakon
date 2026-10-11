@@ -319,10 +319,9 @@ input[type="search"]::-webkit-search-cancel-button, input[type="search"]::-webki
 .empty { color: var(--dim); text-align: center; margin: 2rem 0; }
 
 /* ---- notes the hub refused ---- */
-#refused { margin-top: 1.125rem; padding: 0.875rem 1rem; border: 1px solid var(--error); border-radius: 1rem; }
+#refused { margin-top: 1.125rem; padding: 0.875rem 1rem; border: 1px solid var(--error); border-radius: 1rem; display: flex; flex-direction: column; gap: 0.625rem; }
 #refused h2 { margin: 0; font-size: 0.8125rem; font-weight: 600; color: var(--error); }
 #refused-list { list-style: none; margin: 0; padding: 0; }
-#refused-list li { padding: 0.625rem 0; display: flex; flex-direction: column; gap: 0.625rem; }
 #refused-list .row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 
 /* ---- first run ---- */
@@ -453,3 +452,23 @@ dialog.drawer .panel {
 .pick > svg, .pick .aside svg { flex: none; color: var(--accent); }
 .drawer .always { margin: 1.375rem 0 0.25rem 0.25rem; font: 500 0.75rem var(--mono); color: var(--faint); }
 .drawer .none { margin: 0.875rem 0.25rem 0; color: var(--dim); font-size: 0.9375rem; }
+
+/* ---- saved, and the note just saved ---- */
+.saved { margin: 0 0 0 0.125rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font: 0.8125rem var(--mono); color: var(--success-text); }
+.saved:empty { display: none; }
+.saved .then { color: var(--dim); }
+.note.fresh .face { margin: 0 0.625rem; padding: 0.5rem 0.625rem; border-radius: 0.75rem; }
+.note.fresh .marker, .note.fresh .age { color: var(--success-text); }
+.note.fresh .face { background: linear-gradient(var(--fresh), var(--fresh)), var(--bg); }
+
+/* ---- refused notes ---- */
+#refused-list li { display: flex; flex-direction: column; gap: 0.625rem; }
+#refused-list li + li { margin-top: 0.875rem; padding-top: 0.875rem; border-top: 1px solid var(--line); }
+#refused .quote { margin: 0; display: flex; gap: 0.625rem; font-size: 0.9375rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+#refused .bar { color: var(--faint); }
+#refused .reason { margin: 0; font: 0.75rem/1.5 var(--mono); color: var(--error); overflow-wrap: anywhere; }
+#refused .only { margin: 0; font-size: 0.8125rem; color: var(--dim); }
+#refused .btn { color: var(--text); }
+#refused .btn.quiet { color: var(--dim); }
+#refused textarea { width: 100%; min-height: 5rem; padding: 0.625rem 0.75rem; border: 1px solid var(--accent); border-radius: 0.75rem; background: var(--surface); resize: vertical; }
+#refused textarea:focus { outline: none; }

@@ -31,7 +31,7 @@ const saveSync = () => store('sp.sync', { hub: hubId, cursor, notes })
 
 let token = load('sp.token', '')
 let outbox = load('sp.outbox', []) // notes not yet accepted by the hub, one per id
-let refused = load('sp.refused', []) // { id, text, reason }: notes the hub wouldn't take
+let refused = load('sp.refused', []) // { id, text, reason, note }: notes the hub wouldn't take (older entries have no note)
 let projects = load('sp.projects', [])
 // Set when the outbox couldn't be written: nothing is queued until it can be.
 let storageError = ''
@@ -179,7 +179,7 @@ const held = new Map()
 const refuse = entries => {
   if (entries.length === 0) return
   const ids = new Set(entries.map(([note]) => note.id))
-  const next = refused.filter(item => !ids.has(item.id)).concat(entries.map(([note, reason]) => ({ id: note.id, text: note.text, reason })))
+  const next = refused.filter(item => !ids.has(item.id)).concat(entries.map(([note, reason]) => ({ id: note.id, text: note.text, reason, note })))
   if (!store('sp.refused', next)) {
     for (const [note, reason] of entries) held.set(note, reason)
     return
@@ -204,6 +204,7 @@ const adoptHub = id => {
 const setOnline = value => {
   online = value
   renderStatus()
+  renderSaved()
 }
 
 const BATCH = 200
@@ -350,17 +351,75 @@ const copy = async text => {
   }
 }
 
-// Notes the hub refused: their only copy is here, so they stay until dismissed.
+// Notes the hub refused: their only copy is here, so they stay until edited and sent again, or
+// discarded.
+let refusedEditing = null // { id, draft }
+
+// The note to send again: the refused copy, or (an entry from before notes were kept with their
+// refusal) a phone note rebuilt from its text.
+const refusedNote = item => {
+  if (item.note) return item.note
+  const now = new Date().toISOString()
+  return { id: item.id, status: 'open', by: 'phone', created: now, updated: now, origin: 'iphone', project: null, context: {}, sentAt: null, deleted: false, text: item.text, extra: [] }
+}
+
+const setRefused = next => {
+  if (!store('sp.refused', next)) return false
+  refused = next
+  return true
+}
+
+// Sends a refused note again, with `text` when it was edited. It leaves the list once it's queued.
+const retry = (item, text = item.text) => {
+  const note = refusedNote(item)
+  refusedEditing = null
+  if (queue({ ...note, text, updated: stamp(note.updated), origin: 'iphone' })) setRefused(refused.filter(other => other.id !== item.id))
+  renderRefused()
+}
+
+const discard = item => {
+  if (!setRefused(refused.filter(other => other.id !== item.id))) return
+  if (refusedEditing?.id === item.id) refusedEditing = null
+  renderRefused()
+  toast('Discarded', () => {
+    if (!refused.some(other => other.id === item.id) && setRefused([...refused, item])) renderRefused()
+  })
+}
+
 const renderRefused = () => {
   const items = refused.map(item => {
-    const copied = button('Copy', async () => toast((await copy(item.text)) ? 'Copied' : "Couldn't copy"), 'btn')
-    const dismiss = button('Dismiss', () => {
-      refused = refused.filter(other => other !== item)
-      store('sp.refused', refused)
+    const isEditing = refusedEditing?.id === item.id
+    const reason = make('p', 'reason', item.reason)
+    const only = make('p', 'only', 'Only this phone has it.')
+    if (isEditing) {
+      const field = document.createElement('textarea')
+      field.value = refusedEditing.draft
+      field.setAttribute('aria-label', 'Edit note')
+      field.addEventListener('input', () => (refusedEditing.draft = field.value))
+      const save = button('Retry', () => field.value.trim() !== '' && retry(item, field.value.trim()), 'btn')
+      const cancel = button('Cancel', () => {
+        refusedEditing = null
+        renderRefused()
+        $('refused-list').querySelector(`li[data-id="${CSS.escape(item.id)}"] .edit`)?.focus()
+      }, 'btn quiet')
+      const row = make('li', '', field, reason, only, make('div', 'row', save, cancel))
+      row.dataset.id = item.id
+      return row
+    }
+    const bar = make('span', 'bar', '▎')
+    bar.setAttribute('aria-hidden', 'true')
+    const edit = button('Edit', () => {
+      refusedEditing = { id: item.id, draft: item.text }
       renderRefused()
-    }, 'btn')
-    return make('li', '', make('p', 'quote', item.text), make('div', 'meta error', `Refused by the hub: ${item.reason}`), make('div', 'row', copied, dismiss))
+      $('refused-list').querySelector('textarea')?.focus()
+    }, 'btn edit')
+    const again = button('Retry', () => retry(item), 'btn')
+    const drop = button('Discard local copy', () => discard(item), 'btn quiet')
+    const row = make('li', '', make('p', 'quote', bar, make('span', '', item.text)), reason, only, make('div', 'row', edit, again, drop))
+    row.dataset.id = item.id
+    return row
   })
+  $('refused-title').textContent = `The hub wouldn't take ${items.length === 1 ? '1 note' : `${items.length} notes`}`
   $('refused-list').replaceChildren(...items)
   $('refused').hidden = items.length === 0
 }
@@ -510,7 +569,9 @@ const noteRow = (note, isQueued) => {
   } else marker.setAttribute('aria-hidden', 'true')
   const text = make('p', 'text', note.text)
   text.id = `text-${++textIds}`
-  const age = isQueued ? make('span', 'age queued', make('span', '', '↑ '), 'queued') : make('span', 'age', ageOf(note.updated))
+  // The note just saved says `now` rather than `queued`: the form already says it's waiting to sync.
+  const isFresh = note.id === freshId
+  const age = isQueued && !isFresh ? make('span', 'age queued', make('span', '', '↑ '), 'queued') : make('span', 'age', ageOf(note.updated))
   const more = button('', event => openSheet(note.id, event.currentTarget), 'more icon-btn')
   more.append(icon(ICONS.more, { fill: true }))
   more.setAttribute('aria-label', 'Note actions')
@@ -519,7 +580,7 @@ const noteRow = (note, isQueued) => {
   const face = make('div', 'face', marker, text, age, more)
   const behind = make('div', 'behind', icon(ICONS.archive, { stroke: 2 }), make('span', '', 'Archive'))
   behind.setAttribute('aria-hidden', 'true')
-  const row = make('li', note.id === sheetFor ? 'note chosen' : 'note', behind, face)
+  const row = make('li', `note${note.id === sheetFor ? ' chosen' : ''}${isFresh ? ' fresh' : ''}`, behind, face)
   row.dataset.id = note.id
   gestures(row, face, behind, note.id)
   return row
@@ -541,7 +602,9 @@ const proposalRow = note => {
 
 const render = () => {
   renderStatus()
-  renderRefused()
+  // A refused note being edited isn't drawn again under the typing.
+  if (!refusedEditing) renderRefused()
+  renderSaved()
   renderList()
   if (sheetFor !== null) renderSheet()
   renderPickerList()
@@ -875,9 +938,31 @@ const chipProjects = () => {
   return shown
 }
 
+// The note just saved: the form says so until the next one starts, and its row stands out for a
+// few seconds.
+let savedId = null
+let freshId = null
+let freshTimer = 0
+const FRESH_MS = 3000
+
+// "✓ saved", then whether it has reached the hub yet; and the field's placeholder, which says when
+// a note will sync while the hub is out of reach.
+const renderSaved = () => {
+  const saved = $('saved')
+  if (savedId === null || mode === 'capture') saved.replaceChildren()
+  else {
+    const tick = make('span', '', '✓')
+    tick.setAttribute('aria-hidden', 'true')
+    const isSent = !outbox.some(note => note.id === savedId)
+    saved.replaceChildren(tick, 'saved', make('span', 'then', isSent ? '· synced' : '· waiting to sync'))
+  }
+  $('text').placeholder = online === false ? 'A note… will sync when back online' : savedId !== null && mode !== 'capture' ? 'Another…' : 'A note…'
+}
+
 const renderCapture = () => {
   const text = $('text')
   $('save').disabled = text.value.trim() === ''
+  renderSaved()
   const picked = projectOf(chosen)
   // The pill (outside capture): where the note goes, or went.
   const pill = $('pill')
@@ -937,6 +1022,7 @@ const startCapture = () => {
     isJustSaved = false
     chosen = null
   }
+  savedId = null
   setMode('capture')
 }
 
@@ -974,8 +1060,12 @@ $('capture').addEventListener('submit', event => {
   if (text === '') return
   const picked = projectOf(chosen)
   const now = new Date().toISOString()
+  const id = ulid()
+  // Set before queueing, which draws the list: the new row is drawn fresh at once.
+  const wasFresh = freshId
+  freshId = id
   const isQueued = queue({
-    id: ulid(),
+    id,
     status: 'open',
     by: 'phone',
     created: now,
@@ -989,7 +1079,16 @@ $('capture').addEventListener('submit', event => {
     extra: [],
   })
   // Not queued (the phone can't store it): the text stays in the field.
-  if (!isQueued) return
+  if (!isQueued) {
+    freshId = wasFresh
+    return
+  }
+  savedId = id
+  clearTimeout(freshTimer)
+  freshTimer = setTimeout(() => {
+    freshId = null
+    renderList()
+  }, FRESH_MS)
   field.value = ''
   store('sp.draft', '')
   if (picked) {
