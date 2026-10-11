@@ -9,13 +9,15 @@
   --accent-text: #ffffff;
   --warn: #a15c00;
   --error: #c0362c;
-  /* Project colours: Claude Code's light theme keys, as the pane draws them. */
-  --suggestion: rgb(87, 105, 247);
-  --success: rgb(44, 122, 57);
-  --merged: rgb(135, 0, 255);
-  --planMode: rgb(0, 102, 102);
-  --warning: rgb(150, 108, 30);
-  --autoAccept: rgb(135, 0, 255);
+  /* Project colours: the pane's palette (plugin/src/ui/look.ts), light values. */
+  --teal: #00756d;
+  --sky: #1565a8;
+  --violet: #6f3fd1;
+  --magenta: #9b2ea6;
+  --pink: #b52f68;
+  --gold: #7f6400;
+  --lime: #4f7410;
+  --sand: #7e5e38;
   --inactive: rgb(102, 102, 102);
   --claude: rgb(215, 119, 87);
 }
@@ -30,13 +32,15 @@
     --accent-text: #16161a;
     --warn: #e0a243;
     --error: #ef6b5f;
-    /* The dark theme's. */
-    --suggestion: rgb(177, 185, 249);
-    --success: rgb(78, 186, 101);
-    --merged: rgb(175, 135, 255);
-    --planMode: rgb(72, 150, 140);
-    --warning: rgb(255, 193, 7);
-    --autoAccept: rgb(175, 135, 255);
+    /* Dark values. */
+    --teal: #4cc2b4;
+    --sky: #5aaeeb;
+    --violet: #b08cf5;
+    --magenta: #de7fe0;
+    --pink: #f283ac;
+    --gold: #e0bf4c;
+    --lime: #a9cc55;
+    --sand: #cfae86;
     --inactive: rgb(153, 153, 153);
   }
 }
@@ -132,12 +136,14 @@ button:disabled { opacity: .5; }
 #list li.group button { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 40px; padding: 0 2px; border: 0; border-radius: 0; background: none; color: inherit; font-weight: 700; font-size: 15px; text-align: left; }
 #list li.group .fold { width: 1em; color: var(--dim); font-weight: 400; }
 #list li.group .count { margin-left: auto; color: var(--dim); font-weight: 400; font-size: 13px; }
-#list li.group.suggestion { color: var(--suggestion); }
-#list li.group.success { color: var(--success); }
-#list li.group.merged { color: var(--merged); }
-#list li.group.planMode { color: var(--planMode); }
-#list li.group.warning { color: var(--warning); }
-#list li.group.autoAccept { color: var(--autoAccept); }
+#list li.group.teal { color: var(--teal); }
+#list li.group.sky { color: var(--sky); }
+#list li.group.violet { color: var(--violet); }
+#list li.group.magenta { color: var(--magenta); }
+#list li.group.pink { color: var(--pink); }
+#list li.group.gold { color: var(--gold); }
+#list li.group.lime { color: var(--lime); }
+#list li.group.sand { color: var(--sand); }
 #list li.group.inactive { color: var(--inactive); }
 .note { white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .meta { display: flex; gap: 8px; align-items: center; margin-top: 4px; font-size: 13px; color: var(--dim); }

@@ -64,7 +64,7 @@ What the mods interface does that shaped the design. Marked *unverified* where u
 
 ### 2.3 Drawing
 - **Elements** come from `$.ui.resolve(e)`: Box, Text, Button, Input, Select, Link, Code, Markdown and Client; Raster and Image are terminal-only; mobile has no Input or Select.
-- **Button** `plain` draws `k: label` with the hotkey in the accent colour; without `plain` the terminal shows `[ label ]` and no hotkey. A digit hotkey on a band Button also fires when the person types that digit alone into an empty prompt and pauses; that is what makes Pocket possible.
+- **Button** `plain` draws `k: label` with the hotkey in `suggestion`; without `plain` the terminal shows `[ label ]` and no hotkey. A digit hotkey on a band Button also fires when the person types that digit alone into an empty prompt and pauses; that is what makes Pocket possible.
 - **The band is shared:** compose other mods' bands with `await next(e)` inside your Box.
 - **`$.ui.status`** gets an orange `⚠ <plugin>:` prefix, so it reads like a warning. Avoid it for calm counts.
 - **Placement:** docked beside the transcript (`placement: 'dock'`, fullscreen and wide) or inline above the prompt. Size to `e.props.bodyColumns` and `scroll.bodyRows`.
@@ -114,10 +114,10 @@ What the mods interface does that shaped the design. Marked *unverified* where u
 `plugin/src/ui/look.ts` holds every visual constant (glyphs, theme keys, widths, rules, footer and toast wording, the chord table), so a change of look is a one-file edit. The mockup mod (`tools/mockups`, `/mock mix <view>`) draws every state. This text is the reference for keys, wording and behaviour; the renders are the reference for spacing and colour.
 
 ### 4.1 Visual language
-- Colour comes only from theme keys, never hex, so both themes work.
-- The accent (`claude`) marks the current project, row numbers, picks, `◆` and search hits. The selected row has a `subtle` background and a focus block in column 0. Metadata (age, preview meta, footer labels, rules) is dim. Other projects get a deterministic colour from a hash of their key; `unfiled` is grey.
-- Two rules only: a heavy `━` under the search row and a light `─` above the preview and the footer.
-- Glyphs: `❯` search, `✎` capture, `⇢` bundle, `◆` from Claude, `▪` from the phone, `●`/`○` picked or not, `↗` sent, `·` archived, `▾`/`▸` group open or folded, `↑`/`↓` more rows, `⚠` storage problem, `✓` saved, `⏎` Enter.
+- Colour comes from theme keys, so every theme works, except project colours: a fixed palette of eight in `look.ts`, a dark and a light value each, picked by the person's theme (`/config` `theme`; a custom theme by its file's `base`; `auto` by `COLORFGBG`, else dark). The phone uses the same palette and hash. A 16-colour (`*-ansi`) theme takes theme keys instead, never `suggestion`, the hotkey digit's colour.
+- The accent (`claude`) marks the current project, row numbers, picks, `◆` and search hits (bold, no underline). The selected row has a `subtle` background and a focus block in column 0. Metadata (age, preview meta, footer labels) is dim. Other projects get a deterministic colour from a hash of their key, drawn on a `●` before their dim name, never on the name; `unfiled` is a grey `○`. `warning` and `error` are kept for real problems.
+- No rules: one blank row separates the search row, the rows, the preview and the footer. Docked, capture is the one framed element (a `round` accent box).
+- Glyphs: `❯` search, `✎` capture, `⇢` bundle, `◆` from Claude, `▪` from the phone, `●`/`○` picked or not (and project dots), `↗` sent, `·` archived, `▸` group folded, `▎` quoted text, `↑`/`↓` more rows, `⚠` storage problem, `✓` saved, `⏎` Enter.
 - Draw to `bodyColumns - 1`: a tree exactly `bodyColumns` wide overflowed by a column.
 - Project labels are the repo basename; two projects with one basename get parent segments until they differ.
 
@@ -136,15 +136,15 @@ you · ~/Work/cc · main · 12m ago                                      ← met
 ──────────────────────────────────────────────────────────────────────
 ctrl+l list view  ctrl+s scope  ctrl+n new  ctrl+q close             ← footer
 ```
-- **Rows** are one line: selection bar, the row's number in the window (1–9, then `·`), a marker (`◆`, `▪`, `●`/`○`, `↗`), the text with search hits highlighted, then the project label and age (`now`, `12m`, `3h`, `2d`, `5w`, `1y`).
-- **Preview** (docked only): the selected note's text, capped at 6 lines, then a meta line `who · path · branch · age ago`.
+- **Rows** are one line: selection bar, the row's number in the window (1–9, then `·`), a marker (`◆`, `▪`, `●`/`○`, `↗`), the text with search hits highlighted, then the project (`● name`) and age (`now`, `12m`, `3h`, `2d`, `5w`, `1y`).
+- **Preview** (docked only): the selected note's text, capped at 6 lines, then a meta line `who · path · branch · age ago`, all behind a dim `▎` bar.
 - **Ordering:** search results by rank, everything else newest `updated` first, ties by id. Ranking is a fuzzy subsequence score with bonuses for word starts, the current project and recency. Query tokens: `@infra`, `is:sent`, `is:archived`, `by:claude`.
 - **Scope** is explicit state, shown at the right of the search row. The pane opens on this project; the first typed character switches to all, and clearing the query switches back, unless the person chose a scope with `ctrl+s`. Choosing all is remembered across sessions (`$.store`).
 - **No match:** `No notes match “kubernetes” in cc.` and, dim, `⏎ saves “kubernetes” as a new note in cc`. Enter saves the query as a note.
 
 ### 4.3 List view
 Reached with `l` on a row or `ctrl+l`; it keeps the query and scope.
-- **Groups** have a header (`▾`/`▸` and the project label, bold, in its colour), no count and no rule. Order: `proposed` first when harvest has any, then the current project, then others by latest activity, then `unfiled`. Within a group: open notes newest first, then history when shown.
+- **Groups** have a header at the left edge: the project's dot and its label, dim, with the group's open count dim on the right and `▸` when folded. `proposed` (with `◆`) and the current project are bold accent. The notes under a header are indented two columns, so note text is the brightest thing in the list. Order: `proposed` first when harvest has any, then the current project, then others by latest activity, then `unfiled`. Within a group: open notes newest first, then history when shown.
 - **Headers are focusable;** `z` folds or unfolds a group.
 - **History:** `h` adds `sent` and `archived` notes (dimmed); `u` on one restores it.
 - **Picking:** `v` picks or unpicks an open or proposed note. Once one is picked every row shows `●`/`○` and the footer leads with `3 picked`. Picks live in `$.state` until sent, cleared (`x`) or the session ends; a picked note that stops being open drops out with a toast. Bundles keep pick order.
@@ -152,7 +152,8 @@ Reached with `l` on a row or `ctrl+l`; it keeps the query and scope.
 
 ### 4.4 Capture, `//` and the draft stash
 - **In the pane:** `n` on a row or `ctrl+n` turns the search row into the capture row (`✎ new note`, the text, the target project at the right). Enter saves and stays in capture; Enter on an empty line returns to search; `ctrl+s` cycles the target project. The draft shows whole underneath, wrapped. A failed save keeps the text and shows `Couldn't save: <reason>`.
-- **From the prompt:** a prompt that becomes exactly `//` is rewritten to `/jot ` (cursor at the end). `/jot` runs at once even mid-turn. `/jot text` saves to this project and toasts `✎ saved to cc · ctrl+x s to view`; `/jot` alone opens the pane in capture mode. To send a literal `//` prompt, start with a space or paste it: only one typed `/` after a lone `/` triggers the rewrite.
+- **From the prompt:** a prompt that becomes exactly `//` is rewritten to `/jot ` (cursor at the end). `/jot` runs at once even mid-turn. `/jot` is painted in the accent and bold, the note after it italic. `/jot text` saves to this project; `/jot` alone opens the pane on search, where Enter on a query that matches nothing saves it as a note and `ctrl+n` turns to capture. To send a literal `//` prompt, start with a space or paste it: only one typed `/` after a lone `/` triggers the rewrite.
+- **Hint line:** the dim line under the prompt gets a tail after ` · `. While the draft leads with `/jot `: `✎ ⏎ saves to cc, Claude won't see it`. For 3 s after a save from the prompt (or a search with no match, saved from the pane): `✓ saved to cc`, in place of a toast. A failed save still says `Couldn't save: <reason>`.
 - **Draft stash.** Every open that asks for focus (`ctrl+x s`, `/jot`) first reads the prompt. If it holds a draft, the draft is kept in `$.state` as the *stash*, the prompt is emptied, and the pane opens focused. Exactly one exit then decides what the prompt holds, and clears the stash:
 
 | Exit | Prompt afterwards |
@@ -189,7 +190,7 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 | `f` / `ctrl+f` | focus search |
 | `n` / `ctrl+n` | new note |
 | `ctrl+s` | scope (search, list) or target project (capture) |
-| `i` | key sheet on/off |
+| `i` | key sheet on/off: a framed list of every key (unframed when the body is too short for a line inside the frame) (storage problems first; opened on a row, that row's own keys next, in its footer's order) between the search row and the footer; while it is up the pane takes the whole body and the footer its last row. It is at most 46 columns and never wider than the pane. When it's longer than the rows between, it pages: the footer shows `j more 2/3`, `j` turns to the next page and `k` back, both going round |
 | Esc | **back** one step: edit → the row (draft kept), move / key sheet / bundle → the list, capture → search, a row → the search field, a query → empty, list view → search view; at the top it closes |
 | `q` / `ctrl+q` / `ctrl+x s` | close the pane from anywhere; drafts are kept |
 
@@ -202,14 +203,14 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 - `ctrl+n` → `pane:next`
 
 ### 4.6 Contextual footer
-One blank row, the light rule, then key/label pairs (key bold, label dim, two spaces between). A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning). The legend `◆ from Claude` trails while a `◆` row is drawn. **The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, search row, list row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`.
+One blank row, then one line: at most four key/label pairs for the focus (key bold, label dim, two spaces between) and `i keys` on the right; pairs drop from the right until the line fits. On a row with nothing picked, the note's own actions take the four places (`t to prompt  s send  e edit  d archive`); `v` pick is answered and listed in the key sheet. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning); a status too long for the line is cut with `…`, leaving room for `i keys`. The legend `◆ from Claude` trails while a `◆` row is drawn. **The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, search row, list row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`.
 
 **Storage problems** also draw a focusable problem row above the first result, in `error` (`⚠ 2 unreadable files · ⏎ details`); ⏎ opens a card listing each file and reason.
 
 ### 4.7 Other states
 - **Bundle:** `⇢ bundle  3 notes into one prompt`, then the exact prompt in a quote box: `Please look at these notes from my ostrakon:`, a blank line, one `- ` line per note in pick order (other projects prefixed `[label] `). Focus goes to a `[ send ]` button; ⏎ sends and `t` fills the prompt instead. Picked notes are marked sent only once the prompt goes in.
 - **Edit:** the row becomes a `round` box with a one-line Input prefilled with the text. Newlines show as `↵` and turn back into newlines on save (a note that already contains `↵` can't round-trip, so `e` points you to the file). `[ cancel ]` and `[ save ]` sit below; the draft is kept if the pane closes.
-- **Empty inbox:** `Nothing pending in cc.` and a short key legend (`//`, `ctrl+x s`, and the phone and harvest lines when those are configured).
+- **Empty inbox:** `Nothing pending in cc.` (scope all: `Nothing pending in any project.`) and the ways in (`//`, `ctrl+n` new note, and the phone and harvest lines when those are configured) in a fixed key column. Docked, a small dim shard sits beside them; when the descriptions would be cut beside it, the shard is left out.
 - **Toasts** are short and calm (`Archived · u undo`, `Copied`, `note 2 in your prompt · ⏎ to send`). Never `$.ui.status`.
 
 ### 4.8 Paging and the inline pane
@@ -219,13 +220,13 @@ One blank row, the light rule, then key/label pairs (key bold, label dim, two sp
 - **Zero results:** no rows and no sentinels; focus stays in the search field.
 - **When the selected row disappears** (filtered, archived, synced away), selection moves to the row now at the same index, or the last row.
 
-**Inline layout.** Switch on `e.props.placement === 'inline'`, not on a column count. The inline body is about 11 rows and keeps the search row, the rows and a one-line footer; it drops the preview and shows the selected row's meta in place of the scope text. Footer pairs drop from the right until the line fits.
+**Inline layout.** Switch on `e.props.placement === 'inline'`, not on a column count. The inline body is about 11 rows and keeps the search row, the rows and a one-line footer; it drops the preview. The scope and counts stay at the right of the search row in every focus; with a row selected, its meta leads them (`◆ claude` or `phone` when not yours, then path, branch, age), dropping the path, then the age, then the branch when the room runs short. Footer pairs drop from the right until the line fits.
 
 ### 4.9 Construction
 - The search field is an `Input` with no `label` (the terminal would draw `label: `); the glyph is a `Text` before it.
 - A row is a keyed `Box` whose focus target is a one-space `plain` Button in column 0; focus inverts it into the selection bar. Rows are keyed by *slot in the window*, not by note, so paging doesn't move the ring.
 - Keys with no visible control (letter actions, digits, borrowed chords) are Buttons in an **action layer**, a `display: 'none'` Box drawn last. A `ui.focus` hook redirects any move onto it. While a row, the bundle or the key sheet holds the ring, the layer also answers every other letter and digit by doing nothing, because an unanswered printable key would go to the prompt and take the keyboard with it.
-- Docked, the preview and footer have fixed heights, so the window never changes size as the selection moves.
+- Docked, the preview and footer have fixed heights, so the window never changes size as the selection moves. In a body too short for the preview and three rows besides, the preview goes, as inline, so the footer stays on screen.
 - Each open draws exactly one `autoFocus` element. Every in-pane view change calls `$.ui.focus` on its target (search → first result, list toggle → selected row, capture, edit, bundle → `[ send ]`, back out → the row it came from, fold → the header).
 
 ---
@@ -379,16 +380,19 @@ A host that is always on, on the tailnet: Bun installed, systemd (for the unit i
 ## 10. Resting state: Pocket (band above the prompt)
 
 ```
-1: check why the cach…  2: rename the store h…  3: ◆ login returns 40…  +2  ✎
+✎ cc   1: check why the cache…   2: rename the store helpers   3: ◆ login returns…   +2
 ```
-- **Chips:** up to `pocketMax` (default 5, max 9) open notes of the current project, newest `updated` first. Each chip is a `plain` Button whose digit is its hotkey. The label is the note's text on one line, cut to 18 terminal cells with `…`, with `◆ ` in front for Claude's notes.
-- **`+N`** shows when more open notes exist than chips; it and **`✎`** (which carries the borrowed `ctrl+x s` action) open the launcher. Opened by their chord the pane gets focus; opened by a click, or after `ctrl+x tab`, the band holds the keys, so the pane opens unfocused.
-- **Width:** fit to `e.props.bodyColumns`. First shorten every label, down to 10 columns, then drop chips from the right into `+N`. `+N` and `✎` always stay.
+- **Opener:** `✎ <project>` leads the row, dim; it carries the borrowed `ctrl+x s` action and opens the launcher.
+- **Chips:** up to `pocketMax` (default 5, max 9) open notes of the current project, newest `updated` first. Each chip is a `plain` Button whose digit is its hotkey. The label is the note's text on one line, cut to 24 terminal cells with `…`, with `◆ ` in front for Claude's notes. The cut falls at the last word that fits, unless that leaves under 10 cells; then mid-word. Chips sit 3 columns apart.
+- **`+N`** (dim) shows when more open notes exist than chips; it and the opener open the launcher. Opened by their chord the pane gets focus; opened by a click, or after `ctrl+x tab`, the band holds the keys, so the pane opens unfocused.
+- **Width:** fit to `e.props.bodyColumns`, the opener included. First shorten every label, down to 10 columns, then drop chips from the right into `+N`. The opener and `+N` always stay.
+- **While a turn runs** (`e.props.isWorking`) the whole row draws dim; the digits still work.
+- **Fresh chip:** a note the person just saved (`/jot text`, the pane) stands out for 2 s: its chip at full strength, the other chips dim. A Button label takes no bold or colour.
 - **Digit from an empty prompt:** type `2` and pause. Note 2 is filled into the prompt (prefixed per §4.5) and a toast says `note 2 in your prompt · ⏎ to send`. Submitting marks it `sent` (§5). A chip never opens the pane.
-- **Zero notes:** `✎` alone. `pocket: false` keeps only the `✎`.
+- **Zero notes:** the opener alone. `pocket: false` keeps only the opener.
 - **Composition:** draw `await next(e)` first, inside a column Box, then the chip row.
 - **Harvest** takes the chip row's place while the last turn has proposals:
-  - `◆ 3 notes from this turn` in bold, the proposals as digit chips, a `0: keep all` chip and the `✎` button. A dim second line: `1–3 keep one · 0 keep all · the rest wait in the pane under “proposed”`. Too narrow for a chip beside the title, the title shortens to `◆ 3`.
+  - One line: the opener, `◆ from this turn` in bold, the proposals as digit chips, `+N`, then `0: keep all`. Too narrow for a chip beside the title, the title shortens to `◆`; too narrow for any chip, the row closes up to fit: one column apart, then `✎` without the project, then no `◆`. Under the first 3 harvests ever (counted in `$.store`, once per turn) a dim second line: `1–3 keep one · 0 keep all · the rest wait in the pane under “proposed”`.
   - A turn's proposals are Claude's `proposed` notes in this project carrying the turn's id. Only the main loop's `turn.complete` counts (subagents complete too); a turn that proposed nothing leaves the last harvest up, and a late harvest of an earlier turn never replaces a later one's.
   - Each turn fact (a conversation's generation, then a count per decision) is decided in order when its hook starts, so a write that waited never undoes a newer one. The band is drawn from these facts rather than synchronized to them.
   - Kept notes become `open` (only if still `proposed`). The band returns to Pocket when the next prompt starts a turn.

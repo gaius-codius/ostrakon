@@ -369,9 +369,9 @@ const labelOf = project => {
 }
 
 // A project's colour, as the pane picks it (plugin/src/ui/look.ts colourOf, with no current
-// project here): a theme key from a hash of the project key; unfiled is grey. style.css holds each
-// key's colour per theme, copied from Claude Code's own theme.
-const PALETTE = ['suggestion', 'success', 'merged', 'planMode', 'warning', 'autoAccept']
+// project here): the palette's entry from a hash of the project key; unfiled is grey. The names in
+// the pane's order; style.css holds each one's colour per theme (tools/check.sh keeps them in step).
+const PALETTE = ['teal', 'sky', 'violet', 'magenta', 'pink', 'gold', 'lime', 'sand']
 const colourOf = project => {
   if (!project) return 'inactive'
   let hash = 0

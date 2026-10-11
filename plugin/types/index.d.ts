@@ -63,6 +63,8 @@ export type PaneState = {
   focus: 'search' | 'line' | 'control' | 'none'
   // The first line drawn (rows are paged by the mod, SPEC §4.8).
   offset: number
+  // The key sheet's page, from 0, while it's paged to fit the body.
+  sheetPage: number
   edit: { id: string; draft: string } | null
   // The note a move (m) applies to, fixed when the Select opens.
   moving: string | null
@@ -93,6 +95,14 @@ declare module 'claude-code' {
       sync: SyncState
       // The mirror folder's sync status (SPEC §7.2); isOn false when no mirror is configured.
       mirror: SyncState
+      // Whether the prompt's draft leads with `/jot `, as prompt.edit last saw it (SPEC §4.4).
+      isJotDraft: boolean
+      // When the last /jot save landed, while the hint line still says so; 0 otherwise.
+      savedAt: number
+      // The note just saved, whose band chip draws fresh for a moment; '' when none (SPEC §10).
+      fresh: string
+      // The turn whose harvest carries the dim hint line: one of the first few harvests ever.
+      harvestHint: string
     }
   }
 }
