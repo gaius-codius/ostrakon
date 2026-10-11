@@ -2,6 +2,9 @@
 
 A scratchpad for Claude Code: capture thoughts and follow-ups from within claude code without breaking your flow, triage them across projects and machines, and turn them into prompts. An optional small hub keeps your notes in sync between machines and serves a phone app for capturing and triaging on the go.
 
+
+![The ostrakon pane docked beside a Claude Code session, listing open notes across projects, with this project's notes as numbered chips above the prompt](docs/images/pane.png)
+
 ## What it does
 
 - **Capture** a note in under two seconds, even while Claude is working, without losing your prompt draft: `/jot text`, or `//` typed into an empty prompt.
@@ -23,13 +26,15 @@ Sync is optional and works both ways. Add, edit, move or archive a note on one m
 
 **On your phone**, the hub's web app installs to the Home Screen and opens straight to a note field. You can triage there too (edit, move, archive, mark sent), and anything you capture offline is kept until the hub is reachable again. To pair a phone, scan the QR code that `ostrakon pair` shows. An iOS Shortcut can send a note from the share sheet or Siri without opening the app. Details: [`docs/phone.md`](docs/phone.md).
 
+<p align="center"><img src="docs/images/phone.png" width="300" alt="The phone app: a note field, then open notes grouped by project, with Claude's proposals marked"></p>
+
 ## Install
 
 ### Requirements
 
-- **Claude Code** with mods support (see the [mods docs](https://code.claude.com/docs/en/plugins/mods/overview)). Tested with 2.1.294; mods are still changing, so a much older or newer version may not work.
+- **Claude Code** with mods support (see the [mods docs](https://code.claude.com/docs/en/plugins/mods/overview)). Tested with 2.1.296; mods are still changing, so a much older or newer version may not work.
 - **git**, and **python3** for the install script (without it, the script tells you the one line to add yourself).
-- **For the hub:** [Bun](https://bun.sh) (tested with 1.4.2) to run the hub and to use `ostrakon pair`, and `qrencode` for the pairing QR code. `install.sh --hub` sets the hub up as a systemd service, so that part is Linux-only for now; elsewhere, run `ostrakon hub` however you like to keep things running.
+- **For the hub:** [Bun](https://bun.sh) (tested with 1.4.3) to run the hub and to use `ostrakon pair`, and `qrencode` for the pairing QR code. `install.sh --hub` sets the hub up as a systemd service, so that part is Linux-only for now; elsewhere, run `ostrakon hub` however you like to keep things running.
 
 Tested on Linux. macOS should work for the mod but hasn't been tried yet; reports are welcome.
 
