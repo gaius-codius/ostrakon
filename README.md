@@ -29,7 +29,7 @@ Sync is optional and works both ways. Add, edit, move or archive a note on one m
 
 - **Claude Code** with mods support (see the [mods docs](https://code.claude.com/docs/en/plugins/mods/overview)). Tested with 2.1.294; mods are still changing, so a much older or newer version may not work.
 - **git**, and **python3** for the install script (without it, the script tells you the one line to add yourself).
-- **For the hub:** [Bun](https://bun.sh) (tested with 1.4.2), and `qrencode` to pair a phone. `install.sh --hub` sets the hub up as a systemd service, so that part is Linux-only for now; elsewhere, run `ostrakon hub` however you like to keep things running.
+- **For the hub:** [Bun](https://bun.sh) (tested with 1.4.2) to run the hub and to use `ostrakon pair`, and `qrencode` for the pairing QR code. `install.sh --hub` sets the hub up as a systemd service, so that part is Linux-only for now; elsewhere, run `ostrakon hub` however you like to keep things running.
 
 Tested on Linux. macOS should work for the mod but hasn't been tried yet; reports are welcome.
 

@@ -48,7 +48,9 @@ Tailscale app connected.
 
 **Without Tailscale.** Any HTTPS reverse proxy (Caddy, nginx), tunnel (Cloudflare Tunnel, ngrok) or
 other VPN in front of `127.0.0.1:8790` works too. Set the proxy's timeout above 30 seconds, because
-live sync holds requests open. If your proxy puts the hub on the public internet, only the token
+live sync holds requests open. Turn off the proxy's logging of full addresses (or of query strings),
+because pairing sends the token to the hub in one (`?token=…`). Leave `HUB_LOGIN` unset: it is only
+safe behind `tailscale serve`. If your proxy puts the hub on the public internet, only the token
 protects it, so read [`SECURITY.md`](../SECURITY.md) first.
 
 ## Pair your phone
@@ -77,8 +79,8 @@ A few details:
 [url]` prints a QR code and link that contain the token itself. Treat a screenshot of it like the
 token, and clear the terminal after scanning.
 
-**Or type the address yourself** with the token in it. The app stores the token and removes it
-from the address bar straight away:
+**Or type the address yourself** with the token in it. The app stores the token (Safari keeps the
+address as it is, so Add to Home Screen can use it; the installed app removes it from its own):
 
 ```
 https://<host>.<tailnet>.ts.net:8443/?token=<HUB_TOKEN>
@@ -93,8 +95,8 @@ In Safari, with the app open, tap **Share**, then **Add to Home Screen**, then *
 icon it opens full screen, straight to the note field.
 
 On iOS, a Home Screen app doesn't share Safari's storage, so the token has to come along in the
-app's start address. That's why pairing leaves Safari on the `?token=` address (it stays on the
-phone; nothing is sent anywhere). When you add the app, the hub gives it a start address with the
+app's start address. That's why pairing leaves Safari on the `?token=` address. The address goes only to your hub,
+but it does carry the token, so don't share a screenshot of it. When you add the app, the hub gives it a start address with the
 token in it, and the installed app stores the token and removes it from its own address.
 
 If the installed app still asks for the token, delete it, open the link in Safari, reload once (an
