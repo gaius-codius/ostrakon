@@ -2,7 +2,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import { REPORT_MAX_PROBLEMS, freshReport, withProblem } from '../src/report'
 import { MemDir } from './memdir'
-import { CC, put, startSession } from './world'
+import { CC, put, run, startSession } from './world'
 
 const HUB = { hubUrl: 'https://hub.test/', hubToken: 'secret' }
 const MINE = '01JA7K2M3Q9X4ZB6C8D0EFGH91'
@@ -27,6 +27,17 @@ describe('the load report', () => {
     await startSession($, on, dir)
     const report = JSON.parse(dir.get(REPORT) ?? '{}')
     expect(report).toMatchObject({ claude: '2.1.294', loadedAt: '2026-10-09T12:00:00.000Z', problems: [] })
+  })
+
+  test('a note that fails to save goes in the report, saved on the next poll', async ($, on) => {
+    const dir = new MemDir()
+    const { clock } = await startSession($, on, dir)
+    dir.failWrites = true
+    await run($, 'jot', 'this one fails')
+    dir.failWrites = false
+    await clock.advance(2100)
+    const report = JSON.parse(dir.get('/home/me/.cache/ostrakon/report.json') ?? '{}')
+    expect(report.problems).toMatchObject([{ where: 'storage', count: 1 }])
   })
 
   // A refused pull is in hub.test.tsx; a push fails apart from it, in the core's retry.

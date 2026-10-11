@@ -392,6 +392,7 @@ const changeNote = async ($: EngineInterface, id: string, edit: (note: Note) => 
   try {
     return await store.change(await storeIO($), id, edit)
   } catch (error) {
+    noteProblem($, 'storage', error)
     toast($, TOAST.failed(error instanceof StorageError ? error.message : messageOf(error)))
     return undefined
   }
@@ -601,6 +602,8 @@ const openPane = async ($: EngineInterface, mode: 'browse' | 'capture') => {
   } catch (error) {
     why = messageOf(error)
   }
+  // The pane not opening is the kind of break a new Claude Code brings (SPEC §12, the load report).
+  if (why !== undefined) noteProblem($, 'pane not opened', why)
   await update($, isOpen, () => why === undefined)
   if (why !== undefined) {
     await afterClose($)
@@ -854,6 +857,7 @@ const searchSubmit = async ($: EngineInterface, value: string) => {
     // Something typed while it saved is a new search: leave it.
     await setPane($, state => (state.query === value ? { ...state, query: '', scope: state.scopeChosen ? state.scope : 'project' } : state))
   } catch (error) {
+    noteProblem($, 'storage', error)
     toast($, TOAST.failed(messageOf(error)))
     await setPane($, state => ({ ...state, query: redrawn(value) }))
   }
@@ -876,6 +880,7 @@ const captureSubmit = async ($: EngineInterface, value: string) => {
       capture: { ...state.capture, draft: state.capture.draft === value ? '' : state.capture.draft, error: null, saved: [...state.capture.saved, text].slice(-10) },
     }))
   } catch (error) {
+    noteProblem($, 'storage', error)
     await setPane($, state => ({
       ...state,
       capture: { ...state.capture, draft: state.capture.draft === value ? redrawn(value) : state.capture.draft, error: TOAST.failed(messageOf(error)) },
@@ -1138,7 +1143,8 @@ export const register: Register = (on, options) => {
         .catch(error => reportStorage($, error))
     })
     void startSync($).catch(error => noteProblem($, 'sync', error))
-    await saveReport($)
+    // Not awaited: a slow disk never holds the session up for a diagnostic (saveReport catches).
+    void saveReport($)
     return next(e)
   })
 
@@ -1186,6 +1192,7 @@ export const register: Register = (on, options) => {
         context: { ...(sessionId !== undefined ? { sessionId } : {}), ...(turnId !== undefined ? { turnId } : {}) },
       })
     } catch (error) {
+      noteProblem($, 'storage', error)
       return { deny: TOAST.failed(messageOf(error)) }
     }
     toast($, TOAST.jotted(text))
@@ -1205,6 +1212,7 @@ export const register: Register = (on, options) => {
       toast($, TOAST.saved(project.name))
       return { text: '' }
     } catch (error) {
+      noteProblem($, 'storage', error)
       return { text: `ostrakon: ${TOAST.failed(messageOf(error))}` }
     }
   })
