@@ -91,6 +91,18 @@ describe('hub', () => {
     expect((await call('/../hub.ts', { auth: null })).status).toBe(404)
   })
 
+  test('the page serves files from one folder down, with their types, and nothing past public/', async () => {
+    const { call } = fresh()
+    const font = await call('/fonts/ibm-plex-mono-latin-400-normal.woff2', { auth: null })
+    expect(font.status).toBe(200)
+    expect(font.headers.get('content-type')).toBe('font/woff2')
+    const licence = await call('/fonts/LICENSE-plex-mono.txt', { auth: null })
+    expect(licence.headers.get('content-type')).toStartWith('text/plain')
+    for (const path of ['/fonts/.hidden', '/.fonts/x.woff2', '/fonts/a/b.woff2', '/fonts/%2e%2e/hub.ts', '/fonts/..%2fhub.ts', '/fonts/missing.woff2']) {
+      expect((await call(path, { auth: null })).status).toBe(404)
+    }
+  })
+
   test('a note that is not one is refused, and the rest of the batch still lands', async () => {
     const { call } = fresh()
     const response = await call('/api/notes', {

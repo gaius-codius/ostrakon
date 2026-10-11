@@ -40,6 +40,8 @@ const TYPES: Record<string, string> = {
   '.json': 'application/manifest+json',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.woff2': 'font/woff2',
+  '.txt': 'text/plain; charset=utf-8',
 }
 
 // A note as it arrives (JSON from the mod, the phone or a Shortcut), held to the file format:
@@ -211,7 +213,8 @@ export const handler = (hub: Hub, auth: { token?: string; login?: string }, { no
     if (!path.startsWith('/api/')) {
       if (request.method !== 'GET') return new Response('method not allowed', { status: 405 })
       const name = path === '/' ? 'index.html' : path.slice(1)
-      if (!/^[a-z0-9][a-z0-9._-]*$/i.test(name)) return new Response('not found', { status: 404 })
+      // A file in public/, or in one of its folders (fonts/, vendor/); no part may start with a dot.
+      if (!/^(?:[a-z0-9][a-z0-9_-]*\/)?[a-z0-9][a-z0-9._-]*$/i.test(name)) return new Response('not found', { status: 404 })
       const file = Bun.file(join(PUBLIC, name))
       if (!(await file.exists())) return new Response('not found', { status: 404 })
       // iOS gives a Home Screen app storage of its own: its start URL carries the token, for the

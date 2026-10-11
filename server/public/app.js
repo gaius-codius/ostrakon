@@ -304,15 +304,18 @@ const loadProjects = async () => {
 // ---- drawing ----
 
 const renderStatus = () => {
+  // The header says nothing while sync works, as the pane's footer does (SPEC §9.4).
   const status = $('status')
   const count = outbox.length
-  const queued = count > 0 ? `${count} queued` : ''
-  const text = online === false ? ['Offline', queued].filter(Boolean).join(' · ') : queued || (online ? 'Synced' : 'Connecting…')
+  const text = online === false ? ['hub offline', count > 0 ? `${count} queued` : ''].filter(Boolean).join(' · ') : ''
   const problem =
     storageError ||
     (held.size > 0 ? `Can't save on this phone (storage full or blocked); ${held.size} refused note${held.size === 1 ? '' : 's'} kept in the queue` : '')
-  status.textContent = problem === '' ? text : `${problem} · ${text}`
-  status.classList.toggle('warn', online === false || count > 0 || problem !== '')
+  const ring = make('span', 'ring')
+  ring.setAttribute('aria-hidden', 'true')
+  status.replaceChildren(...(problem === '' && text === '' ? [] : [ring, [problem, text].filter(Boolean).join(' · ')]))
+  status.classList.toggle('warn', text !== '' && problem === '')
+  status.classList.toggle('error', problem !== '')
 }
 
 // An element with a class and children (text or elements).
@@ -350,13 +353,13 @@ const copy = async text => {
 // Notes the hub refused: their only copy is here, so they stay until dismissed.
 const renderRefused = () => {
   const items = refused.map(item => {
-    const copied = button('Copy', async () => toast((await copy(item.text)) ? 'Copied' : "Couldn't copy"))
+    const copied = button('Copy', async () => toast((await copy(item.text)) ? 'Copied' : "Couldn't copy"), 'btn')
     const dismiss = button('Dismiss', () => {
       refused = refused.filter(other => other !== item)
       store('sp.refused', refused)
       renderRefused()
-    })
-    return make('li', '', make('div', 'note', item.text), make('div', 'meta error', `Refused by the hub: ${item.reason}`), make('div', 'row', copied, dismiss))
+    }, 'btn')
+    return make('li', '', make('p', 'quote', item.text), make('div', 'meta error', `Refused by the hub: ${item.reason}`), make('div', 'row', copied, dismiss))
   })
   $('refused-list').replaceChildren(...items)
   $('refused').hidden = items.length === 0
@@ -388,6 +391,33 @@ const renderPicker = () => {
   select.value = projects.some(project => project.key === chosen) ? chosen : ''
 }
 
+// The one place a project's colour is painted: a dot in the colour colourOf names (a CSS custom
+// property of that name, per theme, in style.css). Unfiled is a ring.
+const dot = project => {
+  const node = make('span', project ? 'dot' : 'dot ring')
+  node.setAttribute('aria-hidden', 'true')
+  if (project) node.style.background = `var(--${colourOf(project)})`
+  return node
+}
+
+// A group's heading: a button that folds it, with what leads it (a dot), its name, a word after the
+// name when there is one, and how many notes it holds.
+let groupIds = 0
+const heading = (key, lead, name, count, isOpen, note, rowsId) => {
+  const toggle = button('', () => {
+    if (folded.has(key)) folded.delete(key)
+    else folded.add(key)
+    store('sp.folded', [...folded])
+    renderList()
+  })
+  toggle.setAttribute('aria-expanded', String(isOpen))
+  toggle.setAttribute('aria-controls', rowsId)
+  toggle.append(make('span', 'lead', lead), make('span', 'name', name))
+  if (note) toggle.append(make('span', 'folded', note))
+  toggle.append(make('span', 'count', String(count), make('span', 'sr-only', count === 1 ? ' note' : ' notes')))
+  return make('h2', '', toggle)
+}
+
 const renderList = () => {
   if (editing || isTouching) {
     isStale = true
@@ -400,8 +430,8 @@ const renderList = () => {
     .filter(note => !note.deleted && note.status === 'open')
     .filter(note => words === '' || `${note.text} ${labelOf(note.project)}`.toLowerCase().includes(words))
     .sort((a, b) => Date.parse(b.updated) - Date.parse(a.updated) || (a.id < b.id ? 1 : -1))
-  // Grouped as the pane's list view (SPEC §4.6): a heading per project in its colour, projects by
-  // their latest note, unfiled last; within a group newest first.
+  // Grouped as the pane's list view (SPEC §4.6): a heading per project, projects by their latest
+  // note, unfiled last; within a group newest first.
   const groups = new Map()
   for (const note of shown) {
     const key = note.project?.key ?? ''
@@ -409,43 +439,43 @@ const renderList = () => {
     groups.get(key).push(note)
   }
   const order = [...groups.keys()].sort((a, b) => (a === '') - (b === ''))
-  const rows = []
+  const sections = []
   for (const key of order) {
     const notes = groups.get(key)
+    const project = notes[0].project
     // While filtering every group shows its matches, folded or not.
     const isFolded = words === '' && folded.has(key)
-    // The pane's ▾/▸ before the name; a folded group says how many notes it holds.
-    const toggle = button('', () => {
-      if (folded.has(key)) folded.delete(key)
-      else folded.add(key)
-      store('sp.folded', [...folded])
-      renderList()
-    })
-    toggle.append(make('span', 'fold', isFolded ? '▸' : '▾'), make('span', 'name', labelOf(notes[0].project)))
-    if (isFolded) toggle.append(make('span', 'count', String(notes.length)))
-    toggle.setAttribute('aria-expanded', String(!isFolded))
-    const heading = make('li', `group ${colourOf(notes[0].project)}`, toggle)
-    heading.setAttribute('role', 'heading')
-    heading.setAttribute('aria-level', '2')
-    rows.push(heading)
-    if (isFolded) continue
-    for (const note of notes) {
-      // The pane's markers: ◆ from Claude, ▪ from the phone.
-      const marker = make('span', `marker ${note.by}`, note.by === 'claude' ? '◆' : note.by === 'phone' ? '▪' : '')
-      const side = make('div', 'side', make('span', 'age', ageOf(note.updated)))
-      if (queued.has(note.id)) side.append(make('span', 'queued', 'queued'))
-      // The face slides left over the archive strip behind it.
-      const face = make('div', 'face', marker, make('div', 'note', note.text), side)
-      const behind = make('div', 'behind', make('span', '', 'Archive'))
-      const row = make('li', note.id === sheetFor ? 'chosen' : '', behind, face)
-      row.dataset.id = note.id
-      gestures(row, face, behind, note.id)
-      rows.push(row)
-    }
+    const rowsId = `rows-${++groupIds}`
+    const head = heading(key, dot(project), labelOf(project), notes.length, !isFolded, isFolded ? '▸' : '', rowsId)
+    const list = make('ul', 'rows')
+    list.id = rowsId
+    list.hidden = isFolded
+    if (!isFolded) for (const note of notes) list.append(noteRow(note, queued.has(note.id)))
+    const group = make('div', 'group', head, list)
+    group.dataset.key = key
+    sections.push(group)
   }
-  $('list').replaceChildren(...rows)
+  $('list').replaceChildren(...sections)
   $('empty').hidden = shown.length > 0
   $('empty').textContent = words === '' ? 'No open notes.' : 'No notes match.'
+}
+
+// One open note: its marker (◆ from Claude, ▪ from the phone), the text and its age, over the
+// archive strip a swipe uncovers.
+const noteRow = (note, isQueued) => {
+  const marker = make('span', `marker ${note.by}`, note.by === 'claude' ? '◆' : note.by === 'phone' ? '▪' : '')
+  if (note.by === 'claude') {
+    marker.setAttribute('role', 'img')
+    marker.setAttribute('aria-label', 'From Claude')
+  } else marker.setAttribute('aria-hidden', 'true')
+  const age = isQueued ? make('span', 'age queued', make('span', '', '↑ '), 'queued') : make('span', 'age', ageOf(note.updated))
+  const face = make('div', 'face', marker, make('p', 'text', note.text), age)
+  const behind = make('div', 'behind', make('span', '', 'Archive'))
+  behind.setAttribute('aria-hidden', 'true')
+  const row = make('li', note.id === sheetFor ? 'note chosen' : 'note', behind, face)
+  row.dataset.id = note.id
+  gestures(row, face, behind, note.id)
+  return row
 }
 
 const render = () => {
@@ -493,10 +523,10 @@ const archive = id => {
 
 const startEdit = id => {
   const note = current()[id]
-  const row = $('list').querySelector(`li[data-id="${id}"]`)
+  const row = $('list').querySelector(`li.note[data-id="${id}"]`)
   if (!note || !row) return
   editing = { id, draft: note.text }
-  row.className = 'editing'
+  row.className = 'note editing'
   const field = document.createElement('textarea')
   field.value = note.text
   field.setAttribute('aria-label', 'Edit note')
@@ -505,7 +535,7 @@ const startEdit = id => {
     if (event.key === 'Escape') endEdit(false)
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) endEdit(true)
   })
-  row.replaceChildren(field, make('div', 'row', button('Cancel', () => endEdit(false)), button('Save', () => endEdit(true), 'primary')))
+  row.replaceChildren(field, make('div', 'actions', button('Cancel', () => endEdit(false), 'btn'), button('Save', () => endEdit(true), 'primary')))
   field.focus()
   field.setSelectionRange(field.value.length, field.value.length)
 }
@@ -670,9 +700,8 @@ const gestures = (row, face, behind, id) => {
   let holdTimer = 0
   const reset = () => {
     clearTimeout(holdTimer)
-    row.classList.remove('dragging', 'armed', 'labelled')
+    row.classList.remove('dragging', 'armed')
     face.style.transform = ''
-    behind.style.width = ''
     start = null
     isDragging = false
     isTouching = false
@@ -709,11 +738,7 @@ const gestures = (row, face, behind, id) => {
       isDragging = true
       row.classList.add('dragging')
       row.classList.toggle('armed', dx < -ARCHIVE_PX)
-      // The strip fills the gap the face leaves; its word shows once it fits whole.
-      const gap = Math.max(0, -dx)
-      behind.style.width = `${gap}px`
-      row.classList.toggle('labelled', gap >= behind.firstChild.offsetWidth + 24)
-      face.style.transform = `translateX(${-gap}px)`
+      face.style.transform = `translateX(${Math.min(0, dx)}px)`
     }
   })
   row.addEventListener('pointerup', event => {

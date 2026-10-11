@@ -2,7 +2,7 @@
 // cache in the background (stale-while-revalidate): a new version shows on the next open.
 // /api is never cached, nor the manifest: it carries the token for the Home Screen app.
 const CACHE = 'ostrakon-shell-v11'
-const SHELL = ['/', '/app.js', '/style.css', '/icon.svg', '/icon-180.png']
+const SHELL = ['/', '/app.js', '/style.css', '/icon.svg', '/icon-180.png', '/fonts/ibm-plex-sans-latin-wght-normal.woff2', '/fonts/ibm-plex-mono-latin-400-normal.woff2', '/fonts/ibm-plex-mono-latin-500-normal.woff2']
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()))
