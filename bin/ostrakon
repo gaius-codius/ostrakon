@@ -20,6 +20,7 @@ usage: ostrakon <command>
   hub          run the hub in the foreground
   update       update this checkout (newest release, or pull its branch) and restart the
                hub if it's installed; --release / --main to switch (update.sh)
+  doctor       check that everything is set up and working, and say what to fix
   version      show the version and the checkout's commit
   help         show this
 
@@ -42,6 +43,7 @@ need_bun() { command -v bun >/dev/null || { echo "ostrakon: needs Bun (https://b
 
 case ${1:-help} in
   update) shift; exec "$ROOT/update.sh" "$@" ;;
+  doctor) exec "$ROOT/bin/doctor" ;;
   version | -V | --version)
     v=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$ROOT/plugin/.claude-plugin/plugin.json" | head -n 1)
     echo "ostrakon $v ($(git -C "$ROOT" describe --tags --always --dirty 2>/dev/null || echo 'not a git checkout'))" ;;

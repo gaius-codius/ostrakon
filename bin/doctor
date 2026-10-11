@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2088,SC2012  # the ~ in messages is meant literally; ls -l only reads one known file
+# `ostrakon doctor`: checks that ostrakon is set up and working, and says what to fix. It only
+# reads: it changes nothing, and never prints the hub token. Exits 1 if anything needs fixing.
+set -uo pipefail
+
+ROOT=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
+SETTINGS=$HOME/.claude/settings.json
+ENV_FILE=${OSTRAKON_HUB_ENV:-$HOME/.config/ostrakon-hub/env}
+problems=0
+
+ok() { printf '  ok  %s\n' "$*"; }
+bad() { printf '  !!  %s\n' "$*"; problems=$((problems + 1)); }
+note() { printf '  --  %s\n' "$*"; }
+has() { command -v "$1" >/dev/null; }
+tested() { sed -n "s/^$1=//p" "$ROOT/bin/tested-with"; }
+# An http(s) status code for a GET, or 000 when nothing answered. The token goes in on stdin, so it
+# never shows in the process list.
+status_of() { # url [token]
+  if [ -n "${2:-}" ]; then
+    printf 'Authorization: Bearer %s\n' "$2" | curl -s -o /dev/null -w '%{http_code}' -m 5 -H @- "$1"
+  else
+    curl -s -o /dev/null -w '%{http_code}' -m 5 "$1"
+  fi
+}
+
+version=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$ROOT/plugin/.claude-plugin/plugin.json" | head -n 1)
+echo "ostrakon $version ($(git -C "$ROOT" describe --tags --always --dirty 2>/dev/null || echo 'not a git checkout')) in $ROOT"
+
+# What the settings say, as KEY<tab>value lines: the mod's folder and the plugin's options.
+settings() {
+  has python3 || return 0
+  python3 -I - "$SETTINGS" <<'EOF'
+import json, os, sys
+path = sys.argv[1]
+if not os.path.exists(path):
+    sys.exit(0)
+try:
+    s = json.load(open(path))
+except ValueError:
+    print('invalid\t1'); sys.exit(0)
+print('dirs\t' + str(s.get('env', {}).get('CLAUDE_CODE_PLUGIN_DIRS', '')))
+configs = s.get('pluginConfigs', {})
+for key in ('hubUrl', 'hubToken', 'notesDir', 'mirrorDir'):
+    value = next((c.get('options', {}).get(key) for c in (configs.get('ostrakon', {}), configs.get('ostrakon@inline', {})) if c.get('options', {}).get(key)), '')
+    print(f'{key}\t{value}')
+EOF
+}
+dirs='' hubUrl='' hubToken='' notesDir='' mirrorDir='' invalid=''
+while IFS=$'\t' read -r key value; do
+  case $key in dirs | hubUrl | hubToken | notesDir | mirrorDir | invalid) printf -v "$key" '%s' "$value" ;; esac
+done < <(settings)
+expand() { case $1 in '~') echo "$HOME" ;; '~/'*) echo "$HOME/${1#'~/'}" ;; *) echo "$1" ;; esac; }
+
+echo "== Claude Code"
+if has claude; then
+  cv=$(claude --version 2>/dev/null | awk '{print $1}')
+  if [ "$cv" = "$(tested claude)" ]; then ok "claude $cv, the version this release was tested with"
+  else note "claude $cv; this release was tested with $(tested claude). Mods are still changing, so if something breaks, mention your version when you report it"; fi
+  if claude plugin validate "$ROOT/plugin" >/dev/null 2>&1; then ok "this Claude Code accepts the mod (claude plugin validate)"
+  else bad "claude plugin validate rejects the mod; run it to see why: claude plugin validate $ROOT/plugin"; fi
+else
+  bad "claude not found: install Claude Code (with mods support)"
+fi
+if [ -n "$invalid" ]; then
+  bad "$SETTINGS isn't valid JSON, so Claude Code can't read it"
+elif ! has python3; then
+  note "python3 not found, so the settings weren't checked"
+else
+  loaded=${CLAUDE_CODE_PLUGIN_DIRS:-$dirs}
+  case $loaded in
+    *"$ROOT/plugin"*) ok "the mod loads in every session (CLAUDE_CODE_PLUGIN_DIRS)" ;;
+    '') bad "the mod isn't loaded: run $ROOT/install.sh, or start claude with --plugin-dir $ROOT/plugin" ;;
+    *) bad "CLAUDE_CODE_PLUGIN_DIRS names other folders ($loaded), not $ROOT/plugin" ;;
+  esac
+fi
+
+echo "== notes"
+dir=$(expand "${OSTRAKON_DIR:-${notesDir:-$HOME/.local/share/ostrakon}}")
+if [ -d "$dir" ] && [ -w "$dir" ]; then ok "notes folder $dir ($(find "$dir" -maxdepth 2 -name '*.md' | wc -l | tr -d ' ') notes)"
+elif [ -d "$dir" ]; then bad "notes folder $dir isn't writable"
+else note "notes folder $dir doesn't exist yet; the mod makes it on the first note"; fi
+if [ -n "$mirrorDir" ]; then
+  mirror=$(expand "$mirrorDir")
+  if [ -d "$mirror" ]; then ok "mirror folder $mirror"
+  else bad "mirror folder $mirror doesn't exist (the mod makes it only if its parent folder does)"; fi
+fi
+
+echo "== sync with a hub"
+if [ -z "$hubUrl" ]; then
+  note "no hubUrl set; fine if you sync through a folder, or not at all"
+elif ! has curl; then
+  note "curl not found, so the hub wasn't checked"
+else
+  base=${hubUrl%/}
+  health=$(curl -s -m 5 "$base/healthz" || true)
+  case $health in
+    ok*)
+      hv=$(printf '%s' "$health" | awk '{print $2}')
+      if [ "$hv" = "$version" ]; then ok "hub answers at $base"
+      else note "hub at $base runs ${hv:-an older version}, this checkout $version; run ostrakon update where the hub runs"; fi
+      if [ -z "$hubToken" ]; then bad "no hubToken set, so the hub refuses this machine's notes"
+      else
+        case $(status_of "$base/api/projects" "$hubToken") in
+          200) ok "the hub accepts this machine's token" ;;
+          401) bad "the hub refuses this machine's token (hubToken); copy HUB_TOKEN from the hub's env file" ;;
+          *) bad "the hub didn't answer a signed-in request properly; check its log" ;;
+        esac
+      fi ;;
+    *) bad "nothing answers at $base: is the hub running, and can this machine reach it (Tailscale connected, proxy up)?" ;;
+  esac
+fi
+
+# The hub on this machine, if it's set up here.
+if has systemctl && systemctl --user cat ostrakon-hub >/dev/null 2>&1; then
+  echo "== the hub on this machine"
+  if systemctl --user is-active --quiet ostrakon-hub; then ok "the ostrakon-hub service is running"
+  else bad "the ostrakon-hub service isn't running: systemctl --user start ostrakon-hub, and journalctl --user -u ostrakon-hub for why"; fi
+  if has loginctl && [ "$(loginctl show-user "$USER" -p Linger --value 2>/dev/null)" != yes ]; then
+    note "it stops when you log out; to keep it running: loginctl enable-linger $USER"
+  fi
+  if [ -r "$ENV_FILE" ]; then
+    case $(ls -l "$ENV_FILE" | cut -c5-10) in
+      ------) ok "$ENV_FILE is readable only by you" ;;
+      *) bad "others can read the hub token in $ENV_FILE: chmod 600 $ENV_FILE" ;;
+    esac
+  fi
+  has bun || bad "bun not found; the hub needs it (https://bun.sh)"
+  has qrencode || note "qrencode not found; ostrakon pair needs it to show a QR code"
+fi
+
+echo "== tools"
+if has bun; then
+  bv=$(bun --version 2>/dev/null)
+  if [ "$bv" = "$(tested bun)" ]; then ok "bun $bv"; else note "bun $bv; tested with $(tested bun)"; fi
+else
+  note "bun not found; only the hub and ostrakon pair need it"
+fi
+has git || bad "git not found; ostrakon update needs it"
+case :$PATH: in
+  *:"$HOME/.local/bin":*) ok "~/.local/bin is on your PATH" ;;
+  *) note "~/.local/bin isn't on your PATH, so the ostrakon command only works by its full path" ;;
+esac
+
+echo
+if [ $problems = 0 ]; then echo "All good."; elif [ $problems = 1 ]; then echo "1 thing to fix, marked !! above."; exit 1
+else echo "$problems things to fix, marked !! above."; exit 1; fi

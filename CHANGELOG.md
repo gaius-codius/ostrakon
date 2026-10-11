@@ -6,6 +6,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Added
+
+- `ostrakon doctor`: checks that the mod loads, your notes folder, the hub and its token, and the tools ostrakon needs, and says what to fix. It changes nothing and never prints the token.
+
 ### Fixed
 
 - The hub no longer sends its internal error messages to callers: a body that isn't JSON gets `invalid JSON body`, and a failure of the hub itself a fixed answer, with the details in its log.

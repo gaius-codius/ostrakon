@@ -23,6 +23,8 @@ Or run `./install.sh` (without `--release`) to load it in every session from thi
 
 ## Releases
 
+Before each release, go through the checklist in [`docs/releasing.md`](docs/releasing.md): mods keep changing, so it re-tests against the current Claude Code and updates the requirements, `ostrakon doctor` and the docs.
+
 Versions follow [Semantic Versioning](https://semver.org/); before 1.0 a minor version may break things. `plugin/.claude-plugin/plugin.json` holds the one version for the whole repo (the mod, the hub and the `ostrakon` command).
 
 1. On an up-to-date `main`: `tools/release.sh prepare 0.2.0`. It makes a `release-v0.2.0` branch with one commit that sets the version and moves the Unreleased notes under 0.2.0.
