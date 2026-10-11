@@ -27,7 +27,8 @@ status_of() { # url [token]
 version=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$ROOT/plugin/.claude-plugin/plugin.json" | head -n 1)
 echo "ostrakon $version ($(git -C "$ROOT" describe --tags --always --dirty 2>/dev/null || echo 'not a git checkout')) in $ROOT"
 
-# What the settings say, as KEY<tab>value lines: the mod's folder and the plugin's options.
+# What the settings say, as KEY<tab>value lines: the mod's folder, the notes folder Claude Code
+# hands the mod (env.OSTRAKON_DIR, nothing else from env), and the plugin's options.
 settings() {
   has python3 || return 0
   python3 -I - "$SETTINGS" <<'EOF'
@@ -40,15 +41,16 @@ try:
 except ValueError:
     print('invalid\t1'); sys.exit(0)
 print('dirs\t' + str(s.get('env', {}).get('CLAUDE_CODE_PLUGIN_DIRS', '')))
+print('envDir\t' + str(s.get('env', {}).get('OSTRAKON_DIR', '')))
 configs = s.get('pluginConfigs', {})
 for key in ('hubUrl', 'hubToken', 'notesDir', 'mirrorDir'):
     value = next((c.get('options', {}).get(key) for c in (configs.get('ostrakon', {}), configs.get('ostrakon@inline', {})) if c.get('options', {}).get(key)), '')
     print(f'{key}\t{value}')
 EOF
 }
-dirs='' hubUrl='' hubToken='' notesDir='' mirrorDir='' invalid=''
+dirs='' envDir='' hubUrl='' hubToken='' notesDir='' mirrorDir='' invalid=''
 while IFS=$'\t' read -r key value; do
-  case $key in dirs | hubUrl | hubToken | notesDir | mirrorDir | invalid) printf -v "$key" '%s' "$value" ;; esac
+  case $key in dirs | envDir | hubUrl | hubToken | notesDir | mirrorDir | invalid) printf -v "$key" '%s' "$value" ;; esac
 done < <(settings)
 expand() { case $1 in '~') echo "$HOME" ;; '~/'*) echo "$HOME/${1#'~/'}" ;; *) echo "$1" ;; esac; }
 
@@ -103,13 +105,20 @@ claude = r.get('claude') or 'unknown'
 print(f'  ok  the mod last loaded {ago(loaded)}, in Claude Code {claude}')
 if installed and claude not in ('unknown', installed):
     print(f'  --  you have {installed} now; start a session so the report covers it')
-failed = False
-for p in r.get('problems', [])[-5:]:
-    # 'sync' is housekeeping (a cache that wouldn't save); a refusal shows as 'hub' or 'mirror'.
-    mark = '--' if p['where'] == 'sync' else '!!'
-    failed = failed or mark == '!!'
+# 'sync' is housekeeping (a cache that wouldn't save); a refusal shows as 'hub' or 'mirror'.
+needs_fix = lambda p: p['where'] != 'sync'
+problems = r.get('problems', [])
+failed = any(needs_fix(p) for p in problems)
+for p in problems[-5:]:
+    mark = '!!' if needs_fix(p) else '--'
     times = f' ({p["count"]} times, last {ago(when(p["last"]))})' if p['count'] > 1 else ''
     print(f'  {mark}  {p["where"]}: {p["message"]}{times}')
+# Only the latest five are shown, but every one kept counts.
+older = problems[:-5]
+if older:
+    serious = sum(needs_fix(p) for p in older)
+    fix = f' ({serious} to fix)' if serious else ''
+    print(f'  {"!!" if serious else "--"}  and {len(older)} older{fix} in {path}')
 if failed:
     print('      for details: start claude with --debug-file /tmp/ostrakon-debug.log, then grep ostrakon in it')
 sys.exit(1 if failed else 0)
@@ -117,10 +126,19 @@ EOF
 fi
 
 echo "== notes"
-dir=$(expand "${OSTRAKON_DIR:-${notesDir:-$HOME/.local/share/ostrakon}}")
-if [ -d "$dir" ] && [ -w "$dir" ]; then ok "notes folder $dir ($(find "$dir" -maxdepth 2 -name '*.md' | wc -l | tr -d ' ') notes)"
+# The folder the mod picks (plugin/src/store.ts): OSTRAKON_DIR as Claude Code hands it over (the
+# settings' env goes over the shell's), else notesDir, else the default. Notes go in its notes/.
+root=$(expand "${envDir:-${OSTRAKON_DIR:-${notesDir:-$HOME/.local/share/ostrakon}}}")
+dir=${root%/}/notes
+if [ -d "$dir" ] && [ -w "$dir" ]; then ok "notes folder $dir ($(find "$dir" -maxdepth 1 -name '*.md' | wc -l | tr -d ' ') notes)"
 elif [ -d "$dir" ]; then bad "notes folder $dir isn't writable"
-else note "notes folder $dir doesn't exist yet; the mod makes it on the first note"; fi
+else
+  # The mod makes it with mkdir -p: from the nearest folder that exists, which must be writable.
+  parent=$(dirname "$dir")
+  while [ ! -e "$parent" ]; do parent=$(dirname "$parent"); done
+  if [ -d "$parent" ] && [ -w "$parent" ]; then note "notes folder $dir doesn't exist yet; the mod makes it on the first note"
+  else bad "notes folder $dir doesn't exist, and the mod can't make it: $parent isn't a writable folder"; fi
+fi
 if [ -n "$mirrorDir" ]; then
   mirror=$(expand "$mirrorDir")
   if [ -d "$mirror" ]; then ok "mirror folder $mirror"
