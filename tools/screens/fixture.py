@@ -27,9 +27,9 @@ def iso(ms):
 def yq(s):
     return '"' + s.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
-def build(cwd):
+def build(cwd, key=None, path=None):
     P = {
-        'cc': ('path:' + cwd, 'cc', cwd),
+        'cc': (key or 'path:' + cwd, 'cc', path or cwd),
         'infra': ('github.com/example/infra', 'infra', '/home/user/code/infra'),
         'nota': ('github.com/example/nota', 'nota', '/home/user/code/nota'),
         'none': None,
@@ -95,6 +95,9 @@ def main():
     ap.add_argument('out')
     ap.add_argument('--now', default=os.environ.get('FIXTURE_NOW'))
     ap.add_argument('--cwd', default='/tmp/ostrakon-screens/project')
+    # The session's project when its folder is a git repo with a remote (the key the mod gives it).
+    ap.add_argument('--key')
+    ap.add_argument('--path', help='the path cc notes show (default: --cwd)')
     a = ap.parse_args()
     out = os.path.realpath(a.out)
     home = os.path.expanduser('~')
@@ -112,7 +115,7 @@ def main():
     os.makedirs(os.path.join(out, 'notes'))
     open(marker, 'w').write('created by tools/screens/fixture.py\n')
     rng = random.Random(42)
-    for nt in build(a.cwd)[a.name]:
+    for nt in build(a.cwd, a.key, a.path)[a.name]:
         nid, txt = render(nt, now, rng)
         with open(os.path.join(out, 'notes', nid + '.md'), 'w') as f:
             f.write(txt)

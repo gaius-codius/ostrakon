@@ -41,7 +41,8 @@ time. The steps that actually cut the release are at the end, and in [`CONTRIBUT
   in plain words.
 - The README, [`docs/phone.md`](phone.md) and `docs/SPEC.md` describe what the release does, not
   what the last one did.
-- Screenshots in the README, if the pane, the band or the phone app look different.
+- Screenshots in the README, if the pane, the band or the phone app look different:
+  `tools/screens/readme.sh` takes both again, on the same fixture notes.
 - [`ROADMAP.md`](../ROADMAP.md): take out anything this release built.
 
 ## 5. Cut it
