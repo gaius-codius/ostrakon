@@ -51,7 +51,9 @@ except ValueError:
     sys.exit(0)
 env = settings.setdefault('env', {})
 current = env.get('CLAUDE_CODE_PLUGIN_DIRS', '').strip()
-if plugin in current:
+if settings.get('enabledPlugins', {}).get('ostrakon@ostrakon'):
+    print("installed from the marketplace (ostrakon@ostrakon), so not loading it from here too")
+elif plugin in current:
     print(f"already loaded from {plugin}")
 elif current:
     print(f"! CLAUDE_CODE_PLUGIN_DIRS already names other folders ({current}); add {plugin} to it yourself")

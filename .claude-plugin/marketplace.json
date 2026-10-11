@@ -1,0 +1,14 @@
+{
+  "name": "ostrakon",
+  "owner": {
+    "name": "gaius-codius"
+  },
+  "description": "A scratchpad for Claude Code",
+  "plugins": [
+    {
+      "name": "ostrakon",
+      "source": "./plugin",
+      "description": "Capture thoughts mid-work, triage them across projects and machines, and turn them into prompts"
+    }
+  ]
+}

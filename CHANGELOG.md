@@ -9,6 +9,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 ### Added
 
 - A logo: a pottery shard. The mark, lockups and icons are in `brand/`, the README opens with it, and the phone app uses it for its icons, its tab and beside its name.
+- Install just the mod from Claude Code: `claude plugin marketplace add gaius-codius/ostrakon`, then `claude plugin install ostrakon@ostrakon`. `ostrakon doctor` recognises that install, and warns if the mod is also loaded through `CLAUDE_CODE_PLUGIN_DIRS`; `install.sh` doesn't load it a second time.
 
 ## [0.2.0] - 2026-10-11
 

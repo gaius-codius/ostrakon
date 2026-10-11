@@ -75,6 +75,15 @@ To try it without installing anything, load it for a single session: `claude --p
 { "env": { "CLAUDE_CODE_PLUGIN_DIRS": "/path/to/ostrakon/plugin" } }
 ```
 
+#### Or install just the mod, from Claude Code
+
+```sh
+claude plugin marketplace add gaius-codius/ostrakon
+claude plugin install ostrakon@ostrakon
+```
+
+This gets you the mod and nothing else: no `ostrakon` command, so no `update`, `doctor` or hub. Update it with `claude plugin update ostrakon@ostrakon`, or turn on auto-update for the marketplace in `/plugin`. A new copy arrives with each release. Use one way or the other: if you also run the install script, it sees the plugin and doesn't load the mod a second time.
+
 ### Updating
 
 ```sh
@@ -124,7 +133,7 @@ A mod can't add keyboard shortcuts of its own, so ostrakon borrows some existing
 
 ## Configuration
 
-Set these under the plugin's options (`pluginConfigs.ostrakon.options` in your settings):
+Set these under the plugin's options (`pluginConfigs.ostrakon.options` in your settings, or `pluginConfigs["ostrakon@ostrakon"].options` if you installed it with `claude plugin install`):
 
 | Option | Default | What it does |
 |---|---|---|
