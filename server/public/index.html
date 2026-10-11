@@ -59,18 +59,47 @@
         <p id="no-match-title" class="title"></p>
         <p>Archived and sent notes aren't searched.</p>
       </div>
-      <p id="empty" class="empty" hidden>No open notes.</p>
+      <section id="empty" class="empty" aria-labelledby="empty-title" hidden>
+        <svg class="shard" aria-hidden="true" width="72" height="54" viewBox="0 0 120 90" fill="none"><path d="M18 28 L44 9 L82 5 Q100 11 108 24 L113 47 L97 62 L101 73 L62 85 L30 79 L11 58 L15 43 Z" fill="#8a4a35" stroke="#b5634a" stroke-width="1.5" stroke-linejoin="round"></path><path d="M83 6 L80 16 L86 22 M97 62 L88 60" stroke="#6e3a29" stroke-width="1.2" stroke-linecap="round"></path><g transform="rotate(-4 60 46)" stroke="#2a1711" stroke-width="2.4" stroke-linecap="round"><path d="M30 31 h12 M48 31 l4 -3 l4 3 h14 M76 31 h12"></path><path d="M25 44 h24 M55 44 h9 M70 44 l3 3 l3 -3 h20"></path><path d="M28 57 h18 M52 57 h26 M84 57 h8"></path><path d="M38 69 h14 M58 69 h12"></path></g></svg>
+        <div class="words">
+          <h2 id="empty-title">Nothing open</h2>
+          <p>Your notes land here, sorted by project.</p>
+        </div>
+        <dl class="ways">
+          <dt>share</dt>
+          <dd>send text from any app with the “Jot to ostrakon” Shortcut</dd>
+          <dt>siri</dt>
+          <dd>say “Jot to ostrakon” and dictate</dd>
+          <dt>//</dt>
+          <dd>jot from the Claude Code prompt; it shows up here too</dd>
+          <dt><span aria-hidden="true">◆</span><span class="sr-only">Claude</span></dt>
+          <dd>Claude can leave notes for you</dd>
+        </dl>
+        <a class="setup" href="https://github.com/gaius-codius/ostrakon/blob/main/docs/phone.md#ios-shortcut-jot-to-ostrakon" target="_blank" rel="noopener">Set up the Shortcut ›</a>
+      </section>
     </section>
   </main>
 </div>
-<main id="login" hidden>
-  <form id="login-form" autocomplete="off">
-    <h1>Ostrakon</h1>
-    <p>Paste the hub token (<code>HUB_TOKEN</code>) to connect this phone.</p>
-    <input id="token" type="password" placeholder="Token" aria-label="Token" autocapitalize="off" spellcheck="false">
-    <button type="submit" class="primary">Connect</button>
-    <p id="login-error" class="error" hidden>That token was refused.</p>
-  </form>
+<main id="login" class="pair" hidden>
+  <svg class="shard" aria-hidden="true" width="120" height="90" viewBox="0 0 120 90" fill="none"><path d="M18 28 L44 9 L82 5 Q100 11 108 24 L113 47 L97 62 L101 73 L62 85 L30 79 L11 58 L15 43 Z" fill="#8a4a35" stroke="#b5634a" stroke-width="1.5" stroke-linejoin="round"></path><path d="M83 6 L80 16 L86 22 M97 62 L88 60" stroke="#6e3a29" stroke-width="1.2" stroke-linecap="round"></path><g transform="rotate(-4 60 46)" stroke="#2a1711" stroke-width="2.4" stroke-linecap="round"><path d="M30 31 h12 M48 31 l4 -3 l4 3 h14 M76 31 h12"></path><path d="M25 44 h24 M55 44 h9 M70 44 l3 3 l3 -3 h20"></path><path d="M28 57 h18 M52 57 h26 M84 57 h8"></path><path d="M38 69 h14 M58 69 h12"></path></g></svg>
+  <h1>Connect this phone</h1>
+  <p class="lede">Notes sync through your ostrakon hub.</p>
+  <ol class="steps">
+    <li><span class="n" aria-hidden="true">1</span><span>On your computer, run <code>ostrakon pair</code></span></li>
+    <li><span class="n" aria-hidden="true">2</span><span>Scan the code it shows with this phone's camera</span></li>
+    <li><span class="n" aria-hidden="true">3</span><span>Add it to your Home Screen when it opens</span></li>
+  </ol>
+  <div class="bottom">
+    <p id="login-error" class="pair-error" role="alert" hidden></p>
+    <details id="token-details">
+      <summary>Paste a hub token instead</summary>
+      <form id="login-form" autocomplete="off">
+        <label for="token">Hub token</label>
+        <input id="token" type="password" autocapitalize="off" spellcheck="false">
+        <button type="submit" class="primary">Connect</button>
+      </form>
+    </details>
+  </div>
 </main>
 <dialog id="sheet" class="sheet" aria-labelledby="sheet-text">
   <div id="sheet-scrim" class="scrim"></div>

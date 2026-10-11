@@ -962,7 +962,11 @@ const showLogin = notice => {
   $('login').hidden = false
   $('login-error').hidden = !notice
   if (notice) $('login-error').textContent = typeof notice === 'string' ? notice : 'That token was refused.'
-  $('token').focus()
+  // A refused token: the token field is open again, ready for another.
+  if (notice === true) {
+    $('token-details').open = true
+    $('token').focus()
+  }
 }
 
 const start = () => {
@@ -1335,7 +1339,7 @@ const claimPair = async code => {
     store('sp.token', token)
     return ''
   } catch {
-    return "Couldn't reach the hub to pair. Check that Tailscale is connected, then scan again."
+    return "Couldn't reach the hub to pair. Check this phone can reach it, then scan again."
   }
 }
 
