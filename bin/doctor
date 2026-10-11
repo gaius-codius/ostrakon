@@ -105,7 +105,7 @@ if installed and claude not in ('unknown', installed):
     print(f'  --  you have {installed} now; start a session so the report covers it')
 failed = False
 for p in r.get('problems', [])[-5:]:
-    # Sync problems are usually just a hub out of reach; the hub checks say whether it is now.
+    # 'sync' is housekeeping (a cache that wouldn't save); a refusal shows as 'hub' or 'mirror'.
     mark = '--' if p['where'] == 'sync' else '!!'
     failed = failed or mark == '!!'
     times = f' ({p["count"]} times, last {ago(when(p["last"]))})' if p['count'] > 1 else ''
