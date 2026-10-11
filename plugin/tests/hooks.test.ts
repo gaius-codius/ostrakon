@@ -329,6 +329,32 @@ test('the key sheet pages to fit the inline body, j and k turning the pages roun
   await ui.unmount()
 })
 
+test('at the shortest heights the key sheet drops its frame and stays off the footer', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-i' })
+  // The sheet's last row, frame and all, is above the footer's, the body's last.
+  const sheetAt = async (placement: 'dock' | 'inline', bodyRows: number) => {
+    const props = { ...PANE.props, placement, scroll: { offset: 0, bodyRows } }
+    await ui.redraw(props)
+    await ui.redraw(props)
+    const sheet = (await ui.findAll({ type: 'Box' })).find(box => box.props.position === 'absolute')
+    const isFramed = sheet?.props.borderStyle !== undefined
+    const lines = (sheet?.children ?? []).length
+    expect(Number(sheet?.props.top) + lines + (isFramed ? 2 : 0)).toBeLessThanOrEqual(bodyRows - 1)
+    return { isFramed, lines }
+  }
+  expect(await sheetAt('dock', 6)).toEqual({ isFramed: true, lines: 1 })
+  expect(await sheetAt('dock', 5)).toEqual({ isFramed: false, lines: 2 })
+  expect(await sheetAt('inline', 5)).toEqual({ isFramed: true, lines: 1 })
+  expect(await sheetAt('inline', 4)).toEqual({ isFramed: false, lines: 2 })
+  expect(await ui.find({ type: 'Text', text: /^ close keys$/ })).toBeDefined()
+  await ui.unmount()
+})
+
 test("opened on a row, the key sheet leads with the row's own keys and the row stays put", async ($, on) => {
   const dir = fixture()
   await startSession($, on, dir)

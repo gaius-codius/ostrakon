@@ -596,9 +596,11 @@ const Move = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
 }
 
 // The key sheet sits under the search row and above the footer, framed. It pages to fit the rows
-// between (SPEC §4.5): the problems first, then the keys.
+// between (SPEC §4.5): the problems first, then the keys. Too short for a line inside the frame
+// (5 rows docked, 4 inline), it drops the frame rather than cover the footer.
 const sheetTop = (isInline: boolean) => (isInline ? 1 : 2)
-export const sheetRoom = (bodyRows: number, isInline: boolean) => Math.max(1, bodyRows - sheetTop(isInline) - FOOTER_ROWS - 2)
+const isSheetFramed = (bodyRows: number, isInline: boolean) => bodyRows - sheetTop(isInline) - FOOTER_ROWS - 2 >= 1
+export const sheetRoom = (bodyRows: number, isInline: boolean) => Math.max(1, bodyRows - sheetTop(isInline) - FOOTER_ROWS - (isSheetFramed(bodyRows, isInline) ? 2 : 0))
 export const sheetPages = (bodyRows: number, isInline: boolean, problems: number) =>
   Math.max(1, Math.ceil((problems + TEXT.keySheet.length) / sheetRoom(bodyRows, isInline)))
 
@@ -610,11 +612,12 @@ const KeySheet = ({ el, view }: { el: E; view: PaneView }) => {
   const inner = width - 4
   const keyWidth = Math.min(WIDTH.sheetKey, Math.floor(inner / 2))
   const room = sheetRoom(view.bodyRows, view.isInline)
+  const isFramed = isSheetFramed(view.bodyRows, view.isInline)
   const page = view.focus.kind === 'sheet' ? view.focus.page : 0
   const lines = sheetLines(TEXT.keySheet, view.focus.kind === 'sheet' ? view.focus.lead : [])
   const entries = [...view.problems.map(problem => ({ problem: `${problem.file}: ${problem.reason}`, key: '', label: '' })), ...lines.map(([key, label]) => ({ problem: '', key, label }))]
   return (
-    <Box position="absolute" top={sheetTop(view.isInline)} left={Math.max(0, view.width - width)} width={width} borderStyle="round" borderColor={COLOUR.accent} flexDirection="column" paddingX={1} backgroundColor={COLOUR.band}>
+    <Box position="absolute" top={sheetTop(view.isInline)} left={Math.max(0, view.width - width)} width={width} borderStyle={isFramed ? 'round' : undefined} borderColor={COLOUR.accent} flexDirection="column" paddingX={1} backgroundColor={COLOUR.band}>
       {entries.slice(page * room, (page + 1) * room).map(({ problem, key, label }) =>
         problem !== '' ? (
           <Text color={COLOUR.problem}>{cut(problem, inner)}</Text>
