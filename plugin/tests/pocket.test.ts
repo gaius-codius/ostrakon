@@ -563,6 +563,21 @@ test('a note just saved stands out in the pocket for MS.fresh: its chip at full 
   await ui.unmount()
 })
 
+test('a reload within MS.fresh, which stops the timer, ends the fresh chip at once', async ($, on) => {
+  const { clock } = await startSession($, on, fixture())
+  const ui = await mountBand($)
+  await run($, 'jot', 'buy milk')
+  await ui.redraw(BAND.props)
+  expect(await dims(ui)).toEqual({ 'band-open': true, 'band-chip-1': false, 'band-chip-2': true, 'band-chip-3': true })
+  // A reload keeps the atoms and runs session.start again.
+  const reloaded = $.session.start({ cwd: '/home/me/Work/cc', surface: 'terminal', isInteractive: true })
+  await clock.advance(100)
+  await reloaded
+  await ui.redraw(BAND.props)
+  expect(await dims(ui)).toEqual({ 'band-open': true, 'band-chip-1': false, 'band-chip-2': false, 'band-chip-3': false })
+  await ui.unmount()
+})
+
 test('the harvest row is one line, with the hint under it for the first three harvests only, each counted once', async ($, on) => {
   const dir = fixture()
   await startSession($, on, dir)

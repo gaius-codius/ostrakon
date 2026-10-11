@@ -73,6 +73,22 @@ test('a /jot save says saved on the hint line instead of a toast, until MS.saved
   await ui.unmount()
 })
 
+test('a reload within MS.saved, which stops the timer, ends the saved hint at once', async ($, on) => {
+  hintLine(on)
+  const { clock } = await startSession($, on, fixture())
+  const ui = await mountHint($)
+  await run($, 'jot', 'buy milk')
+  await ui.redraw({ ...HINT_PROPS, isDraft: false })
+  expect(await tailOf(ui)).toBe(HINT.saved('cc'))
+  // A reload keeps the atoms and runs session.start again.
+  const reloaded = $.session.start({ cwd: '/home/me/Work/cc', surface: 'terminal', isInteractive: true })
+  await clock.advance(100)
+  await reloaded
+  await ui.redraw({ ...HINT_PROPS, isDraft: false })
+  expect(await tailOf(ui)).toBe('')
+  await ui.unmount()
+})
+
 test('a failed /jot save still says why, and the hint line claims nothing', async ($, on) => {
   hintLine(on)
   const dir = fixture()

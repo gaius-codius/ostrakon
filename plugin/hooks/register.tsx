@@ -1152,6 +1152,9 @@ export const register: Register = (on, options) => {
     const stored = await read($, turns)
     const shown = await read($, harvest)
     turnState = sessionRestored(turnState, stored, shown)
+    // The fresh chip and the saved hint end on timers, which stopped with the old module: they end now.
+    await update($, fresh, () => '')
+    await update($, savedAt, () => 0)
     project = await currentProject($)
       .then(found => ((isProjectKnown = true), found))
       .catch(() => project)
