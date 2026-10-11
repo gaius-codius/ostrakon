@@ -2,7 +2,17 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
 import { parseNote } from '../src/frontmatter'
-import { DEFAULT_HARVEST_MODE, JOT_DESCRIPTION, JOT_REPLY, LIGHT_ANSWER_MAX, LIGHT_PROMPT_MAX, harvestModeOf, lightRequest, parseReview, reviewPrompt } from '../src/harvest'
+import {
+  DEFAULT_HARVEST_MODE,
+  JOT_DESCRIPTION,
+  JOT_REPLY,
+  LIGHT_ANSWER_MAX,
+  LIGHT_PROMPT_MAX,
+  harvestModeOf,
+  lightRequest,
+  parseReview,
+  reviewPrompt,
+} from '../src/harvest'
 import { MemDir } from './memdir'
 import { CC, put, startSession } from './world'
 import type { World } from './world'
@@ -49,7 +59,9 @@ const reviewer = (on: On, text: string, gate?: Promise<void>) => {
   on('model.fork', async (_, e) => {
     asked.push(e.prompt)
     if (gate) await gate
-    return { value: text === '' ? { isAnswered: false as const, reason: 'empty-reply' as const, usage: USAGE } : { isAnswered: true as const, text, usage: USAGE } }
+    return {
+      value: text === '' ? { isAnswered: false as const, reason: 'empty-reply' as const, usage: USAGE } : { isAnswered: true as const, text, usage: USAGE },
+    }
   })
   return asked
 }
@@ -80,7 +92,13 @@ const opened = () => {
 const turn = async ($: Engine, durationMs = 12000, isAborted = false, turnId = 'turn-1') => {
   await $.turn.start({ text: 'fix the count', turnId })
   return async () => {
-    await $.turn.complete({ answer: 'Fixed count(). test_discount still fails: codes are case-sensitive.', durationMs, isAborted, turnId, reason: isAborted ? 'aborted' : 'answer' })
+    await $.turn.complete({
+      answer: 'Fixed count(). test_discount still fails: codes are case-sensitive.',
+      durationMs,
+      isAborted,
+      turnId,
+      reason: isAborted ? 'aborted' : 'answer',
+    })
   }
 }
 
@@ -111,7 +129,7 @@ test('harvest on: the jot tool is registered exactly as with harvest off', { opt
   expect(world.tools).toEqual([expect.objectContaining({ name: 'jot', isDeferred: false, description: JOT_DESCRIPTION })])
 })
 
-test('a jot is an open note of Claude\'s in this project, with a toast, harvest on or off', { options: ON }, async ($, on) => {
+test("a jot is an open note of Claude's in this project, with a toast, harvest on or off", { options: ON }, async ($, on) => {
   const dir = fixture()
   reviewer(on, '```json\n[]\n```')
   const { world } = await startSession($, on, dir)
@@ -120,7 +138,13 @@ test('a jot is an open note of Claude\'s in this project, with a toast, harvest 
   await done()
   await settle()
   const [note] = claudes(dir)
-  expect(note).toMatchObject({ text: 'retry ignores Retry-After', status: 'open', by: 'claude', project: { key: CC.key }, context: { sessionId: 'sess-1', turnId: 'turn-1' } })
+  expect(note).toMatchObject({
+    text: 'retry ignores Retry-After',
+    status: 'open',
+    by: 'claude',
+    project: { key: CC.key },
+    context: { sessionId: 'sess-1', turnId: 'turn-1' },
+  })
   expect(world.toasts).toContain('◆ Claude jotted: retry ignores Retry-After')
 })
 
@@ -134,7 +158,10 @@ test('an empty jot is refused and saves nothing', async ($, on) => {
 
 test('harvest on: a finished turn is reviewed once, and what the review finds is proposed and offered by the band', { options: ON }, async ($, on) => {
   const dir = fixture()
-  const asked = reviewer(on, 'Here are two.\n```json\n["test_discount fails: codes are case-sensitive (shop/pricing.py)", "cli.py \\"N items\\" now counts units"]\n```')
+  const asked = reviewer(
+    on,
+    'Here are two.\n```json\n["test_discount fails: codes are case-sensitive (shop/pricing.py)", "cli.py \\"N items\\" now counts units"]\n```',
+  )
   await startSession($, on, dir)
   const done = await turn($)
   await done()
@@ -151,18 +178,26 @@ test('harvest on: a finished turn is reviewed once, and what the review finds is
   await ui.unmount()
 })
 
-test('harvest on: the review leaves out what Claude jotted this turn and proposes at most harvestMaxPerTurn', { options: { harvest: true, harvestMaxPerTurn: 2 } }, async ($, on) => {
-  const dir = fixture()
-  const asked = reviewer(on, '```json\n["one", "two", "three"]\n```')
-  const { world } = await startSession($, on, dir)
-  const done = await turn($)
-  await jot($, world, 'retry ignores Retry-After')
-  await done()
-  await until(() => proposed(dir).length === 2, 'two proposals')
-  expect(asked[0]).toContain('Already saved, so leave these out:\n- retry ignores Retry-After')
-  expect(asked[0]).toContain('List up to 2 side issues')
-  expect(claudes(dir).filter(note => note.status === 'proposed').map(note => note.text)).toEqual(['one', 'two'])
-})
+test(
+  'harvest on: the review leaves out what Claude jotted this turn and proposes at most harvestMaxPerTurn',
+  { options: { harvest: true, harvestMaxPerTurn: 2 } },
+  async ($, on) => {
+    const dir = fixture()
+    const asked = reviewer(on, '```json\n["one", "two", "three"]\n```')
+    const { world } = await startSession($, on, dir)
+    const done = await turn($)
+    await jot($, world, 'retry ignores Retry-After')
+    await done()
+    await until(() => proposed(dir).length === 2, 'two proposals')
+    expect(asked[0]).toContain('Already saved, so leave these out:\n- retry ignores Retry-After')
+    expect(asked[0]).toContain('List up to 2 side issues')
+    expect(
+      claudes(dir)
+        .filter(note => note.status === 'proposed')
+        .map(note => note.text),
+    ).toEqual(['one', 'two'])
+  },
+)
 
 test('harvest on: an empty array, a quick turn or an interrupted one propose nothing', { options: ON }, async ($, on) => {
   const dir = fixture()
@@ -189,7 +224,7 @@ test('harvest off: no turn is reviewed', async ($, on) => {
   expect(claudes(dir)).toEqual([])
 })
 
-test('a review reply\'s notes are the strings of the JSON array in its last fenced block, else of the first [ … ] in it', () => {
+test("a review reply's notes are the strings of the JSON array in its last fenced block, else of the first [ … ] in it", () => {
   expect(parseReview('Here are the side issues.\n```json\n["a", "b"]\n```')).toEqual(['a', 'b'])
   // The last fenced block is the answer; a fence without a language counts too.
   expect(parseReview('```json\n["draft"]\n```\nOn reflection:\n```\n["final"]\n```')).toEqual(['final'])
@@ -213,14 +248,17 @@ test('a review reply\'s notes are the strings of the JSON array in its last fenc
   expect(parseReview('```json\n["a", 2, null, {"text": "b"}, ["c"], "  ", "d\\n  e"]\n```')).toEqual(['a', 'd e'])
   expect(parseReview(`["${'x'.repeat(400)}"]`)[0]).toHaveLength(300)
   // A real note may start with "None"; markdown inside a note is kept as written.
-  expect(parseReview('["None of the API handlers validate tenant ids", "**Audit** calls to __init__"]')).toEqual(['None of the API handlers validate tenant ids', '**Audit** calls to __init__'])
+  expect(parseReview('["None of the API handlers validate tenant ids", "**Audit** calls to __init__"]')).toEqual([
+    'None of the API handlers validate tenant ids',
+    '**Audit** calls to __init__',
+  ])
   // Nothing worth keeping, in any form, or no array at all.
   for (const none of ['[]', '```json\n[]\n```', 'NONE', 'Nothing worth keeping this turn.', '["unclosed", ', '']) expect(parseReview(none)).toEqual([])
   // An echo of the question proposes none of it.
   expect(parseReview(reviewPrompt('Fixed it.', ['an old jot'], 3))).toEqual([])
 })
 
-test('a subagent\'s jot is tied to the session, not to the main turn running', async ($, on) => {
+test("a subagent's jot is tied to the session, not to the main turn running", async ($, on) => {
   const dir = fixture()
   const { world } = await startSession($, on, dir)
   await $.turn.start({ text: 'go', turnId: 'turn-2' })
@@ -238,7 +276,7 @@ test('harvest on: a review with no answer proposes nothing', { options: ON }, as
   expect(claudes(dir)).toEqual([])
 })
 
-test('harvest on: a reply that repeats this turn\'s jot doesn\'t propose it again', { options: ON }, async ($, on) => {
+test("harvest on: a reply that repeats this turn's jot doesn't propose it again", { options: ON }, async ($, on) => {
   const dir = fixture()
   reviewer(on, '```json\n["Retry ignores  retry-after", "the cache key misses the locale"]\n```')
   const { world } = await startSession($, on, dir)
@@ -267,7 +305,7 @@ test('harvest on: a review that lands after a later turn started (and ended) sta
   await ui.unmount()
 })
 
-test('harvest on: a late review of an earlier turn doesn\'t take the band from a later turn\'s proposals', { options: ON }, async ($, on) => {
+test("harvest on: a late review of an earlier turn doesn't take the band from a later turn's proposals", { options: ON }, async ($, on) => {
   const dir = fixture()
   const { gate, open } = opened()
   // The first question waits; later ones are answered at once. Each answer is picked by its
@@ -284,7 +322,7 @@ test('harvest on: a late review of an earlier turn doesn\'t take the band from a
   await until(() => asked.length === 1, 'the first review')
   await clock.advance(1000)
   await (await turn($, 12000, false, 'turn-2'))()
-  await until(() => proposed(dir).length === 1, 'the second turn\'s proposal')
+  await until(() => proposed(dir).length === 1, "the second turn's proposal")
   await settle()
   open()
   await until(() => proposed(dir).length === 2, 'the late proposal')
@@ -301,52 +339,60 @@ test('harvest on: a late review of an earlier turn doesn\'t take the band from a
   await ui.unmount()
 })
 
-test('harvest on: a completion held by the engine until the next prompt started isn\'t reviewed: the fork would read the newer turn', { options: ON }, async ($, on) => {
-  const dir = fixture()
-  const asked = reviewer(on, '```json\n["from the first turn"]\n```')
-  const { gate, open } = opened()
-  const { world } = await startSession($, on, dir)
-  const held: NonNullable<World['heldCompletion']> = { turnId: 'turn-1', gate }
-  world.heldCompletion = held
-  const done = await turn($)
-  const completing = done()
-  await until(() => held.isHeld === true, 'the held completion')
-  await $.turn.start({ text: 'and again', turnId: 'turn-2' })
-  open()
-  await completing
-  await settle()
-  expect(asked).toEqual([])
-  expect(proposed(dir)).toEqual([])
-})
+test(
+  "harvest on: a completion held by the engine until the next prompt started isn't reviewed: the fork would read the newer turn",
+  { options: ON },
+  async ($, on) => {
+    const dir = fixture()
+    const asked = reviewer(on, '```json\n["from the first turn"]\n```')
+    const { gate, open } = opened()
+    const { world } = await startSession($, on, dir)
+    const held: NonNullable<World['heldCompletion']> = { turnId: 'turn-1', gate }
+    world.heldCompletion = held
+    const done = await turn($)
+    const completing = done()
+    await until(() => held.isHeld === true, 'the held completion')
+    await $.turn.start({ text: 'and again', turnId: 'turn-2' })
+    open()
+    await completing
+    await settle()
+    expect(asked).toEqual([])
+    expect(proposed(dir)).toEqual([])
+  },
+)
 
-test('harvest on: of two turns started at the same moment, a late review of the first doesn\'t take the band from the second', { options: ON }, async ($, on) => {
-  const dir = fixture()
-  const { gate, open } = opened()
-  const asked: string[] = []
-  on('model.fork', async (_, e) => {
-    const n = asked.push(e.prompt)
-    if (n === 1) await gate
-    const text = n === 1 ? '["from the first turn"]' : '["from the second turn"]'
-    return { value: { isAnswered: true as const, text, usage: USAGE } }
-  })
-  await startSession($, on, dir)
-  await (await turn($))()
-  await until(() => asked.length === 1, 'the first review')
-  // No time passes: both turns start at the same millisecond.
-  await (await turn($, 12000, false, 'turn-2'))()
-  await until(() => proposed(dir).length === 1, 'the second turn\'s proposal')
-  await settle()
-  open()
-  await until(() => proposed(dir).length === 2, 'the late proposal')
-  await settle()
-  const ui = await $.ui.mount(BAND)
-  const labels = (await ui.findAll({ type: 'Button' })).map(found => (found.props as { label?: string }).label)
-  expect(labels).toContain('from the second turn')
-  expect(labels).not.toContain('from the first turn')
-  await ui.unmount()
-})
+test(
+  "harvest on: of two turns started at the same moment, a late review of the first doesn't take the band from the second",
+  { options: ON },
+  async ($, on) => {
+    const dir = fixture()
+    const { gate, open } = opened()
+    const asked: string[] = []
+    on('model.fork', async (_, e) => {
+      const n = asked.push(e.prompt)
+      if (n === 1) await gate
+      const text = n === 1 ? '["from the first turn"]' : '["from the second turn"]'
+      return { value: { isAnswered: true as const, text, usage: USAGE } }
+    })
+    await startSession($, on, dir)
+    await (await turn($))()
+    await until(() => asked.length === 1, 'the first review')
+    // No time passes: both turns start at the same millisecond.
+    await (await turn($, 12000, false, 'turn-2'))()
+    await until(() => proposed(dir).length === 1, "the second turn's proposal")
+    await settle()
+    open()
+    await until(() => proposed(dir).length === 2, 'the late proposal')
+    await settle()
+    const ui = await $.ui.mount(BAND)
+    const labels = (await ui.findAll({ type: 'Button' })).map(found => (found.props as { label?: string }).label)
+    expect(labels).toContain('from the second turn')
+    expect(labels).not.toContain('from the first turn')
+    await ui.unmount()
+  },
+)
 
-test('harvest on: a continuation\'s proposals join its prompt\'s, whichever review lands first', { options: ON }, async ($, on) => {
+test("harvest on: a continuation's proposals join its prompt's, whichever review lands first", { options: ON }, async ($, on) => {
   const dir = fixture()
   const { gate, open } = opened()
   const asked: string[] = []
@@ -363,9 +409,9 @@ test('harvest on: a continuation\'s proposals join its prompt\'s, whichever revi
   await clock.advance(1000)
   await $.turn.start({ text: '', turnId: 'turn-2' })
   open()
-  await until(() => proposed(dir).length === 1, 'the prompt\'s proposal')
+  await until(() => proposed(dir).length === 1, "the prompt's proposal")
   await $.turn.complete({ answer: 'Also checked the tax rate.', durationMs: 12000, isAborted: false, turnId: 'turn-2', reason: 'answer' })
-  await until(() => proposed(dir).length === 2, 'the continuation\'s proposal')
+  await until(() => proposed(dir).length === 2, "the continuation's proposal")
   await settle()
   const ui = await $.ui.mount(BAND)
   expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
@@ -375,7 +421,7 @@ test('harvest on: a continuation\'s proposals join its prompt\'s, whichever revi
   await ui.unmount()
 })
 
-test('harvest on: a continuation reviewed before its prompt\'s late review keeps its proposals in the band too', { options: ON }, async ($, on) => {
+test("harvest on: a continuation reviewed before its prompt's late review keeps its proposals in the band too", { options: ON }, async ($, on) => {
   const dir = fixture()
   const { gate, open } = opened()
   const asked: string[] = []
@@ -391,7 +437,7 @@ test('harvest on: a continuation reviewed before its prompt\'s late review keeps
   await clock.advance(1000)
   await $.turn.start({ text: '', turnId: 'turn-2' })
   await $.turn.complete({ answer: 'Also checked the tax rate.', durationMs: 12000, isAborted: false, turnId: 'turn-2', reason: 'answer' })
-  await until(() => proposed(dir).length === 1, 'the continuation\'s proposal')
+  await until(() => proposed(dir).length === 1, "the continuation's proposal")
   await settle()
   open()
   await until(() => proposed(dir).length === 2, 'the late proposal')
@@ -401,7 +447,7 @@ test('harvest on: a continuation reviewed before its prompt\'s late review keeps
   await ui.unmount()
 })
 
-test('harvest on: a review that lands after /clear stays in the pane, out of the new conversation\'s band', { options: ON }, async ($, on) => {
+test("harvest on: a review that lands after /clear stays in the pane, out of the new conversation's band", { options: ON }, async ($, on) => {
   const dir = fixture()
   const { gate, open } = opened()
   const asked = reviewer(on, '```json\n["from before the clear"]\n```', gate)
@@ -423,11 +469,11 @@ test('a jot is kept as one line, at most 300 characters', async ($, on) => {
   const { world } = await startSession($, on, dir)
   await jot($, world, '  first line\n  second line  ')
   await jot($, world, 'x'.repeat(500))
-  expect(claudes(dir).map(note => note.text.length > 300 ? 'too long' : note.text.slice(0, 20))).toEqual(['first line second li', 'xxxxxxxxxxxxxxxxxxxx'])
+  expect(claudes(dir).map(note => (note.text.length > 300 ? 'too long' : note.text.slice(0, 20)))).toEqual(['first line second li', 'xxxxxxxxxxxxxxxxxxxx'])
   expect(claudes(dir)[1]?.text).toHaveLength(300)
 })
 
-test('harvest on: a repeated jot doesn\'t use up the limit', { options: { harvest: true, harvestMaxPerTurn: 1 } }, async ($, on) => {
+test("harvest on: a repeated jot doesn't use up the limit", { options: { harvest: true, harvestMaxPerTurn: 1 } }, async ($, on) => {
   const dir = fixture()
   reviewer(on, '```json\n["retry ignores Retry-After", "the cache key misses the locale"]\n```')
   const { world } = await startSession($, on, dir)
@@ -446,7 +492,7 @@ test('harvestMode: light and fork are the two modes; anything else is the defaul
   for (const other of [undefined, '', 'Light', 'both', true, 1, null]) expect(harvestModeOf(other)).toBe(DEFAULT_HARVEST_MODE)
 })
 
-test('light mode\'s request holds the turn\'s prompt, final answer and saved notes, and nothing else', () => {
+test("light mode's request holds the turn's prompt, final answer and saved notes, and nothing else", () => {
   const request = lightRequest('fix the count', 'Fixed count().', ['retry ignores Retry-After'], 2)
   expect(request).toMatchObject({ model: 'haiku', effort: 'low' })
   expect(request.system).toContain("can't see files or tool output")
@@ -511,46 +557,54 @@ test('light mode cuts a long text on whole clusters, rounding inward, at both cu
   expect(fits.head).toBe(`${'a'.repeat(half - 2)}\u{1F600}`)
 })
 
-test('harvest light: a finished turn is reviewed by one small-model completion, not a fork, and its proposals are offered by the band', { options: LIGHT }, async ($, on) => {
-  const dir = fixture()
-  const { sent, forked } = lightReviewer(on, '```json\n["test_discount fails: codes are case-sensitive (shop/pricing.py)", "the tax rate is global"]\n```')
-  await startSession($, on, dir)
-  await (await turn($))()
-  await until(() => proposed(dir).length === 2, 'two proposals')
-  expect(forked).toEqual([])
-  expect(sent).toHaveLength(1)
-  expect(sent[0]).toMatchObject({ model: 'haiku', effort: 'low' })
-  // The turn's own prompt (turn.start's text) and answer.
-  expect(sent[0]?.prompt).toContain('<prompt>\nfix the count\n</prompt>')
-  expect(sent[0]?.prompt).toContain('Fixed count(). test_discount still fails')
-  expect(claudes(dir).map(note => [note.status, note.text, note.context.turnId])).toEqual([
-    ['proposed', 'test_discount fails: codes are case-sensitive (shop/pricing.py)', 'turn-1'],
-    ['proposed', 'the tax rate is global', 'turn-1'],
-  ])
-  const ui = await $.ui.mount(BAND)
-  expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
-  await ui.unmount()
-})
+test(
+  'harvest light: a finished turn is reviewed by one small-model completion, not a fork, and its proposals are offered by the band',
+  { options: LIGHT },
+  async ($, on) => {
+    const dir = fixture()
+    const { sent, forked } = lightReviewer(on, '```json\n["test_discount fails: codes are case-sensitive (shop/pricing.py)", "the tax rate is global"]\n```')
+    await startSession($, on, dir)
+    await (await turn($))()
+    await until(() => proposed(dir).length === 2, 'two proposals')
+    expect(forked).toEqual([])
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toMatchObject({ model: 'haiku', effort: 'low' })
+    // The turn's own prompt (turn.start's text) and answer.
+    expect(sent[0]?.prompt).toContain('<prompt>\nfix the count\n</prompt>')
+    expect(sent[0]?.prompt).toContain('Fixed count(). test_discount still fails')
+    expect(claudes(dir).map(note => [note.status, note.text, note.context.turnId])).toEqual([
+      ['proposed', 'test_discount fails: codes are case-sensitive (shop/pricing.py)', 'turn-1'],
+      ['proposed', 'the tax rate is global', 'turn-1'],
+    ])
+    const ui = await $.ui.mount(BAND)
+    expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
+    await ui.unmount()
+  },
+)
 
-test('harvest light: the same limits as the fork: jotted notes left out and told, at most harvestMaxPerTurn, quick and interrupted turns skipped', { options: { ...LIGHT, harvestMaxPerTurn: 2 } }, async ($, on) => {
-  const dir = fixture()
-  const { sent, forked } = lightReviewer(on, '```json\n["Retry ignores  retry-after", "one", "two", "three"]\n```')
-  const { world } = await startSession($, on, dir)
-  const done = await turn($)
-  await jot($, world, 'retry ignores Retry-After')
-  await done()
-  await until(() => proposed(dir).length === 2, 'two proposals')
-  await settle()
-  expect(proposed(dir).map(note => note.text)).toEqual(['one', 'two'])
-  expect(sent[0]?.prompt).toContain('Already saved, so leave these out:\n- retry ignores Retry-After')
-  await (await turn($, 2000, false, 'turn-2'))()
-  await (await turn($, 12000, true, 'turn-3'))()
-  await settle()
-  expect(sent).toHaveLength(1)
-  expect(forked).toEqual([])
-})
+test(
+  'harvest light: the same limits as the fork: jotted notes left out and told, at most harvestMaxPerTurn, quick and interrupted turns skipped',
+  { options: { ...LIGHT, harvestMaxPerTurn: 2 } },
+  async ($, on) => {
+    const dir = fixture()
+    const { sent, forked } = lightReviewer(on, '```json\n["Retry ignores  retry-after", "one", "two", "three"]\n```')
+    const { world } = await startSession($, on, dir)
+    const done = await turn($)
+    await jot($, world, 'retry ignores Retry-After')
+    await done()
+    await until(() => proposed(dir).length === 2, 'two proposals')
+    await settle()
+    expect(proposed(dir).map(note => note.text)).toEqual(['one', 'two'])
+    expect(sent[0]?.prompt).toContain('Already saved, so leave these out:\n- retry ignores Retry-After')
+    await (await turn($, 2000, false, 'turn-2'))()
+    await (await turn($, 12000, true, 'turn-3'))()
+    await settle()
+    expect(sent).toHaveLength(1)
+    expect(forked).toEqual([])
+  },
+)
 
-test('harvest light: a continuation is reviewed with its prompt\'s text', { options: LIGHT }, async ($, on) => {
+test("harvest light: a continuation is reviewed with its prompt's text", { options: LIGHT }, async ($, on) => {
   const dir = fixture()
   const { sent } = lightReviewer(on, '[]')
   await startSession($, on, dir)
@@ -558,12 +612,12 @@ test('harvest light: a continuation is reviewed with its prompt\'s text', { opti
   await until(() => sent.length === 1, 'the first review')
   await $.turn.start({ text: '', turnId: 'turn-2' })
   await $.turn.complete({ answer: 'Also checked the tax rate.', durationMs: 12000, isAborted: false, turnId: 'turn-2', reason: 'answer' })
-  await until(() => sent.length === 2, 'the continuation\'s review')
+  await until(() => sent.length === 2, "the continuation's review")
   expect(sent[1]?.prompt).toContain('<prompt>\nfix the count\n</prompt>')
   expect(sent[1]?.prompt).toContain('Also checked the tax rate.')
 })
 
-test('harvest light: a completion held until the next prompt started isn\'t reviewed, as in fork mode', { options: LIGHT }, async ($, on) => {
+test("harvest light: a completion held until the next prompt started isn't reviewed, as in fork mode", { options: LIGHT }, async ($, on) => {
   const dir = fixture()
   const { sent } = lightReviewer(on, '["from the first turn"]')
   const { gate, open } = opened()
@@ -645,21 +699,25 @@ const clockHold = (on: On) => {
 // The review's check that its prompt is still the latest, and its model call, have no wait between
 // them: a newer prompt starting while the review waits for anything before the check unreviews the
 // turn, and the clock read for the log's latency is taken before the check, not after it.
-test('harvest light: a newer turn starting while the review waits for the clock leaves this turn unreviewed, so no model call reads the wrong transcript', { options: LIGHT }, async ($, on) => {
-  const dir = fixture()
-  const { sent, forked } = lightReviewer(on, '["from the first turn"]')
-  const hold = clockHold(on)
-  await startSession($, on, dir)
-  hold.isArmed = true
-  await (await turn($))()
-  await until(() => hold.isHeld, 'the held clock read')
-  await $.turn.start({ text: 'and again', turnId: 'turn-2' })
-  hold.open()
-  await settle()
-  expect(sent).toEqual([])
-  expect(forked).toEqual([])
-  expect(proposed(dir)).toEqual([])
-})
+test(
+  'harvest light: a newer turn starting while the review waits for the clock leaves this turn unreviewed, so no model call reads the wrong transcript',
+  { options: LIGHT },
+  async ($, on) => {
+    const dir = fixture()
+    const { sent, forked } = lightReviewer(on, '["from the first turn"]')
+    const hold = clockHold(on)
+    await startSession($, on, dir)
+    hold.isArmed = true
+    await (await turn($))()
+    await until(() => hold.isHeld, 'the held clock read')
+    await $.turn.start({ text: 'and again', turnId: 'turn-2' })
+    hold.open()
+    await settle()
+    expect(sent).toEqual([])
+    expect(forked).toEqual([])
+    expect(proposed(dir)).toEqual([])
+  },
+)
 
 test('harvest fork: a newer turn starting while the review waits for the clock leaves this turn unreviewed', { options: ON }, async ($, on) => {
   const dir = fixture()

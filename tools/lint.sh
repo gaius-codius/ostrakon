@@ -20,7 +20,7 @@ done
 
 # Reported, but not failing yet: the code hasn't had its one-off format. Take a name out once its
 # tool's findings are fixed.
-PENDING=' biome '
+PENDING=' '
 failed='' pending=''
 check() { # name command...
   local name=$1
@@ -48,6 +48,6 @@ check typos typos
 check lychee lychee --offline --include-fragments --no-progress "${docs[@]}"
 
 echo
-[ -n "$pending" ] && echo "not failing yet (see PENDING in tools/lint.sh):$pending"
+[ -z "$pending" ] || echo "not failing yet (see PENDING in tools/lint.sh):$pending"
 if [ -n "$failed" ]; then echo "failed:$failed"; exit 1; fi
 echo "lint ok"

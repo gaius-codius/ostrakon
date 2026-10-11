@@ -1,4 +1,3 @@
-'use strict'
 // The ostrakon phone form (SPEC §9.3): capture first, then the inbox. Everything the phone
 // changes goes through an outbox in localStorage, so a save never waits for the network.
 
@@ -50,7 +49,7 @@ let toastTimer = 0
 let toastUndo = null
 let sheetFor = null // the note the action sheet is open for
 // Folded groups, by project key ('' for unfiled); kept on the phone across opens.
-let folded = new Set(load('sp.folded', []))
+const folded = new Set(load('sp.folded', []))
 
 // The marks the phone draws as text; the shared ones as the pane's (plugin/src/ui/look.ts GLYPH).
 // docs/DESIGN.md lists them, and tools/check.sh fails when the two differ.
@@ -364,7 +363,20 @@ let refusedEditing = null // { id, draft }
 const refusedNote = item => {
   if (item.note) return item.note
   const now = new Date().toISOString()
-  return { id: item.id, status: 'open', by: 'phone', created: now, updated: now, origin: 'iphone', project: null, context: {}, sentAt: null, deleted: false, text: item.text, extra: [] }
+  return {
+    id: item.id,
+    status: 'open',
+    by: 'phone',
+    created: now,
+    updated: now,
+    origin: 'iphone',
+    project: null,
+    context: {},
+    sentAt: null,
+    deleted: false,
+    text: item.text,
+    extra: [],
+  }
 }
 
 const setRefused = next => {
@@ -378,7 +390,10 @@ const setRefused = next => {
 const retry = (item, text = item.text) => {
   const note = refusedNote(item)
   if (!queue({ ...note, text, updated: stamp(note.updated), origin: 'iphone' })) {
-    if (refusedEditing?.id === item.id) $('refused-list').querySelector(`li[data-id="${CSS.escape(item.id)}"] textarea`)?.focus()
+    if (refusedEditing?.id === item.id)
+      $('refused-list')
+        .querySelector(`li[data-id="${CSS.escape(item.id)}"] textarea`)
+        ?.focus()
     return
   }
   refusedEditing = null
@@ -406,22 +421,32 @@ const renderRefused = () => {
       field.setAttribute('aria-label', 'Edit note')
       field.addEventListener('input', () => (refusedEditing.draft = field.value))
       const save = button('Retry', () => field.value.trim() !== '' && retry(item, field.value.trim()), 'btn')
-      const cancel = button('Cancel', () => {
-        refusedEditing = null
-        renderRefused()
-        $('refused-list').querySelector(`li[data-id="${CSS.escape(item.id)}"] .edit`)?.focus()
-      }, 'btn quiet')
+      const cancel = button(
+        'Cancel',
+        () => {
+          refusedEditing = null
+          renderRefused()
+          $('refused-list')
+            .querySelector(`li[data-id="${CSS.escape(item.id)}"] .edit`)
+            ?.focus()
+        },
+        'btn quiet',
+      )
       const row = make('li', '', field, reason, only, make('div', 'row', save, cancel))
       row.dataset.id = item.id
       return row
     }
     const bar = make('span', 'bar', GLYPH.quote)
     bar.setAttribute('aria-hidden', 'true')
-    const edit = button('Edit', () => {
-      refusedEditing = { id: item.id, draft: item.text }
-      renderRefused()
-      $('refused-list').querySelector('textarea')?.focus()
-    }, 'btn edit')
+    const edit = button(
+      'Edit',
+      () => {
+        refusedEditing = { id: item.id, draft: item.text }
+        renderRefused()
+        $('refused-list').querySelector('textarea')?.focus()
+      },
+      'btn edit',
+    )
     const again = button('Retry', () => retry(item), 'btn')
     const drop = button('Discard local copy', () => discard(item), 'btn quiet')
     const row = make('li', '', make('p', 'quote', bar, make('span', '', item.text)), reason, only, make('div', 'row', edit, again, drop))
@@ -503,7 +528,12 @@ const renderList = () => {
   const order = [...groups.keys()].sort((a, b) => (a === '') - (b === ''))
   const sections = []
   // Claude's proposals (harvest, SPEC §8) come first, to keep or dismiss; a search looks at open notes only.
-  const proposals = mode === 'search' ? [] : Object.values(current()).filter(note => !note.deleted && note.status === 'proposed').sort((a, b) => Date.parse(b.updated) - Date.parse(a.updated))
+  const proposals =
+    mode === 'search'
+      ? []
+      : Object.values(current())
+          .filter(note => !note.deleted && note.status === 'proposed')
+          .sort((a, b) => Date.parse(b.updated) - Date.parse(a.updated))
   if (proposals.length > 0) {
     const isFolded = folded.has(PROPOSED)
     const rowsId = `rows-${++groupIds}`
@@ -535,7 +565,10 @@ const renderList = () => {
   // Focus stays on the same control (a row's ⋯, a heading) when the list is drawn again.
   const focused = $('list').contains(document.activeElement) ? document.activeElement.dataset.focus : undefined
   $('list').replaceChildren(...sections)
-  if (focused) $('list').querySelector(`[data-focus="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true })
+  if (focused)
+    $('list')
+      .querySelector(`[data-focus="${CSS.escape(focused)}"]`)
+      ?.focus({ preventScroll: true })
   const isSearch = mode === 'search'
   const count = `${shown.length} note${shown.length === 1 ? '' : 's'} in ${groups.size} project${groups.size === 1 ? '' : 's'}`
   setText($('search-status'), isSearch && shown.length > 0 ? count : '')
@@ -622,7 +655,7 @@ const noteRow = (note, isQueued, words = '') => {
   behind.setAttribute('aria-hidden', 'true')
   const row = make('li', `note${note.id === sheetFor ? ' chosen' : ''}${isFresh ? ' fresh' : ''}`, behind, face)
   row.dataset.id = note.id
-  gestures(row, face, behind, note.id)
+  gestures(row, face, note.id)
   return row
 }
 
@@ -636,7 +669,13 @@ const proposalRow = note => {
     choice.setAttribute('aria-describedby', text.id)
     choice.dataset.focus = `${choice.textContent}:${note.id}`
   }
-  const article = make('article', 'proposal', text, make('p', 'for', 'for ', dot(note.project), `${labelOf(note.project)} · ${ageOf(note.updated)}`), make('div', 'choices', keep, dismiss))
+  const article = make(
+    'article',
+    'proposal',
+    text,
+    make('p', 'for', 'for ', dot(note.project), `${labelOf(note.project)} · ${ageOf(note.updated)}`),
+    make('div', 'choices', keep, dismiss),
+  )
   article.setAttribute('aria-labelledby', text.id)
   const row = make('li', '', article)
   row.dataset.id = note.id
@@ -701,7 +740,15 @@ const setStatus = (id, status) => change(id, () => ({ status }))
 
 const archive = id => {
   if (setStatus(id, 'archived')) {
-    toast('Archived', undo(id, note => !note.deleted && note.status === 'archived', () => ({ status: 'open' })), current()[id]?.text)
+    toast(
+      'Archived',
+      undo(
+        id,
+        note => !note.deleted && note.status === 'archived',
+        () => ({ status: 'open' }),
+      ),
+      current()[id]?.text,
+    )
   }
 }
 
@@ -709,7 +756,14 @@ const archive = id => {
 const decide = (id, status) => {
   const hadFocus = document.activeElement?.dataset.focus?.endsWith(`:${id}`)
   if (!setStatus(id, status)) return
-  toast(status === 'open' ? 'Kept' : 'Dismissed', undo(id, note => !note.deleted && note.status === status, () => ({ status: 'proposed' })))
+  toast(
+    status === 'open' ? 'Kept' : 'Dismissed',
+    undo(
+      id,
+      note => !note.deleted && note.status === status,
+      () => ({ status: 'proposed' }),
+    ),
+  )
   // Focus follows a kept note to its row, else goes to the next proposal or the first heading.
   if (hadFocus) ((status === 'open' ? moreOf(id) : null) ?? $('list').querySelector('[data-focus^="Keep:"], h2 button'))?.focus({ preventScroll: true })
 }
@@ -728,7 +782,15 @@ const startEdit = id => {
     if (event.key === 'Escape') endEdit(false)
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) endEdit(true)
   })
-  row.replaceChildren(field, make('div', 'actions', button('Cancel', () => endEdit(false), 'btn'), button('Save', () => endEdit(true), 'primary')))
+  row.replaceChildren(
+    field,
+    make(
+      'div',
+      'actions',
+      button('Cancel', () => endEdit(false), 'btn'),
+      button('Save', () => endEdit(true), 'primary'),
+    ),
+  )
   field.focus()
   field.setSelectionRange(field.value.length, field.value.length)
 }
@@ -742,7 +804,10 @@ const endEdit = isSaved => {
   const hadFocus = $('list').querySelector('li.note.editing')?.contains(document.activeElement)
   if (!(isSaved && note && text !== '' && text !== note.text)) render()
   // Not queued: the editor stays open with the draft.
-  else if (!queue({ ...note, text, updated: stamp(note.updated), origin: 'iphone' })) return (editing = { id, draft })
+  else if (!queue({ ...note, text, updated: stamp(note.updated), origin: 'iphone' })) {
+    editing = { id, draft }
+    return editing
+  }
   if (hadFocus) moreOf(id)?.focus({ preventScroll: true })
 }
 
@@ -752,7 +817,15 @@ const markSent = id => {
   const { sentAt } = note
   const at = new Date().toISOString()
   if (change(id, () => ({ status: 'sent', sentAt: at }))) {
-    toast('Marked sent', undo(id, now => !now.deleted && now.status === 'sent' && now.sentAt === at, () => ({ status: 'open', sentAt })), note.text)
+    toast(
+      'Marked sent',
+      undo(
+        id,
+        now => !now.deleted && now.status === 'sent' && now.sentAt === at,
+        () => ({ status: 'open', sentAt }),
+      ),
+      note.text,
+    )
   }
 }
 
@@ -763,7 +836,11 @@ const moveTo = (id, project) => {
   const to = project ? { key: project.key, name: project.name, path: project.path } : null
   const fields = project => (project ? [project.key, project.name, project.path] : null)
   const isMoved = now => !now.deleted && JSON.stringify(fields(now.project)) === JSON.stringify(fields(to))
-  if (change(id, () => ({ project: to }))) toast(`Moved to ${labelOf(to)}`, undo(id, isMoved, () => ({ project: was })))
+  if (change(id, () => ({ project: to })))
+    toast(
+      `Moved to ${labelOf(to)}`,
+      undo(id, isMoved, () => ({ project: was })),
+    )
 }
 
 // ---- movement ----
@@ -838,10 +915,15 @@ const motion = {
   searchIn: () => {
     // Not #main, which holds the toast: a transform there would carry the fixed toast with it.
     for (const node of [$('search-bar'), $('search-status'), $('inbox')]) {
-      run(node, { opacity: [0, 1], transform: ['translateY(-6px)', 'translateY(0px)'] }, { duration: 0.18, ease: 'easeOut' }).finished.then(() => (node.style.transform = ''))
+      run(node, { opacity: [0, 1], transform: ['translateY(-6px)', 'translateY(0px)'] }, { duration: 0.18, ease: 'easeOut' }).finished.then(
+        () => (node.style.transform = ''),
+      )
     }
   },
-  toastIn: node => (reduced.matches ? run(node, { opacity: [0, 1] }, { duration: 0.15 }) : run(node, { opacity: [0, 1], transform: ['translateY(12px)', 'translateY(0px)'] }, SPRING)),
+  toastIn: node =>
+    reduced.matches
+      ? run(node, { opacity: [0, 1] }, { duration: 0.15 })
+      : run(node, { opacity: [0, 1], transform: ['translateY(12px)', 'translateY(0px)'] }, SPRING),
   toastOut: (node, done) => run(node, { opacity: 0 }, { duration: 0.15 }).finished.then(done, done),
 }
 
@@ -914,16 +996,18 @@ const neighbourOf = id => {
 // Runs a sheet action once the sheet is closed, so the list it redraws is the plain one. Focus then
 // goes back to the row's ⋯; `then`: 'gone' when the note leaves the list (focus goes to a
 // neighbour's ⋯), 'own' when the action puts focus somewhere itself (Edit, in its field).
-const act = (run, then = 'back') => () => {
-  const id = sheetFor
-  const near = then === 'gone' ? neighbourOf(id) : null
-  closeSheet(back => {
-    run(id)
-    if (then === 'own') return
-    const target = then === 'gone' ? (near ? moreOf(near) : null) : back
-    target?.focus({ preventScroll: true })
-  })
-}
+const act =
+  (run, then = 'back') =>
+  () => {
+    const id = sheetFor
+    const near = then === 'gone' ? neighbourOf(id) : null
+    closeSheet(back => {
+      run(id)
+      if (then === 'own') return
+      const target = then === 'gone' ? (near ? moreOf(near) : null) : back
+      target?.focus({ preventScroll: true })
+    })
+  }
 
 const sheetAction = (iconName, label, run, { sub = '', aside = '', className = '' } = {}) => {
   const item = button('', run, `action ${className}`)
@@ -948,11 +1032,20 @@ const renderSheet = () => {
   $('sheet-meta').replaceChildren(dot(note.project), `${labelOf(note.project)} · ${by} · ${ageOf(note.updated)}`)
   const items = [
     sheetAction('edit', 'Edit', act(startEdit, 'own')),
-    sheetAction('copy', 'Copy text', act(async id => toast((await copy(current()[id]?.text ?? '')) ? 'Copied' : "Couldn't copy"))),
-    sheetAction('move', 'Move to project', () => {
-      const id = sheetFor
-      closeSheet(back => openPicker({ mode: 'move', id, trigger: back }))
-    }, { aside: `${labelOf(note.project)} ${GLYPH.next}` }),
+    sheetAction(
+      'copy',
+      'Copy text',
+      act(async id => toast((await copy(current()[id]?.text ?? '')) ? 'Copied' : "Couldn't copy")),
+    ),
+    sheetAction(
+      'move',
+      'Move to project',
+      () => {
+        const id = sheetFor
+        closeSheet(back => openPicker({ mode: 'move', id, trigger: back }))
+      },
+      { aside: `${labelOf(note.project)} ${GLYPH.next}` },
+    ),
     sheetAction('sent', 'Mark sent', act(markSent, 'gone'), { sub: 'used elsewhere; leaves open notes' }),
     sheetAction('archive', 'Archive', act(archive, 'gone'), { className: 'danger' }),
   ]
@@ -1001,7 +1094,7 @@ const FLICK_MIN_PX = 24
 const TURN_PX = 4 // a move this far sets which way the finger is heading
 const VELOCITY_MS = 100 // velocity over the last this many ms
 
-const gestures = (row, face, behind, id) => {
+const gestures = (row, face, id) => {
   let start = null // { x, y, pointer }
   let isDragging = false
   let holdTimer = 0
@@ -1489,7 +1582,7 @@ const closePicker = (picked = false) => {
 }
 
 // The current choice: the project the note is under (move), or the next note's (file).
-const pickedKey = () => (picking?.mode === 'move' ? current()[picking.id]?.project?.key ?? null : chosen)
+const pickedKey = () => (picking?.mode === 'move' ? (current()[picking.id]?.project?.key ?? null) : chosen)
 
 // What the list last drew: a sync that changes none of it leaves the buttons (and focus) alone.
 let pickerDrawn = ''
@@ -1498,7 +1591,8 @@ const renderPickerList = () => {
   if (!picking) return
   const words = $('picker-search').value.trim().toLowerCase()
   const counts = new Map()
-  for (const note of Object.values(current())) if (!note.deleted && note.status === 'open' && note.project) counts.set(note.project.key, (counts.get(note.project.key) ?? 0) + 1)
+  for (const note of Object.values(current()))
+    if (!note.deleted && note.status === 'open' && note.project) counts.set(note.project.key, (counts.get(note.project.key) ?? 0) + 1)
   const here = pickedKey()
   const shown = projects.filter(project => words === '' || labelOf(project).toLowerCase().includes(words))
   const drawn = JSON.stringify([picking.mode, words, here, shown.map(project => [project.key, labelOf(project), counts.get(project.key) ?? 0])])
@@ -1506,23 +1600,28 @@ const renderPickerList = () => {
   pickerDrawn = drawn
   // Focus on a project stays on it when the list is drawn again.
   const focused = $('picker-list').contains(document.activeElement) ? document.activeElement.dataset.key : undefined
-  const items = shown
-    .map(project => {
-      const label = labelOf(project)
-      const at = words === '' ? -1 : label.toLowerCase().indexOf(words)
-      const name = at < 0 ? make('span', 'label', label) : make('span', 'label', label.slice(0, at), make('b', '', label.slice(at, at + words.length)), label.slice(at + words.length))
-      const count = counts.get(project.key) ?? 0
-      const item = button('', () => choose(project.key), 'pick')
-      item.dataset.key = project.key
-      item.append(dot(project), name, make('span', 'aside count', count === 0 ? '—' : `${count} open`))
-      if (count === 0) item.lastChild.setAttribute('aria-label', 'none open')
-      const isHere = project.key === here
-      item.setAttribute('aria-pressed', String(isHere))
-      if (isHere) item.append(icon(ICONS.check, { stroke: 2.2 }))
-      return make('li', '', item)
-    })
+  const items = shown.map(project => {
+    const label = labelOf(project)
+    const at = words === '' ? -1 : label.toLowerCase().indexOf(words)
+    const name =
+      at < 0
+        ? make('span', 'label', label)
+        : make('span', 'label', label.slice(0, at), make('b', '', label.slice(at, at + words.length)), label.slice(at + words.length))
+    const count = counts.get(project.key) ?? 0
+    const item = button('', () => choose(project.key), 'pick')
+    item.dataset.key = project.key
+    item.append(dot(project), name, make('span', 'aside count', count === 0 ? '—' : `${count} open`))
+    if (count === 0) item.lastChild.setAttribute('aria-label', 'none open')
+    const isHere = project.key === here
+    item.setAttribute('aria-pressed', String(isHere))
+    if (isHere) item.append(icon(ICONS.check, { stroke: 2.2 }))
+    return make('li', '', item)
+  })
   $('picker-list').replaceChildren(...items)
-  if (focused !== undefined) $('picker-list').querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true })
+  if (focused !== undefined)
+    $('picker-list')
+      .querySelector(`[data-key="${CSS.escape(focused)}"]`)
+      ?.focus({ preventScroll: true })
   $('picker-none').hidden = items.length > 0
   const unfiled = $('picker-unfiled')
   unfiled.setAttribute('aria-pressed', String(here === null))
@@ -1546,7 +1645,9 @@ const choose = key => {
 $('picker-search').addEventListener('input', renderPickerList)
 $('picker-unfiled').addEventListener('click', () => choose(null))
 $('picker-done').addEventListener('click', () => closePicker())
-$('picker').querySelector('[data-close]').addEventListener('click', () => closePicker())
+$('picker')
+  .querySelector('[data-close]')
+  .addEventListener('click', () => closePicker())
 $('picker').addEventListener('cancel', event => {
   event.preventDefault()
   closePicker()
@@ -1600,7 +1701,12 @@ const isStandalone = () => navigator.standalone || matchMedia('(display-mode: st
 // Authorization header. Resolves to a message for the login screen, or '' when the token is stored.
 const claimPair = async code => {
   try {
-    const response = await fetch('api/pair/claim', { method: 'POST', cache: 'no-store', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) })
+    const response = await fetch('api/pair/claim', {
+      method: 'POST',
+      cache: 'no-store',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code }),
+    })
     if (response.status === 401) return 'That pairing code has expired or was already used. Run ostrakon pair again.'
     if (!response.ok) return `The hub refused the pairing code (${response.status}).`
     const body = await response.json()

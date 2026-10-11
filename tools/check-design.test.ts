@@ -28,7 +28,7 @@ const logged = (doc: string, version: string, lines: string[]) => {
   const newest = /^### \S+ — /m.exec(doc)
   if (!newest) throw new Error('no changelog entry')
   const entry = [`### ${version} — 2026-10-12`, ...lines, ''].join('\n')
-  return doc.slice(0, newest.index).replace(/^Version: .*$/m, `Version: ${version}`) + entry + '\n' + doc.slice(newest.index)
+  return `${doc.slice(0, newest.index).replace(/^Version: .*$/m, `Version: ${version}`) + entry}\n${doc.slice(newest.index)}`
 }
 
 const doc = real(FILES.doc)
@@ -65,7 +65,7 @@ describe('check-design', () => {
     const glyphs = checkDesign({ look: { ...(LOOK as unknown as Look), GLYPH: { ...LOOK.GLYPH, star: '★' } } }).problems
     expect(glyphs).toContain('DESIGN.md symbols miss look.ts GLYPH.star (★)')
     const copy = checkDesign({ read: withFiles({ [FILES.html]: replaced(real(FILES.html), 'Nothing open', 'All clear') }) }).problems
-    expect(copy).toContain('DESIGN.md copy “Nothing open” isn\'t in server/public/index.html')
+    expect(copy).toContain("DESIGN.md copy “Nothing open” isn't in server/public/index.html")
   })
 
   test('a colour under 4.5:1 fails', () => {
@@ -96,8 +96,13 @@ describe('check-design', () => {
   test('an entry without a reason fails', () => {
     const { look, files, fingerprint } = tealChanged()
     const read = withFiles({ ...files, [FILES.doc]: logged(files[FILES.doc], '1.0.1', ['- Change: Teal is a step bluer.', `Fingerprint: ${fingerprint}`]) })
-    expect(checkDesign({ look, read }).problems).toEqual(['changelog 1.0.1 (line ' + (files[FILES.doc].split('\n').findIndex(line => line.startsWith('### 1.0.0')) + 1) + '): no `- Why:` line giving the reason'])
-    const empty = withFiles({ ...files, [FILES.doc]: logged(files[FILES.doc], '1.0.1', ['- Change: Teal is a step bluer.', '- Why:', `Fingerprint: ${fingerprint}`]) })
+    expect(checkDesign({ look, read }).problems).toEqual([
+      `changelog 1.0.1 (line ${files[FILES.doc].split('\n').findIndex(line => line.startsWith('### 1.0.0')) + 1}): no \`- Why:\` line giving the reason`,
+    ])
+    const empty = withFiles({
+      ...files,
+      [FILES.doc]: logged(files[FILES.doc], '1.0.1', ['- Change: Teal is a step bluer.', '- Why:', `Fingerprint: ${fingerprint}`]),
+    })
     expect(checkDesign({ look, read: empty }).problems.join('\n')).toContain('no `- Why:` line giving the reason')
   })
 

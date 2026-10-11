@@ -13,8 +13,7 @@ const encodeTime = (ms: number) => {
   return out
 }
 
-const randomPart = (random: (n: number) => Uint8Array) =>
-  Array.from(random(16), byte => ALPHABET[byte % 32]).join('')
+const randomPart = (random: (n: number) => Uint8Array) => Array.from(random(16), byte => ALPHABET[byte % 32]).join('')
 
 // Within one millisecond, increment the random part so ids stay strictly increasing.
 const increment = (part: string) => {

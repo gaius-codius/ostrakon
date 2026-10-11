@@ -92,7 +92,7 @@ export const createSync = (adapter: SyncAdapter) => {
   let isPushAgain = false
   // Pulled notes that won but couldn't be written here (a lock held too long, a full disk): tried
   // again with every pull, so the cursor moving past them doesn't lose them.
-  let unwritten = new Map<string, Note>()
+  const unwritten = new Map<string, Note>()
   let after: ((ms: number, fn: () => void) => void) | undefined
   let status: SyncStatus = { isOnline: false, queued: 0, problem: '' }
 

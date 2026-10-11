@@ -184,7 +184,11 @@ describe('sync', () => {
     await expect(sync.pull(office.sync)).rejects.toThrow('hub refused the token')
     let rounds = 0
     const timers: (() => void)[] = []
-    sync.run(office.sync, (_, fn) => timers.push(fn), () => rounds++ < 1)
+    sync.run(
+      office.sync,
+      (_, fn) => timers.push(fn),
+      () => rounds++ < 1,
+    )
     await settle()
     expect(last(office)?.problem).toBe('hub refused the token')
     expect(last(office)?.queued).toBe(1)
@@ -219,7 +223,11 @@ describe('sync', () => {
     await second.store.create(second.io, { text: 'new while offline', by: 'you', project: null })
     hub.down = true
     const sync = createSync(hub.adapter())
-    sync.run(second.sync, () => {}, () => true)
+    sync.run(
+      second.sync,
+      () => {},
+      () => true,
+    )
     await settle()
     expect(last(second)).toEqual({ isOnline: false, queued: 1, problem: 'offline' })
   })
@@ -299,7 +307,11 @@ describe('sync', () => {
     const timers: { ms: number; fn: () => void }[] = []
     const sync = createSync(hub.adapter())
     let rounds = 0
-    sync.run(office.sync, (ms, fn) => timers.push({ ms, fn }), () => rounds++ < 6)
+    sync.run(
+      office.sync,
+      (ms, fn) => timers.push({ ms, fn }),
+      () => rounds++ < 6,
+    )
     for (let i = 0; i < 6; i++) {
       await settle()
       const next = timers.shift()
@@ -317,7 +329,20 @@ describe('sync', () => {
     const office = machine('office')
     await office.store.loadAll(office.io)
     const stamp = '2026-10-10T08:00:00.000Z'
-    const phone: Note = { id: '01JA7K2M3Q9X4ZB6C8D0EFGH0Q', status: 'open', by: 'phone', created: stamp, updated: stamp, origin: 'iphone', project: null, context: {}, sentAt: null, deleted: false, text: 'retry me', extra: [] }
+    const phone: Note = {
+      id: '01JA7K2M3Q9X4ZB6C8D0EFGH0Q',
+      status: 'open',
+      by: 'phone',
+      created: stamp,
+      updated: stamp,
+      origin: 'iphone',
+      project: null,
+      context: {},
+      sentAt: null,
+      deleted: false,
+      text: 'retry me',
+      extra: [],
+    }
     hub.put(phone)
     const sync = createSync(hub.adapter())
     office.dir.failWrites = true
@@ -357,7 +382,18 @@ describe('sync', () => {
     const hub = new FakeHub()
     const office = machine('office')
     await office.store.loadAll(office.io)
-    const base = { id: '01JA7K2M3Q9X4ZB6C8D0EFGH0R', status: 'open', by: 'phone', created: '2026-10-10T08:00:00.000Z', origin: 'iphone', project: null, context: {}, sentAt: null, deleted: false, extra: [] } as const
+    const base = {
+      id: '01JA7K2M3Q9X4ZB6C8D0EFGH0R',
+      status: 'open',
+      by: 'phone',
+      created: '2026-10-10T08:00:00.000Z',
+      origin: 'iphone',
+      project: null,
+      context: {},
+      sentAt: null,
+      deleted: false,
+      extra: [],
+    } as const
     const newer: Note = { ...base, extra: [], updated: '2026-10-10T09:00:00.000Z', text: 'newer' }
     const older: Note = { ...base, extra: [], updated: '2026-10-10T08:00:00.000Z', text: 'older' }
     let failing = true
@@ -429,7 +465,20 @@ describe('sync', () => {
     const pushing = sync.push(io)
     for (let i = 0; i < 20 && calls < blockAt; i++) await settle()
     const stamp = '2026-10-10T08:00:00.000Z'
-    const phone: Note = { id: '01JA7K2M3Q9X4ZB6C8D0EFGH0T', status: 'open', by: 'phone', created: stamp, updated: stamp, origin: 'iphone', project: null, context: {}, sentAt: null, deleted: false, text: 'from the phone', extra: [] }
+    const phone: Note = {
+      id: '01JA7K2M3Q9X4ZB6C8D0EFGH0T',
+      status: 'open',
+      by: 'phone',
+      created: stamp,
+      updated: stamp,
+      origin: 'iphone',
+      project: null,
+      context: {},
+      sentAt: null,
+      deleted: false,
+      text: 'from the phone',
+      extra: [],
+    }
     hub.put(phone)
     failing = true
     await sync.pull(io)
@@ -446,7 +495,11 @@ describe('sync', () => {
     await office.store.loadAll(office.io)
     const timers: { ms: number; fn: () => void }[] = []
     const sync = createSync(hub.adapter())
-    sync.run(office.sync, (ms, fn) => timers.push({ ms, fn }), () => false)
+    sync.run(
+      office.sync,
+      (ms, fn) => timers.push({ ms, fn }),
+      () => false,
+    )
     await settle()
     await sync.pull(office.sync)
     const made = await office.store.create(office.io, { text: 'x', by: 'you', project: null })

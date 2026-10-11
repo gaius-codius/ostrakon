@@ -193,12 +193,37 @@ describe('model', () => {
 
   test('footer statuses are cut to their room, the last ones first', () => {
     const offline = 'hub offline · 12 queued · mirror unavailable'
-    expect(fitStatuses([['2 picked', 'a'], [offline, 'w']], 60)).toEqual([['2 picked', 'a'], [offline, 'w']])
-    const cut = fitStatuses([['2 picked', 'a'], [offline, 'w']], 30)
+    expect(
+      fitStatuses(
+        [
+          ['2 picked', 'a'],
+          [offline, 'w'],
+        ],
+        60,
+      ),
+    ).toEqual([
+      ['2 picked', 'a'],
+      [offline, 'w'],
+    ])
+    const cut = fitStatuses(
+      [
+        ['2 picked', 'a'],
+        [offline, 'w'],
+      ],
+      30,
+    )
     expect(cut.map(([text]) => cells(text)).reduce((sum, size) => sum + size + 2, -2)).toBeLessThanOrEqual(30)
     expect(cut[0]?.[0]).toBe('2 picked')
     expect(cut[1]?.[0].endsWith('…')).toBe(true)
-    expect(fitStatuses([['2 picked', 'a'], [offline, 'w']], 9)).toEqual([['2 picked', 'a']])
+    expect(
+      fitStatuses(
+        [
+          ['2 picked', 'a'],
+          [offline, 'w'],
+        ],
+        9,
+      ),
+    ).toEqual([['2 picked', 'a']])
   })
 
   test('inline footers drop pairs from the right and keep i keys', () => {

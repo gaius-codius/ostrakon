@@ -13,8 +13,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="preload" href="v13/fonts/ibm-plex-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="v13/style.css">
+<link rel="preload" href="v14/fonts/ibm-plex-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="v14/style.css">
 </head>
 <body data-mode="list">
 <div id="app" hidden>
@@ -24,6 +24,7 @@
     <button id="close-capture" type="button" class="link-btn" aria-label="Close; the draft is kept" hidden>Close</button>
     <button id="open-search" type="button" class="icon-btn" aria-label="Filter notes"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5 20 20"></path></svg></button>
   </header>
+  <!-- biome-ignore lint/a11y/useSemanticElements: <search> needs iOS 17; the role works everywhere -->
   <div id="search-bar" class="search-bar" role="search" hidden>
     <div class="field">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5 20 20"></path></svg>
@@ -138,7 +139,7 @@
     </div>
   </div>
 </dialog>
-<script src="v13/vendor/motion.js"></script>
-<script src="v13/app.js"></script>
+<script src="v14/vendor/motion.js"></script>
+<script src="v14/app.js"></script>
 </body>
 </html>

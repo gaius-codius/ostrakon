@@ -90,7 +90,7 @@ const session = (conversation = 1000) => {
 }
 
 describe('turns', () => {
-  test('a turn with text is its own prompt; a continuation with no text is its prompt\'s, or its own when none is known', () => {
+  test("a turn with text is its own prompt; a continuation with no text is its prompt's, or its own when none is known", () => {
     const { s, begin, complete } = session()
     begin('t0', '')()
     expect(s.state.latestPrompt?.turnId).toBe('t0')
@@ -105,7 +105,7 @@ describe('turns', () => {
     expect(s.facts.latestOrder).toEqual({ generation: s.state.latestPrompt?.generation, seq: s.state.latestPrompt?.seq })
   })
 
-  test('a prompt keeps the user\'s text, and its continuations reuse it; a turn with no prompt known has none', () => {
+  test("a prompt keeps the user's text, and its continuations reuse it; a turn with no prompt known has none", () => {
     const { s, begin, complete } = session()
     begin('t0', '')()
     expect(s.state.running?.prompt).toMatchObject({ turnId: 't0', text: '' })
@@ -125,7 +125,7 @@ describe('turns', () => {
     expect(s.state.running?.prompt).toMatchObject({ turnId: 't4', text: 'and the docs' })
   })
 
-  test('the band shows a prompt\'s harvest once its turn ends, hides it while a continuation runs, and drops it at the next prompt', () => {
+  test("the band shows a prompt's harvest once its turn ends, hides it while a continuation runs, and drops it at the next prompt", () => {
     const { begin, complete, collect, shown } = session()
     begin('t1')()
     const first = complete('t1')
@@ -146,7 +146,7 @@ describe('turns', () => {
     expect(shown()).toEqual([])
   })
 
-  test('a completion whose write waits doesn\'t end the turn that starts meanwhile, which still collects its harvest', () => {
+  test("a completion whose write waits doesn't end the turn that starts meanwhile, which still collects its harvest", () => {
     const { s, begin, complete, collect, shown } = session()
     begin('t1')()
     const first = complete('t1')
@@ -160,7 +160,7 @@ describe('turns', () => {
     expect(shown()).toEqual(['p2'])
   })
 
-  test('a completion for a turn the module never knew collects nothing, and its waiting write doesn\'t end a continuation', () => {
+  test("a completion for a turn the module never knew collects nothing, and its waiting write doesn't end a continuation", () => {
     const { s, begin, complete, collect, shown } = session()
     begin('t1')()
     const first = complete('t1')
@@ -176,7 +176,7 @@ describe('turns', () => {
     expect(shown()).toEqual(['p1'])
   })
 
-  test('a session start whose write waits doesn\'t end a turn that starts meanwhile: the harvest stays hidden while it runs', () => {
+  test("a session start whose write waits doesn't end a turn that starts meanwhile: the harvest stays hidden while it runs", () => {
     const { s, start, begin, complete, collect, shown } = session()
     begin('t1')()
     const first = complete('t1')
@@ -195,7 +195,7 @@ describe('turns', () => {
     expect(shown()).toEqual(['p1'])
   })
 
-  test('a session start with a turn running leaves the band\'s facts alone; idle, it ends a turn the facts still hold', () => {
+  test("a session start with a turn running leaves the band's facts alone; idle, it ends a turn the facts still hold", () => {
     const { s, start, begin } = session()
     begin('t1')()
     expect(sessionStarted(s.state).facts).toBeNull()
@@ -205,7 +205,7 @@ describe('turns', () => {
     expect(s.facts.running).toBe('')
   })
 
-  test('a /clear whose write waits doesn\'t hide the harvest of the new conversation\'s first turn', () => {
+  test("a /clear whose write waits doesn't hide the harvest of the new conversation's first turn", () => {
     const { s, end, begin, complete, collect, shown } = session()
     const clearing = end()
     begin('t1')()
@@ -232,7 +232,7 @@ describe('turns', () => {
     expect(s.state.running?.prompt.turnId).toBe('t2')
   })
 
-  test('a subagent\'s completion changes nothing: no order, no write, no turn', () => {
+  test("a subagent's completion changes nothing: no order, no write, no turn", () => {
     const { s, begin, complete } = session()
     begin('t1')()
     const before = s.state
@@ -256,7 +256,7 @@ describe('turns', () => {
     expect(review({}, false)).toBe(false)
   })
 
-  test('a review runs only while its prompt is the latest: a completion held until the next prompt started goes unreviewed; a continuation\'s doesn\'t', () => {
+  test("a review runs only while its prompt is the latest: a completion held until the next prompt started goes unreviewed; a continuation's doesn't", () => {
     const { s, begin, complete } = session()
     begin('t1')()
     const held = complete('t1')
@@ -267,7 +267,7 @@ describe('turns', () => {
     expect(canReview(s.state, held.turn!)).toBe(false)
   })
 
-  test('a late harvest of an earlier prompt never replaces a later one\'s, even started in the same millisecond', () => {
+  test("a late harvest of an earlier prompt never replaces a later one's, even started in the same millisecond", () => {
     const { s, begin, complete, collect, shown } = session()
     begin('t1')()
     const first = complete('t1')
@@ -283,7 +283,7 @@ describe('turns', () => {
     expect(isOlder(first.turn!.prompt, second.turn!.prompt)).toBe(true)
   })
 
-  test('a continuation\'s proposals join its prompt\'s, oldest first, whichever lands first', () => {
+  test("a continuation's proposals join its prompt's, oldest first, whichever lands first", () => {
     for (const isPromptFirst of [true, false]) {
       const { s, begin, complete, collect, shown } = session()
       begin('t1')()
@@ -337,7 +337,7 @@ describe('turns', () => {
     expect(sessionRestored(freshTurns(10), FRESH, null).latestPrompt).toBeNull()
   })
 
-  test('an older decision\'s write never undoes a newer one\'s', () => {
+  test("an older decision's write never undoes a newer one's", () => {
     const { s, begin } = session()
     const first = begin('t1')
     const second = begin('t2', 'and again')
@@ -346,7 +346,7 @@ describe('turns', () => {
     expect(s.facts).toMatchObject({ latest: 't2', running: 't2' })
   })
 
-  test('a turn\'s proposals: Claude\'s, still proposed, in this project, carrying the turn\'s id, oldest first', () => {
+  test("a turn's proposals: Claude's, still proposed, in this project, carrying the turn's id, oldest first", () => {
     const all = [
       proposal('b', 't1', 2),
       proposal('a', 't1', 2),
@@ -362,8 +362,13 @@ describe('turns', () => {
     expect(turnProposals(all, CC.key, 't1').map(note => note.id)).toEqual(['c', 'a', 'b'])
   })
 
-  test('the band offers only proposals still waiting, in the harvest\'s order', () => {
-    const notes = { p1: proposal('p1', 't1', 1), p2: proposal('p2', 't1', 2, { status: 'open' }), p3: proposal('p3', 't1', 3, { deleted: true }), p4: proposal('p4', 't1', 4) }
+  test("the band offers only proposals still waiting, in the harvest's order", () => {
+    const notes = {
+      p1: proposal('p1', 't1', 1),
+      p2: proposal('p2', 't1', 2, { status: 'open' }),
+      p3: proposal('p3', 't1', 3, { deleted: true }),
+      p4: proposal('p4', 't1', 4),
+    }
     const facts: TurnFacts = { ...FRESH, latest: 't1' }
     const harvest: Harvest = { turnId: 't1', generation: 1, seq: 1, ids: ['p4', 'p2', 'p3', 'missing', 'p1'] }
     expect(isHarvestShown(harvest, facts)).toBe(true)

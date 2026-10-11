@@ -6,6 +6,17 @@
   "javascript": {
     "formatter": { "quoteStyle": "single", "jsxQuoteStyle": "single", "semicolons": "asNeeded", "arrowParentheses": "asNeeded", "trailingCommas": "all" }
   },
-  "linter": { "enabled": true, "rules": { "recommended": true } },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "style": { "noDescendingSpecificity": "off" }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["plugin/tests/**", "tools/**/*.test.ts"],
+      "linter": { "rules": { "correctness": { "noUnusedFunctionParameters": "off" }, "style": { "noNonNullAssertion": "off" } } }
+    }
+  ],
   "assist": { "enabled": false }
 }

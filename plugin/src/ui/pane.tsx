@@ -2,7 +2,7 @@ import type { Elements } from 'claude-code'
 
 import type { Note, NoteProblem, NoteProject, PaneState } from '../../types'
 import type { Action, Ctx, Focus, Key, Line, Page } from '../model'
-import { ageOf, cells, cut, fitOneLine, fitStatuses, footerPairs, fromField, groupLabel, labelOf, oneLine, sheetLines, toField, uniqueKeys, wrap } from '../model'
+import { ageOf, cells, cut, fitOneLine, fitStatuses, footerPairs, fromField, groupLabel, labelOf, oneLine, sheetLines, uniqueKeys, wrap } from '../model'
 import { CHORD, COLOUR, GLYPH, SHARD, TEXT, WIDTH, colourOf } from './look'
 import type { Tone } from './look'
 
@@ -131,7 +131,7 @@ const NoteRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; li
   const text = cut(oneLine(note.text), textWidth)
   return (
     <Box key={`row-${slot}`} width={view.width} backgroundColor={isSelected ? COLOUR.band : undefined}>
-      <Button key={slotKey(slot)} plain label=" " onPress={() => handlers.pressSlot(slot)} />
+      <Button key={slotKey(slot)} plain label=' ' onPress={() => handlers.pressSlot(slot)} />
       {isGrouped && <Text>{' '.repeat(indent)}</Text>}
       {number !== undefined ? (
         <Text color={isSelected ? undefined : COLOUR.accent} bold>
@@ -162,7 +162,7 @@ const GroupRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; l
   const mark = isProposed ? GLYPH.claude : line.project === null ? GLYPH.unfiledDot : GLYPH.dot
   return (
     <Box key={`row-${slot}`} width={view.width} backgroundColor={isSelected ? COLOUR.band : undefined}>
-      <Button key={slotKey(slot)} plain label=" " onPress={() => handlers.pressSlot(slot)} />
+      <Button key={slotKey(slot)} plain label=' ' onPress={() => handlers.pressSlot(slot)} />
       <Text color={isProposed ? COLOUR.accent : colourOf(line.project?.key ?? null, view.ctx.current.key, view.tone)}>{mark} </Text>
       <Text color={isAccent ? COLOUR.accent : undefined} bold={isAccent} dimColor={!isAccent}>
         {cut(groupLabel(view.ctx, line), WIDTH.label)}
@@ -174,12 +174,24 @@ const GroupRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; l
   )
 }
 
-const ProblemRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; line: Extract<Line, { kind: 'problem' }>; slot: number; handlers: Handlers }) => {
+const ProblemRow = ({
+  el,
+  view,
+  line,
+  slot,
+  handlers,
+}: {
+  el: E
+  view: PaneView
+  line: Extract<Line, { kind: 'problem' }>
+  slot: number
+  handlers: Handlers
+}) => {
   const { Box, Text, Button } = el
   const isSelected = view.focus.kind === 'line' && view.pane.cursor === line.key
   return (
     <Box key={`row-${slot}`} width={view.width} backgroundColor={isSelected ? COLOUR.band : undefined}>
-      <Button key={slotKey(slot)} plain label=" " onPress={() => handlers.pressSlot(slot)} />
+      <Button key={slotKey(slot)} plain label=' ' onPress={() => handlers.pressSlot(slot)} />
       <Text color={COLOUR.problem} bold>
         {GLYPH.problem} {line.count} unreadable file{line.count === 1 ? '' : 's'}
       </Text>
@@ -192,7 +204,7 @@ const Sentinel = ({ el, id, glyph, count, handlers }: { el: E; id: string; glyph
   const { Box, Text, Button } = el
   return (
     <Box>
-      <Button key={id} plain dimColor label=" " onPress={() => handlers.action(id === UP_KEY ? 'up' : 'down')} />
+      <Button key={id} plain dimColor label=' ' onPress={() => handlers.action(id === UP_KEY ? 'up' : 'down')} />
       <Text dimColor>
         {glyph} {count} more
       </Text>
@@ -214,12 +226,7 @@ const rightText = (view: PaneView, room: number) => {
   if (!(view.isInline && view.focus.kind === 'line' && view.preview)) return cut(counted, room)
   const { who, path, branch, age } = metaParts(view, view.preview)
   const mark = who === 'you' ? undefined : who
-  const tries = [
-    [mark, path, branch, age],
-    [mark, branch, age],
-    [mark, branch],
-    [mark],
-  ]
+  const tries = [[mark, path, branch, age], [mark, branch, age], [mark, branch], [mark]]
   for (const parts of tries) {
     const text = [...parts, counted].filter(Boolean).join(' · ')
     if (cells(text) <= room) return text
@@ -270,9 +277,9 @@ const CaptureRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: H
       <Box width={Math.max(10, inner - cells(lead) - 1 - cells(cut(view.captureLabel, WIDTH.label)))}>
         <Input
           key={CAPTURE_KEY}
-          placeholder="write a note"
+          placeholder='write a note'
           value={view.pane.capture.draft}
-          submitLabel=""
+          submitLabel=''
           autoFocus
           onInput={value => handlers.captureInput(value)}
           onSubmit={value => handlers.captureSubmit(value)}
@@ -333,7 +340,7 @@ const Preview = ({ el, view, note }: { el: E; view: PaneView; note: Note }) => {
   if (isEditing) shown = draftLines(fromField(edit.draft), width, WIDTH.previewLines)
   else if (lines.length > WIDTH.previewLines) shown[shown.length - 1] = cut(`${shown[shown.length - 1] ?? ''} `, width).replace(/ ?$/, GLYPH.more)
   return (
-    <Box flexDirection="column" width={view.width} height={PREVIEW_ROWS}>
+    <Box flexDirection='column' width={view.width} height={PREVIEW_ROWS}>
       <Box height={1} />
       {shown.map(line => (
         <Text>
@@ -352,8 +359,10 @@ const Footer = ({ el, view }: { el: E; view: PaneView }) => {
   const { Box, Text } = el
   const { pane, focus } = view
   const statuses: [string, string][] = []
-  if (pane.picks.length > 0 && focus.kind === 'line') statuses.push([`${pane.picks.length} picked${view.picksHidden > 0 ? ` (${view.picksHidden} hidden)` : ''}`, COLOUR.accent])
-  if (view.problems.length > 0 && focus.kind !== 'line') statuses.push([`${view.problems.length} unreadable file${view.problems.length === 1 ? '' : 's'}`, COLOUR.problem])
+  if (pane.picks.length > 0 && focus.kind === 'line')
+    statuses.push([`${pane.picks.length} picked${view.picksHidden > 0 ? ` (${view.picksHidden} hidden)` : ''}`, COLOUR.accent])
+  if (view.problems.length > 0 && focus.kind !== 'line')
+    statuses.push([`${view.problems.length} unreadable file${view.problems.length === 1 ? '' : 's'}`, COLOUR.problem])
   if (view.syncStatus !== '') statuses.push([view.syncStatus, COLOUR.offline])
   // One line: at most WIDTH.footerPairs actions, the legend if there's room, `i keys` on the right.
   const all: [string, string][] = focus.kind === 'unfocused' ? TEXT.unfocused : footerPairs(view.keys)
@@ -376,7 +385,7 @@ const Footer = ({ el, view }: { el: E; view: PaneView }) => {
       </Text>
     )
   return (
-    <Box flexDirection="column" width={view.width}>
+    <Box flexDirection='column' width={view.width}>
       {!view.isInline && <Box height={1} />}
       <Box columnGap={2} width={view.width} height={FOOTER_ROWS}>
         {shown.map(([text, colour]) => (
@@ -406,7 +415,7 @@ const ActionLayer = ({ el, view, handlers }: { el: E; view: PaneView; handlers: 
   const taken = new Set([...keys.map(key => key.hotkey), ...digits.map(String)])
   const idle = holdsKeys ? [...'abcdefghijklmnopqrstuvwxyz0123456789'].filter(char => !taken.has(char)) : []
   return (
-    <Box display="none">
+    <Box display='none'>
       {keys.map(key => (
         <Button
           key={`${LAYER_PREFIX}${key.hotkey ?? key.chord}`}
@@ -421,9 +430,9 @@ const ActionLayer = ({ el, view, handlers }: { el: E; view: PaneView; handlers: 
         <Button key={`${LAYER_PREFIX}digit-${n}`} plain hotkey={String(n)} label={`row ${n}`} onPress={() => handlers.digit(n)} />
       ))}
       {/* ctrl+x s closes the pane from anywhere while it's mounted; the band (P3) opens it. */}
-      <Button key={`${LAYER_PREFIX}toggle`} plain action={CHORD.toggle.action} label="toggle" onPress={() => handlers.action('toggle')} />
+      <Button key={`${LAYER_PREFIX}toggle`} plain action={CHORD.toggle.action} label='toggle' onPress={() => handlers.action('toggle')} />
       {idle.map(char => (
-        <Button key={`${LAYER_PREFIX}idle-${char}`} plain hotkey={char} label="" onPress={() => undefined} />
+        <Button key={`${LAYER_PREFIX}idle-${char}`} plain hotkey={char} label='' onPress={() => undefined} />
       ))}
     </Box>
   )
@@ -433,12 +442,12 @@ const Rows = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
   const { Box, Text, Input, Button } = el
   const { page } = view
   return (
-    <Box flexDirection="column" width={view.width}>
+    <Box flexDirection='column' width={view.width}>
       {page.above > 0 && <Sentinel el={el} id={UP_KEY} glyph={GLYPH.up} count={page.above} handlers={handlers} />}
       {page.lines.map((line, slot) => {
         if (view.pane.mode === 'edit' && view.pane.edit && line.key === view.pane.edit.id) {
           return (
-            <Box key={`row-${slot}`} width={view.width} borderStyle="round" borderColor={COLOUR.accent} flexDirection="column" paddingX={1}>
+            <Box key={`row-${slot}`} width={view.width} borderStyle='round' borderColor={COLOUR.accent} flexDirection='column' paddingX={1}>
               <Box>
                 <Box flexShrink={0}>
                   <Text color={COLOUR.accent} bold>
@@ -446,12 +455,18 @@ const Rows = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
                   </Text>
                 </Box>
                 <Box flexGrow={1} flexShrink={1}>
-                  <Input key={EDIT_KEY} value={view.pane.edit.draft} submitLabel="" onInput={value => handlers.editInput(value)} onSubmit={value => handlers.editSubmit(value)} />
+                  <Input
+                    key={EDIT_KEY}
+                    value={view.pane.edit.draft}
+                    submitLabel=''
+                    onInput={value => handlers.editInput(value)}
+                    onSubmit={value => handlers.editSubmit(value)}
+                  />
                 </Box>
               </Box>
               <Box gap={2}>
-                <Button key="edit-cancel" label="cancel" onPress={() => handlers.editCancel()} />
-                <Button key="edit-save" variant="primary" label="save" onPress={() => handlers.editSubmit(view.pane.edit?.draft ?? '')} />
+                <Button key='edit-cancel' label='cancel' onPress={() => handlers.editCancel()} />
+                <Button key='edit-save' variant='primary' label='save' onPress={() => handlers.editSubmit(view.pane.edit?.draft ?? '')} />
                 <Box flexGrow={1} />
                 <Text dimColor>{TEXT.editHint}</Text>
               </Box>
@@ -472,7 +487,7 @@ const NoMatch = ({ el, view }: { el: E; view: PaneView }) => {
   const where = view.pane.scope === 'project' ? view.ctx.current.name : 'any project'
   const [line, hint] = TEXT.noMatch(view.pane.query.trim(), where)
   return (
-    <Box flexDirection="column" paddingY={view.isInline ? 0 : 1}>
+    <Box flexDirection='column' paddingY={view.isInline ? 0 : 1}>
       <Text>{line}</Text>
       <Text dimColor>
         <Text color={COLOUR.accent}>{GLYPH.enter}</Text> {hint} {view.ctx.current.name} · <Text color={COLOUR.accent}>ctrl+s</Text> scope
@@ -495,7 +510,7 @@ const Empty = ({ el, view, hasHub, hasHarvest }: { el: E; view: PaneView; hasHub
   const hasShard = !view.isInline && view.width - 2 - WIDTH.shard - WIDTH.wayKey >= longest
   const indent = hasShard ? WIDTH.shard : 0
   return (
-    <Box flexDirection="column" paddingY={view.isInline ? 0 : 1} paddingX={1}>
+    <Box flexDirection='column' paddingY={view.isInline ? 0 : 1} paddingX={1}>
       <Box>
         <Box width={indent} />
         <Text bold>{TEXT.emptyTitle(view.pane.scope === 'project' ? view.ctx.current.name : 'any project')}</Text>
@@ -503,7 +518,7 @@ const Empty = ({ el, view, hasHub, hasHarvest }: { el: E; view: PaneView; hasHub
       {!view.isInline && <Box height={1} />}
       <Box>
         {hasShard && (
-          <Box flexDirection="column" width={indent} flexShrink={0}>
+          <Box flexDirection='column' width={indent} flexShrink={0}>
             {SHARD.map(line => (
               <Text color={COLOUR.accent} dimColor>
                 {line}
@@ -511,7 +526,7 @@ const Empty = ({ el, view, hasHub, hasHarvest }: { el: E; view: PaneView; hasHub
             ))}
           </Box>
         )}
-        <Box flexDirection="column">
+        <Box flexDirection='column'>
           {ways.map(([key, text]) => (
             <Box>
               <Box width={WIDTH.wayKey} flexShrink={0}>
@@ -534,7 +549,7 @@ const Capture = ({ el, view }: { el: E; view: PaneView }) => {
   const keep = view.isInline ? WIDTH.savedInline : WIDTH.savedDocked
   const draft = capture.draft.trim() === '' ? [] : draftLines(capture.draft, view.width, view.isInline ? 1 : WIDTH.previewLines)
   return (
-    <Box flexDirection="column" paddingY={view.isInline ? 0 : 1}>
+    <Box flexDirection='column' paddingY={view.isInline ? 0 : 1}>
       {draft.map(line => (
         <Text>{line === '' ? ' ' : line}</Text>
       ))}
@@ -547,7 +562,11 @@ const Capture = ({ el, view }: { el: E; view: PaneView }) => {
           <Text dimColor> · just now</Text>
         </Text>
       ))}
-      {capture.error !== null ? <Text color={COLOUR.problem}>{cut(capture.error, view.width)}</Text> : <Text dimColor>{TEXT.captureHint(view.captureLabel)}</Text>}
+      {capture.error !== null ? (
+        <Text color={COLOUR.problem}>{cut(capture.error, view.width)}</Text>
+      ) : (
+        <Text dimColor>{TEXT.captureHint(view.captureLabel)}</Text>
+      )}
     </Box>
   )
 }
@@ -557,10 +576,12 @@ const Bundle = ({ el, view, handlers, rows }: { el: E; view: PaneView; handlers:
   const others = view.bundle.filter(note => note.project !== null && note.project.key !== view.ctx.current.key)
   const fromOthers = [...new Set(others.map(note => labelOf(view.ctx, note.project)))]
   const room = Math.max(1, rows)
-  const lines = view.bundle.map(note => `- ${note.project !== null && note.project.key !== view.ctx.current.key ? `[${labelOf(view.ctx, note.project)}] ` : ''}${oneLine(note.text)}`)
+  const lines = view.bundle.map(
+    note => `- ${note.project !== null && note.project.key !== view.ctx.current.key ? `[${labelOf(view.ctx, note.project)}] ` : ''}${oneLine(note.text)}`,
+  )
   const shown = lines.length > room ? [...lines.slice(0, room - 1), `${GLYPH.more} and ${lines.length - room + 1} more`] : lines
   return (
-    <Box flexDirection="column" width={view.width}>
+    <Box flexDirection='column' width={view.width}>
       <Box width={view.width}>
         <Text color={COLOUR.accent} bold>
           {GLYPH.bundle} bundle{' '}
@@ -569,10 +590,14 @@ const Bundle = ({ el, view, handlers, rows }: { el: E; view: PaneView; handlers:
           {view.bundle.length} note{view.bundle.length === 1 ? '' : 's'} into one prompt
         </Text>
         <Box flexGrow={1} />
-        {fromOthers.length > 0 && <Text dimColor>{others.length} from {fromOthers.join(', ')}</Text>}
+        {fromOthers.length > 0 && (
+          <Text dimColor>
+            {others.length} from {fromOthers.join(', ')}
+          </Text>
+        )}
       </Box>
       <Box height={1} />
-      <Box borderStyle="quote" borderColor={COLOUR.history} flexDirection="column" width={view.width}>
+      <Box borderStyle='quote' borderColor={COLOUR.history} flexDirection='column' width={view.width}>
         <Text>{TEXT.bundleIntro}</Text>
         <Text> </Text>
         {shown.map(line => (
@@ -582,7 +607,7 @@ const Bundle = ({ el, view, handlers, rows }: { el: E; view: PaneView; handlers:
       {!view.isInline && <Box height={1} />}
       {!view.isInline && <Text dimColor>{TEXT.bundleNote}</Text>}
       <Box gap={2}>
-        <Button key={SEND_KEY} variant="primary" label="send" onPress={() => handlers.action('send')} />
+        <Button key={SEND_KEY} variant='primary' label='send' onPress={() => handlers.action('send')} />
       </Box>
     </Box>
   )
@@ -593,7 +618,7 @@ const Move = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
   const options = [...view.projects.map(project => ({ value: project.key, label: labelOf(view.ctx, project) })), { value: 'unfiled', label: 'unfiled' }]
   return (
     <Box width={view.width}>
-      <Select key={MOVE_KEY} label="move to" options={options} onSelect={value => handlers.moveTo(value)} />
+      <Select key={MOVE_KEY} label='move to' options={options} onSelect={value => handlers.moveTo(value)} />
     </Box>
   )
 }
@@ -603,7 +628,8 @@ const Move = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
 // (5 rows docked, 4 inline), it drops the frame rather than cover the footer.
 const sheetTop = (isInline: boolean) => (isInline ? 1 : 2)
 const isSheetFramed = (bodyRows: number, isInline: boolean) => bodyRows - sheetTop(isInline) - FOOTER_ROWS - 2 >= 1
-export const sheetRoom = (bodyRows: number, isInline: boolean) => Math.max(1, bodyRows - sheetTop(isInline) - FOOTER_ROWS - (isSheetFramed(bodyRows, isInline) ? 2 : 0))
+export const sheetRoom = (bodyRows: number, isInline: boolean) =>
+  Math.max(1, bodyRows - sheetTop(isInline) - FOOTER_ROWS - (isSheetFramed(bodyRows, isInline) ? 2 : 0))
 export const sheetPages = (bodyRows: number, isInline: boolean, problems: number) =>
   Math.max(1, Math.ceil((problems + TEXT.keySheet.length) / sheetRoom(bodyRows, isInline)))
 
@@ -618,9 +644,22 @@ const KeySheet = ({ el, view }: { el: E; view: PaneView }) => {
   const isFramed = isSheetFramed(view.bodyRows, view.isInline)
   const page = view.focus.kind === 'sheet' ? view.focus.page : 0
   const lines = sheetLines(TEXT.keySheet, view.focus.kind === 'sheet' ? view.focus.lead : [])
-  const entries = [...view.problems.map(problem => ({ problem: `${problem.file}: ${problem.reason}`, key: '', label: '' })), ...lines.map(([key, label]) => ({ problem: '', key, label }))]
+  const entries = [
+    ...view.problems.map(problem => ({ problem: `${problem.file}: ${problem.reason}`, key: '', label: '' })),
+    ...lines.map(([key, label]) => ({ problem: '', key, label })),
+  ]
   return (
-    <Box position="absolute" top={sheetTop(view.isInline)} left={Math.max(0, view.width - width)} width={width} borderStyle={isFramed ? 'round' : undefined} borderColor={COLOUR.accent} flexDirection="column" paddingX={1} backgroundColor={COLOUR.band}>
+    <Box
+      position='absolute'
+      top={sheetTop(view.isInline)}
+      left={Math.max(0, view.width - width)}
+      width={width}
+      borderStyle={isFramed ? 'round' : undefined}
+      borderColor={COLOUR.accent}
+      flexDirection='column'
+      paddingX={1}
+      backgroundColor={COLOUR.band}
+    >
       {entries.slice(page * room, (page + 1) * room).map(({ problem, key, label }) =>
         problem !== '' ? (
           <Text color={COLOUR.problem}>{cut(problem, inner)}</Text>
@@ -645,9 +684,23 @@ export const chromeRows = (view: Omit<PaneView, 'page'>) => {
   return header + preview + footer + edit + move
 }
 
-export const Pane = ({ el, view, handlers, hasHub, hasHarvest, bundleRows }: { el: E; view: PaneView; handlers: Handlers; hasHub: boolean; hasHarvest: boolean; bundleRows: number }) => {
+export const Pane = ({
+  el,
+  view,
+  handlers,
+  hasHub,
+  hasHarvest,
+  bundleRows,
+}: {
+  el: E
+  view: PaneView
+  handlers: Handlers
+  hasHub: boolean
+  hasHarvest: boolean
+  bundleRows: number
+}) => {
   const { Box } = el
-  const { pane, focus } = view
+  const { pane } = view
   const hasNotes = view.lines.some(line => line.kind !== 'group')
   const body = () => {
     if (pane.mode === 'capture') return <Capture el={el} view={view} />
@@ -669,12 +722,16 @@ export const Pane = ({ el, view, handlers, hasHub, hasHarvest, bundleRows }: { e
   const isSheet = pane.mode === 'sheet'
   const footerRows = view.isInline ? FOOTER_ROWS : 1 + FOOTER_ROWS
   return (
-    <Box flexDirection="column" width={view.width} height={isSheet ? view.bodyRows : undefined}>
-      {pane.mode === 'bundle' ? null : pane.mode === 'capture' ? <CaptureRow el={el} view={view} handlers={handlers} /> : <SearchRow el={el} view={view} handlers={handlers} />}
+    <Box flexDirection='column' width={view.width} height={isSheet ? view.bodyRows : undefined}>
+      {pane.mode === 'bundle' ? null : pane.mode === 'capture' ? (
+        <CaptureRow el={el} view={view} handlers={handlers} />
+      ) : (
+        <SearchRow el={el} view={view} handlers={handlers} />
+      )}
       {pane.mode !== 'bundle' && !view.isInline && <Box height={1} />}
       {isSheet ? (
-        <Box flexDirection="column" flexShrink={0} height={Math.max(0, view.bodyRows - sheetTop(view.isInline) - footerRows)} overflow="hidden">
-          <Box flexDirection="column" flexShrink={0}>
+        <Box flexDirection='column' flexShrink={0} height={Math.max(0, view.bodyRows - sheetTop(view.isInline) - footerRows)} overflow='hidden'>
+          <Box flexDirection='column' flexShrink={0}>
             {middle}
           </Box>
         </Box>

@@ -137,7 +137,14 @@ export const PocketRow = ({ el, pocket, opener, look, handlers }: { el: E; pocke
     <Box gap={GAP}>
       <Open el={el} opener={opener} handlers={handlers} />
       {pocket.chips.map(chip => (
-        <Button key={chipKey(chip.n)} plain dimColor={isDim(look, pocket.chips, chip.id)} hotkey={String(chip.n)} label={chip.label} onPress={() => handlers.chip(chip.n, chip.id)} />
+        <Button
+          key={chipKey(chip.n)}
+          plain
+          dimColor={isDim(look, pocket.chips, chip.id)}
+          hotkey={String(chip.n)}
+          label={chip.label}
+          onPress={() => handlers.chip(chip.n, chip.id)}
+        />
       ))}
       <More el={el} more={pocket.more} handlers={handlers} />
     </Box>
@@ -166,7 +173,7 @@ export const HarvestRow = ({
   const { Box, Text, Button } = el
   const ids = proposals.map(note => note.id)
   return (
-    <Box flexDirection="column">
+    <Box flexDirection='column'>
       <Box gap={harvest.gap}>
         <Open el={el} opener={harvest.opener} handlers={handlers} />
         {harvest.title !== '' && (
@@ -178,7 +185,7 @@ export const HarvestRow = ({
           <Button key={chipKey(chip.n)} plain dimColor={look.isWorking} hotkey={String(chip.n)} label={chip.label} onPress={() => handlers.keep(chip.id)} />
         ))}
         <More el={el} more={harvest.more} handlers={handlers} />
-        <Button key={KEEP_ALL_KEY} plain dimColor={look.isWorking} hotkey="0" label={TEXT.keepAll} onPress={() => handlers.keepAll(ids)} />
+        <Button key={KEEP_ALL_KEY} plain dimColor={look.isWorking} hotkey='0' label={TEXT.keepAll} onPress={() => handlers.keepAll(ids)} />
       </Box>
       {hasHint ? <Text dimColor>{cut(TEXT.harvestHint(harvest.chips.length), columns)}</Text> : null}
     </Box>

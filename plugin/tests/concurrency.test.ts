@@ -74,7 +74,13 @@ describe('two sessions changing one note', () => {
       if (owner === undefined) dir.files.delete(`${lock}/owner`)
       else dir.put(`${lock}/owner`, owner, dir.clock - age)
     }
-    const attempt = () => store.change(io, made.id, note => ({ ...note, text: `${note.text}+` })).then(() => 'saved', (e: Error) => e.message)
+    const attempt = () =>
+      store
+        .change(io, made.id, note => ({ ...note, text: `${note.text}+` }))
+        .then(
+          () => 'saved',
+          (e: Error) => e.message,
+        )
 
     holdLock('tok 999 boot') // process 999 isn't running
     expect(await attempt()).toBe('saved')
@@ -113,18 +119,33 @@ describe('two sessions changing one note', () => {
     }
 
     let stalled = stall()
-    let bChange = two.change(b, made.id, note => ({ ...note, text: 'from B' })).then(() => 'saved', (e: Error) => e.message)
+    let bChange = two
+      .change(b, made.id, note => ({ ...note, text: 'from B' }))
+      .then(
+        () => 'saved',
+        (e: Error) => e.message,
+      )
     await settle()
     dir.clock += 60 * 60_000
-    expect(await one.change(a, made.id, note => ({ ...note, text: 'from A' })).then(() => 'saved', (e: Error) => e.message)).toContain(
-      'being changed',
-    )
+    expect(
+      await one
+        .change(a, made.id, note => ({ ...note, text: 'from A' }))
+        .then(
+          () => 'saved',
+          (e: Error) => e.message,
+        ),
+    ).toContain('being changed')
     stalled.open()
     expect(await bChange).toBe('saved')
     expect(onDisk(dir, made.id).text).toBe('from B')
 
     stalled = stall()
-    bChange = two.change(b, made.id, note => ({ ...note, text: 'from B again' })).then(() => 'saved', (e: Error) => e.message)
+    bChange = two
+      .change(b, made.id, note => ({ ...note, text: 'from B again' }))
+      .then(
+        () => 'saved',
+        (e: Error) => e.message,
+      )
     await settle()
     dir.running.delete(2) // B's process is gone
     await one.change(a, made.id, note => ({ ...note, text: 'from A' }))
@@ -157,7 +178,12 @@ describe('two sessions changing one note', () => {
     }
     const aWaits = gate()
     a.sleep = () => aWaits.opened
-    const aChange = one.change(a, made.id, note => ({ ...note, status: 'archived' })).then(() => 'saved', (e: Error) => e.message)
+    const aChange = one
+      .change(a, made.id, note => ({ ...note, status: 'archived' }))
+      .then(
+        () => 'saved',
+        (e: Error) => e.message,
+      )
     await settle()
     // Meanwhile B recovers it, takes a fresh lock and stalls mid-write holding it.
     const bStalled = gate()
@@ -169,7 +195,12 @@ describe('two sessions changing one note', () => {
         await bStalled.opened
       }
     }
-    const bChange = two.change(b, made.id, note => ({ ...note, text: 'from B' })).then(() => 'saved', (e: Error) => e.message)
+    const bChange = two
+      .change(b, made.id, note => ({ ...note, text: 'from B' }))
+      .then(
+        () => 'saved',
+        (e: Error) => e.message,
+      )
     await settle()
     aPaused.open()
     await settle()
@@ -202,10 +233,20 @@ describe('two sessions changing one note', () => {
       }
       return move(from, to)
     }
-    const aChange = one.change(a, made.id, note => ({ ...note, status: 'archived' })).then(() => 'saved', (e: Error) => e.message)
+    const aChange = one
+      .change(a, made.id, note => ({ ...note, status: 'archived' }))
+      .then(
+        () => 'saved',
+        (e: Error) => e.message,
+      )
     await settle()
     dir.clock += 24 * 60 * 60_000
-    const bChange = await two.change(b, made.id, note => ({ ...note, text: 'from B' })).then(() => 'saved', (e: Error) => e.message)
+    const bChange = await two
+      .change(b, made.id, note => ({ ...note, text: 'from B' }))
+      .then(
+        () => 'saved',
+        (e: Error) => e.message,
+      )
     expect(bChange).toContain('being changed')
     aPaused.open()
     expect(await aChange).toBe('saved')
@@ -223,7 +264,14 @@ describe('two sessions changing one note', () => {
     dir.put(`${LOCKS}/${made.id}/owner`, 'dead 999 gone')
     dir.dirs.set(`${LOCKS}/${made.id}.recovering-dead`, dir.clock)
     dir.put(`${LOCKS}/${made.id}.recovering-dead/owner`, 'alsodead 998 gone')
-    expect(await store.change(io, made.id, note => ({ ...note, text: 'y' })).then(() => 'saved', (e: Error) => e.message)).toBe('saved')
+    expect(
+      await store
+        .change(io, made.id, note => ({ ...note, text: 'y' }))
+        .then(
+          () => 'saved',
+          (e: Error) => e.message,
+        ),
+    ).toBe('saved')
     expect(onDisk(dir, made.id).text).toBe('y')
   })
 
@@ -240,7 +288,14 @@ describe('two sessions changing one note', () => {
       dir.dirs.set(`${lock}.recovering-t${i - 1}`, dir.clock)
       dir.put(`${lock}.recovering-t${i - 1}/owner`, `t${i} ${900 + i} gone`)
     }
-    expect(await store.change(io, made.id, note => ({ ...note, text: 'y' })).then(() => 'saved', (e: Error) => e.message)).toBe('saved')
+    expect(
+      await store
+        .change(io, made.id, note => ({ ...note, text: 'y' }))
+        .then(
+          () => 'saved',
+          (e: Error) => e.message,
+        ),
+    ).toBe('saved')
   })
 
   test('an owner whose state can’t be looked up is never taken over', async () => {
@@ -260,12 +315,22 @@ describe('two sessions changing one note', () => {
         await bStalled.opened
       }
     }
-    const bChange = two.change(b, made.id, note => ({ ...note, text: 'from B' })).then(() => 'saved', (e: Error) => e.message)
+    const bChange = two
+      .change(b, made.id, note => ({ ...note, text: 'from B' }))
+      .then(
+        () => 'saved',
+        (e: Error) => e.message,
+      )
     await settle()
     dir.unknowable.add(2)
-    expect(await one.change(a, made.id, note => ({ ...note, text: 'from A' })).then(() => 'saved', (e: Error) => e.message)).toContain(
-      'being changed',
-    )
+    expect(
+      await one
+        .change(a, made.id, note => ({ ...note, text: 'from A' }))
+        .then(
+          () => 'saved',
+          (e: Error) => e.message,
+        ),
+    ).toContain('being changed')
     bStalled.open()
     expect(await bChange).toBe('saved')
     expect(onDisk(dir, made.id).text).toBe('from B')
@@ -278,7 +343,14 @@ describe('two sessions changing one note', () => {
     const store = createStore()
     await store.loadAll(io)
     const made = await store.create(io, { text: 'x', by: 'you', project: CC })
-    expect(await store.change(io, made.id, note => note).then(() => 'saved', (e: Error) => e.message)).toContain("couldn't identify")
+    expect(
+      await store
+        .change(io, made.id, note => note)
+        .then(
+          () => 'saved',
+          (e: Error) => e.message,
+        ),
+    ).toContain("couldn't identify")
     expect([...dir.dirs.keys()]).toEqual([])
   })
 
@@ -296,8 +368,22 @@ describe('two sessions changing one note', () => {
       }
       return write(path, text)
     }
-    expect(await store.change(io, made.id, note => note).then(() => 'saved', (e: Error) => e.message)).toContain('disk full')
-    expect(await store.change(io, made.id, note => ({ ...note, text: 'y' })).then(() => 'saved', (e: Error) => e.message)).toBe('saved')
+    expect(
+      await store
+        .change(io, made.id, note => note)
+        .then(
+          () => 'saved',
+          (e: Error) => e.message,
+        ),
+    ).toContain('disk full')
+    expect(
+      await store
+        .change(io, made.id, note => ({ ...note, text: 'y' }))
+        .then(
+          () => 'saved',
+          (e: Error) => e.message,
+        ),
+    ).toBe('saved')
   })
 
   test('a release whose cleanup fails is logged and still frees the lock', async () => {
@@ -311,7 +397,14 @@ describe('two sessions changing one note', () => {
     await store.change(io, made.id, note => ({ ...note, text: 'y' }))
     io.rmdir = rmdir
     expect(dir.warnings.join('\n')).toContain("couldn't remove")
-    expect(await store.change(io, made.id, note => ({ ...note, text: 'z' })).then(() => 'saved', (e: Error) => e.message)).toBe('saved')
+    expect(
+      await store
+        .change(io, made.id, note => ({ ...note, text: 'z' }))
+        .then(
+          () => 'saved',
+          (e: Error) => e.message,
+        ),
+    ).toBe('saved')
   })
 
   test('a file replaced right after our rename is re-read, not cached as ours', async () => {
@@ -595,8 +688,8 @@ describe('front matter written by other tools', () => {
     }
     expect(parseNote(accepted[2] ?? '').extra).toEqual(['tags:\n- ostrakon\n- cc'])
     expect(serializeNote(parseNote(accepted[6] ?? ''))).toContain('  host: gh')
-    expect(parseNote(nested.replace(/project:\n(  .*\n)+/, 'project:\n')).project).toBeNull()
-    expect(parseNote(nested.replace(/project:\n(  .*\n)+/, 'project: null\n  # no project yet\n')).project).toBeNull()
+    expect(parseNote(nested.replace(/project:\n( {2}.*\n)+/, 'project:\n')).project).toBeNull()
+    expect(parseNote(nested.replace(/project:\n( {2}.*\n)+/, 'project: null\n  # no project yet\n')).project).toBeNull()
   })
 
   test('rejects timestamps without a zone and unsupported values', () => {

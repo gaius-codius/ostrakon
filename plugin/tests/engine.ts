@@ -3,7 +3,7 @@
 
 import type { On } from 'claude-code'
 
-import { MemDir, memIO } from './memdir'
+import { type MemDir, memIO } from './memdir'
 
 const ran = (exitCode: number, stdout = '', stderr = '') => ({
   value: { exitCode, stdout, stderr, isStdoutTruncated: false, isStderrTruncated: false },
@@ -27,7 +27,13 @@ export const engineOver = (on: On, dir: MemDir) => {
     value: dir
       .names(e.path)
       .filter(name => !name.includes('/'))
-      .map(name => ({ name, kind: 'file', size: dir.get(`${e.path}/${name}`)?.length ?? 0, mtimeMs: dir.files.get(`${e.path}/${name}`)?.mtimeMs ?? 0, isLink: false })),
+      .map(name => ({
+        name,
+        kind: 'file',
+        size: dir.get(`${e.path}/${name}`)?.length ?? 0,
+        mtimeMs: dir.files.get(`${e.path}/${name}`)?.mtimeMs ?? 0,
+        isLink: false,
+      })),
   }))
   on('fs.stat', async ($, e) => {
     try {

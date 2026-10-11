@@ -39,7 +39,10 @@ export const freshTurns = (conversation: number): TurnState => ({ conversation, 
 
 const ordered = (state: TurnState): [TurnState, Order] => {
   const seq = state.seq + 1
-  return [{ ...state, seq }, { generation: state.conversation, seq }]
+  return [
+    { ...state, seq },
+    { generation: state.conversation, seq },
+  ]
 }
 
 // A session starting (or the module reloading) begins a newer generation. With no running turn
@@ -73,7 +76,8 @@ export const turnStarted = (state: TurnState, e: { turnId: string; text: string 
   const prompt = e.text.trim() !== '' || state.latestPrompt === null ? { turnId: e.turnId, text: e.text, ...order } : state.latestPrompt
   return {
     state: { ...next, latestPrompt: prompt, running: { turnId: e.turnId, prompt } },
-    facts: now => (isOlder(order, now) ? now : { latest: prompt.turnId, latestOrder: { generation: prompt.generation, seq: prompt.seq }, running: e.turnId, ...order }),
+    facts: now =>
+      isOlder(order, now) ? now : { latest: prompt.turnId, latestOrder: { generation: prompt.generation, seq: prompt.seq }, running: e.turnId, ...order },
   }
 }
 
@@ -108,7 +112,9 @@ const byCreated = (a: Note, b: Note) => (a.created < b.created ? -1 : a.created 
 // A turn's proposals: Claude's, in this project, carrying the turn's id (a note without one, a
 // subagent's jot, belongs to no turn), oldest first.
 export const turnProposals = (all: Note[], projectKey: string, turnId: string) =>
-  all.filter(note => note.status === 'proposed' && !note.deleted && note.by === 'claude' && note.project?.key === projectKey && note.context.turnId === turnId).sort(byCreated)
+  all
+    .filter(note => note.status === 'proposed' && !note.deleted && note.by === 'claude' && note.project?.key === projectKey && note.context.turnId === turnId)
+    .sort(byCreated)
 
 // A turn's proposals as its prompt's harvest. The same prompt's (its turn and its continuations,
 // in any order) go together, oldest first; a harvest never replaces one of a prompt that started

@@ -203,7 +203,9 @@ export const storeKit = (notesDir?: string, layout: Layout = {}, hooks: StoreHoo
       if (memo.dir !== empty.dir) return empty
       if (memo.v !== MEMO_VERSION) return { ...empty, isUsed: memo.isUsed === true }
       const files = Object.fromEntries(
-        Object.entries(memo.files ?? {}).filter(([, value]) => typeof value?.id === 'string' && typeof value.updated === 'string' && typeof value.print === 'string'),
+        Object.entries(memo.files ?? {}).filter(
+          ([, value]) => typeof value?.id === 'string' && typeof value.updated === 'string' && typeof value.print === 'string',
+        ),
       )
       const part = hooks.memo ? { [hooks.memo.name]: memo[hooks.memo.name] } : {}
       return { ...empty, isUsed: memo.isUsed === true, files, ...part }
@@ -295,8 +297,7 @@ export const storeKit = (notesDir?: string, layout: Layout = {}, hooks: StoreHoo
 
   // A file that won't parse and is, or last held, note `id` (its own name, or a name it was given
   // in an editor): the note is never written beside it, which would leave two files once it's mended.
-  const unreadableFileOf = (id: string) =>
-    broken.has(`${id}.md`) ? `${id}.md` : [...broken.keys()].find(file => remembered.get(file)?.id === id)
+  const unreadableFileOf = (id: string) => (broken.has(`${id}.md`) ? `${id}.md` : [...broken.keys()].find(file => remembered.get(file)?.id === id))
 
   const filesOf = (id: string) => [...parsed].filter(([, note]) => note.id === id).map(([file]) => file)
 
@@ -323,7 +324,6 @@ export const storeKit = (notesDir?: string, layout: Layout = {}, hooks: StoreHoo
     if (written.get(file) === mtimeMs || isSame) return undefined
     return { ...note, updated: nextStamp(mtimeMs, before.updated) }
   }
-
 
   // Under a lock, the rename only happens while this session still owns it.
   // `text` is the file as written: the note serialized, unless the caller kept a file's own bytes.
@@ -409,7 +409,7 @@ export const storeKit = (notesDir?: string, layout: Layout = {}, hooks: StoreHoo
   }
 
   // Creates `path` as a lock owned by this process: true when this call got it.
-  const take = async (io: StoreIO, path: string, token: string, owner: string) => {
+  const take = async (io: StoreIO, path: string, owner: string) => {
     if (!(await io.mkdir(path))) return false
     try {
       await io.write(`${path}/owner`, owner)
@@ -441,7 +441,7 @@ export const storeKit = (notesDir?: string, layout: Layout = {}, hooks: StoreHoo
       const instance = await abandonedAs(io, path)
       if (instance === undefined) return
       const guard = `${lockPath}.recovering-${instance}`
-      if (await take(io, guard, self.token, self.owner)) {
+      if (await take(io, guard, self.owner)) {
         try {
           if ((await abandonedAs(io, path)) === instance) await clearLock(io, path, 'abandoned')
         } finally {
@@ -465,7 +465,7 @@ export const storeKit = (notesDir?: string, layout: Layout = {}, hooks: StoreHoo
     const token = randomTag()
     const owner = `${token} ${self} ${state.started}\n`
     for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt += 1) {
-      if (await take(io, path, token, owner)) return { path, token }
+      if (await take(io, path, owner)) return { path, token }
       await recover(io, path, { token, owner })
       await io.sleep(LOCK_WAIT_MS)
     }
@@ -567,8 +567,7 @@ export const storeKit = (notesDir?: string, layout: Layout = {}, hooks: StoreHoo
 
     // $.state was reset under us (/clear, /resume, /branch): put the view back even if no file changed.
     const shown = await io.shown()
-    const isViewLost =
-      (parsed.size > 0 && Object.keys(shown.notes).length === 0) || (broken.size > 0 && shown.problems.length === 0)
+    const isViewLost = (parsed.size > 0 && Object.keys(shown.notes).length === 0) || (broken.size > 0 && shown.problems.length === 0)
     if (isChanged || isViewLost) await publish(io)
     await persist(io)
     return isChanged || isViewLost
@@ -665,7 +664,7 @@ export const storeKit = (notesDir?: string, layout: Layout = {}, hooks: StoreHoo
         const next = edit(base)
         if (!next) return base
         const files = copies.map(([file]) => file)
-        const target = files.includes(canonical) ? canonical : files[0] ?? canonical
+        const target = files.includes(canonical) ? canonical : (files[0] ?? canonical)
         return write(
           io,
           { ...next, id: base.id, created: base.created, updated: nextStamp(await io.now(), base.updated), origin: await hostName(io) },

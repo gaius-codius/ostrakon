@@ -29,7 +29,7 @@ const opened = async ($: Engine, on: Parameters<typeof startSession>[1], isCaptu
   return { ...started, ui }
 }
 
-test('ctrl+q\'s layer key closes the pane from capture, and nothing re-opens it afterwards', async ($, on) => {
+test("ctrl+q's layer key closes the pane from capture, and nothing re-opens it afterwards", async ($, on) => {
   const { world, clock, ui } = await opened($, on, true)
   expect(await hasText(ui, /new note/)).toBe(true)
   await ui.press({ key: 'key-pane:previous' })

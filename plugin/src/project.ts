@@ -10,7 +10,10 @@ export const normalizeRemote = (remote: string) => {
   else text = text.replace(/^[a-z][\w+.-]*:\/\//i, '').replace(/^[^@/]+@/, '')
   const [host = '', ...path] = text.split('/')
   const cleanHost = host.replace(/:\d+$/, '').toLowerCase()
-  const cleanPath = path.join('/').replace(/\.git$/, '').replace(/\/+$/, '')
+  const cleanPath = path
+    .join('/')
+    .replace(/\.git$/, '')
+    .replace(/\/+$/, '')
   return cleanPath === '' ? cleanHost : `${cleanHost}/${cleanPath}`
 }
 

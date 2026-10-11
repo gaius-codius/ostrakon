@@ -69,7 +69,7 @@ describe('pocketOf', () => {
     expect(capped.more).toBe(3)
   })
 
-  test('labels are cut to 24 columns at a word, with an ellipsis; Claude\'s notes spend two of them on the diamond', () => {
+  test("labels are cut to 24 columns at a word, with an ellipsis; Claude's notes spend two of them on the diamond", () => {
     const pocket = pocketOf([note(LONG, 1), note(LONG, 2, { by: 'claude' }), note('short', 3)], CC.key, 5, WIDE, OPENER)
     expect(pocket.chips.map(chip => chip.label)).toEqual(['a very long note text…', '◆ a very long note text…', 'short'])
     for (const chip of pocket.chips) expect(cellsIn(chip.label)).toBeLessThanOrEqual(WIDTH.chip)
@@ -94,7 +94,7 @@ describe('pocketOf', () => {
     for (const label of labels) expect(cellsIn(label)).toBeLessThanOrEqual(WIDTH.chip)
   })
 
-  test('a note\'s lines run together in its label', () => {
+  test("a note's lines run together in its label", () => {
     expect(pocketOf([note('first\n  second', 1)], CC.key, 5, WIDE, OPENER).chips[0]?.label).toBe('first second')
   })
 
@@ -138,14 +138,16 @@ describe('pocketOf', () => {
     for (const count of [1, 5, 12]) {
       for (let columns = 17; columns <= 160; columns++) {
         const { chips, more, title, gap, opener: shown } = harvestOf(proposals.slice(0, count), columns, opener)
-        const drawn = [shown, title, ...chips.map(chip => `${chip.n}: ${chip.label}`), ...(more > 0 ? [`+${more}`] : []), `0: ${TEXT.keepAll}`].filter(text => text !== '')
+        const drawn = [shown, title, ...chips.map(chip => `${chip.n}: ${chip.label}`), ...(more > 0 ? [`+${more}`] : []), `0: ${TEXT.keepAll}`].filter(
+          text => text !== '',
+        )
         const width = drawn.reduce((sum, text) => sum + cellsIn(text), 0) + gap * (drawn.length - 1)
         expect(width).toBeLessThanOrEqual(columns)
       }
     }
   })
 
-  test('a pocketMax that isn\'t a number shows no chips rather than throwing', () => {
+  test("a pocketMax that isn't a number shows no chips rather than throwing", () => {
     expect(pocketOf([note('x', 1)], CC.key, Number.NaN, WIDE, OPENER)).toEqual({ chips: [], more: 1 })
   })
   test('a row too narrow for even one chip shows none and counts them all in more', () => {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Static checks for the mod: validate, type-check, tests. Run from anywhere.
+# Static checks for the mod: validate, design, type-check, tests, lint (tools/lint.sh). Run from anywhere.
 # Type-checking needs .claude-plugin/types/, which the engine writes when it loads
 # the mod (any `claude --plugin-dir plugin` session, e.g. tools/screens/lib.sh start).
 set -euo pipefail
@@ -17,3 +17,4 @@ echo "== tsc"; npx -y -p typescript@5.6.3 tsc -p "$P"
 echo "tsc ok"
 echo "== test"; claude plugin test "$P"
 echo "== hub test"; (cd "$P/../server" && bun test)
+echo "== lint"; "$P/../tools/lint.sh"

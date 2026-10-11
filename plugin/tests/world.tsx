@@ -4,7 +4,7 @@ import type { On } from 'claude-code'
 
 import { parseNote, serializeNote } from '../src/frontmatter'
 import { engineOver } from './engine'
-import { MemDir } from './memdir'
+import type { MemDir } from './memdir'
 
 // The prefix of this plugin's tools; tools/check.sh fails when plugin.json names another plugin.
 export const TOOL_PREFIX = 'mcp__ostrakon__'
@@ -41,7 +41,18 @@ export const put = (dir: MemDir, id: string, text: string, project: typeof CC | 
   dir.put(`/data/notes/${id}.md`, serializeNote({ ...NOTE, id, text, project, created: stamp, updated: stamp }))
 }
 
-export type World = { box: { text: string }; toasts: string[]; submitted: string[]; opened: number; closed: number; focused: string[]; tools: { name: string; description: string; isDeferred?: unknown; registeredAs: string }[]; drop?: string; turnOnSubmit?: string; heldCompletion?: { turnId: string; gate: Promise<void>; isHeld?: boolean } }
+export type World = {
+  box: { text: string }
+  toasts: string[]
+  submitted: string[]
+  opened: number
+  closed: number
+  focused: string[]
+  tools: { name: string; description: string; isDeferred?: unknown; registeredAs: string }[]
+  drop?: string
+  turnOnSubmit?: string
+  heldCompletion?: { turnId: string; gate: Promise<void>; isHeld?: boolean }
+}
 
 export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '') => {
   const engine = $
@@ -118,7 +129,7 @@ export const run = ($: Engine, command: string, args: string) =>
 
 export const mountPane = ($: Engine) => $.ui.mount({ plugin: 'ostrakon', surface: 'terminal', ...PANE })
 
-export const texts = async (ui: Awaited<ReturnType<typeof mountPane>>) => (await ui.findAll({ type: 'Text' })).map((found: { text?: unknown }) => String(found.text ?? ''))
+export const texts = async (ui: Awaited<ReturnType<typeof mountPane>>) =>
+  (await ui.findAll({ type: 'Text' })).map((found: { text?: unknown }) => String(found.text ?? ''))
 
 export const noteIn = (dir: MemDir, id: string) => parseNote(dir.get(`/data/notes/${id}.md`) ?? '')
-
