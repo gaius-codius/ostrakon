@@ -103,7 +103,7 @@ The unit runs `~/.local/bin/ostrakon hub`, so it works wherever the repo is chec
 ## Development
 
 - Design and platform notes: [`docs/SPEC.md`](docs/SPEC.md). What might come next: [`ROADMAP.md`](ROADMAP.md).
-- `tools/check.sh` runs `claude plugin validate`, the type-check, `claude plugin test` and the hub's tests. The plugin's tests and type-check need the `claude` CLI, because the mods test kit and type declarations ship inside it.
+- `tools/check.sh` runs `claude plugin validate`, the design check ([`docs/DESIGN.md`](docs/DESIGN.md) against the code), the type-check, `claude plugin test` and the hub's tests. The plugin's tests and type-check need the `claude` CLI, because the mods test kit and type declarations ship inside it.
 - The hub's tests need only [Bun](https://bun.sh): `cd server && bun test`.
 - Contributing, and how releases are cut: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - `tools/` also holds the screenshot pipeline and experiment harnesses; their output goes to `working-docs/`, which is git-ignored.
