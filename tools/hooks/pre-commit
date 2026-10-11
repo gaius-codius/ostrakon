@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Runs tools/lint.sh before each commit. Turn it on once per clone:
+#   git config core.hooksPath tools/hooks
+# Skip it for one commit with git commit --no-verify.
+exec "$(git rev-parse --show-toplevel)/tools/lint.sh"

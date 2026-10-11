@@ -1,0 +1,8 @@
+# The spell checker (typos), run by tools/lint.sh.
+[default]
+# A word cut short with an ellipsis is sample UI text (a truncated chip), not a typo.
+extend-ignore-re = ["\\w+…"]
+
+[default.extend-words]
+# Both spellings are standard English.
+unparseable = "unparseable"

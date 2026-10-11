@@ -7,7 +7,7 @@ source $HERE/lib.sh
 OUT=$ROOT/working-docs/screens/p3; mkdir -p $OUT/crops
 # The band sits 5 rows above the bottom: crop the bottom rows of the frame.
 keep() { cp $R/shots/$1.png $OUT/$1.png
-  local w h; read w h < <(magick identify -format '%w %h' $OUT/$1.png)
+  local w; read -r w _ < <(magick identify -format '%w %h' $OUT/$1.png)
   magick $OUT/$1.png -gravity SouthWest -crop ${w}x170+0+20 +repage $OUT/crops/$1.png; }
 snap() { sleep 1; shot $1 "$2" >/dev/null; keep $1; echo $1; }
 
@@ -34,7 +34,7 @@ dark() {
   start many 160 44; snap pocket9-160 "pocket · many notes (5 chips + more)"
   lit "/jot"; keys Enter; sleep 1.5; snap pocket-docked-160 "pocket · beside the docked pane"
   start many 100 40; snap pocket-100 "pocket · 100 columns"
-  export SCREENS_SESSION=$(python3 -c 'import uuid; print(uuid.uuid4())')
+  SCREENS_SESSION=$(python3 -c 'import uuid; print(uuid.uuid4())'); export SCREENS_SESSION
   start few 160 44
   lit "UI test: run the shell command sleep 6, then reply only with ok"; keys Enter; sleep 2; propose; sleep 14
   snap harvest-160 "harvest · 3 proposals from the last turn"

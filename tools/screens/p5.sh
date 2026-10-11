@@ -8,11 +8,11 @@ export SCREENS_OPTIONS='"harvest":true'
 source $HERE/lib.sh
 OUT=$ROOT/working-docs/screens/p5; mkdir -p $OUT/crops
 keep() { cp $R/shots/$1.png $OUT/$1.png
-  local w h; read w h < <(magick identify -format '%w %h' $OUT/$1.png)
+  local w; read -r w _ < <(magick identify -format '%w %h' $OUT/$1.png)
   magick $OUT/$1.png -gravity SouthWest -crop ${w}x170+0+20 +repage $OUT/crops/$1.png; }
 snap() { sleep 1; shot $1 "$2" >/dev/null; keep $1; echo $1; }
 busy() { T capture-pane -p -t rv | grep -qE '… \([0-9]+[ms]'; }
-idle() { sleep 8; for i in $(seq 1 90); do sleep 4; busy || { sleep 4; busy || return 0; }; done; }
+idle() { sleep 8; for _ in $(seq 1 90); do sleep 4; busy || { sleep 4; busy || return 0; }; done; }
 
 # A tiny cart: one test to fix, and side issues around it (a case-sensitive discount code, a TODO).
 sample() {
@@ -90,12 +90,12 @@ EOF
 # Claude Code asks once whether to trust a new folder: yes (the sample is ours).
 trusted() { T capture-pane -p -t rv | grep -q "trust this folder" || return 0
   T send-keys -t rv Down; sleep 0.5; T send-keys -t rv Enter
-  for i in $(seq 1 30); do T capture-pane -p -t rv | grep -q "shift+tab" && break; sleep 1; done; sleep 2; }
+  for _ in $(seq 1 30); do T capture-pane -p -t rv | grep -q "shift+tab" && break; sleep 1; done; sleep 2; }
 
 run() { # cols rows
   start few $1 $2 >/dev/null; trusted
   lit "Make test_count_counts_quantities in test_cart.py pass. Keep the change minimal."; keys Enter; idle
-  for i in $(seq 1 20); do T capture-pane -p -t rv | grep -q "from this turn" && return 0; sleep 2; done
+  for _ in $(seq 1 20); do T capture-pane -p -t rv | grep -q "from this turn" && return 0; sleep 2; done
   echo "no harvest after the turn (the review found nothing?)"; return 1
 }
 

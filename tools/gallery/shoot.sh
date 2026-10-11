@@ -10,7 +10,7 @@ G() { tmux -L spgallery "$@"; }
 SET=""; [ "$THEME" = light ] && SET="--settings '{\"theme\":\"light\"}'"
 G kill-session -t g 2>/dev/null
 G new-session -d -s g -x $COLS -y $ROWS -c "${SCREENS_CWD:-$HOME}" "COLORTERM=truecolor claude --plugin-dir $HERE --debug-file $TMP/debug.log $SET"
-for i in $(seq 1 40); do G capture-pane -p -t g | grep -q "shift+tab" && break; sleep 1; done; sleep 3
+for _ in $(seq 1 40); do G capture-pane -p -t g | grep -q "shift+tab" && break; sleep 1; done; sleep 3
 shot() { # name
   local n=$1-$THEME-$COLS
   G capture-pane -e -N -p -t g > $TMP/$n.ans

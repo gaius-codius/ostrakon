@@ -13,7 +13,7 @@ snap() { sleep 1; shot $1 "$2" >/dev/null; keep $1 "${3:-}"; echo $1; }
 DOCKED=612x700+752+30; INLINE=850x350+16+405
 
 hub_up() { T kill-session -t hub 2>/dev/null; T new-session -d -s hub -c $ROOT "HUB_PORT=$PORT HUB_DATA=$HUBDATA HUB_TOKEN=$TOKEN bun server/hub.ts"
-  for i in $(seq 1 20); do curl -sf 127.0.0.1:$PORT/healthz >/dev/null && return; sleep 0.25; done; echo "hub didn't start" >&2; }
+  for _ in $(seq 1 20); do curl -sf 127.0.0.1:$PORT/healthz >/dev/null && return; sleep 0.25; done; echo "hub didn't start" >&2; }
 hub_down() { T kill-session -t hub 2>/dev/null; sleep 0.5; }
 jot() { curl -sf -XPOST -H "Authorization: Bearer $TOKEN" 127.0.0.1:$PORT/api/jot -d "{\"text\":\"$1\"}" >/dev/null; }
 settings() { # theme
@@ -24,7 +24,7 @@ settings() { # theme
 }
 
 rm -rf $HUBDATA; hub_up
-export SCREENS_SETTINGS=$(settings dark)
+SCREENS_SETTINGS=$(settings dark); export SCREENS_SETTINGS
 start few 160 44
 lit "/jot"; keys Enter; sleep 1.5; keys C-l; sleep 1
 jot "pick up the long USB-C cable on the way home"; sleep 1.5
@@ -40,7 +40,7 @@ lit "/jot"; keys Enter; sleep 1.5; keys C-l; sleep 1; keys d; sleep 3
 snap hub-offline-100 "hub · unreachable, inline at 100 columns" $INLINE
 
 hub_up
-export SCREENS_SETTINGS=$(settings light)
+SCREENS_SETTINGS=$(settings light); export SCREENS_SETTINGS
 start few 160 44
 lit "/jot"; keys Enter; sleep 1.5; keys C-l; sleep 1
 hub_down; keys d; sleep 3
