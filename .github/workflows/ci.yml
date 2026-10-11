@@ -26,6 +26,22 @@ jobs:
       - run: bun test
         working-directory: server
 
+  design:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Every branch, so the design changelog can be held against the base's.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      # docs/DESIGN.md against the code, and its changelog against the base branch (a pull request)
+      # or the commit before (a push).
+      - run: bun tools/check-design.ts --base "$BASE"
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
+      - run: bun test ./tools/check-design.test.ts
+
   shellcheck:
     runs-on: ubuntu-latest
     steps:

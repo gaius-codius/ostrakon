@@ -3,7 +3,8 @@ import type { Engine } from 'claude-code/testing'
 
 import { serializeNote } from '../src/frontmatter'
 import { MemDir } from './memdir'
-import { CC, INFRA, NOTE, noteIn, put, startSession } from './world'
+import { MS } from '../src/ui/look'
+import { CC, INFRA, NOTE, noteIn, put, run, startSession } from './world'
 
 const ONE = '01JA7K2M3Q9X4ZB6C8D0EFGH01'
 const TWO = '01JA7K2M3Q9X4ZB6C8D0EFGH02'
@@ -52,7 +53,7 @@ const propose = (
 
 const TURN_DONE = { answer: 'done', durationMs: 5, isAborted: false, turnId: 'turn-1', reason: 'answer' } as const
 
-const mountBand = ($: Engine, props: Partial<{ hasSurvey: boolean }> = {}, bodyColumns = 120) =>
+const mountBand = ($: Engine, props: Partial<{ hasSurvey: boolean; isWorking: boolean }> = {}, bodyColumns = 120) =>
   $.ui.mount({ plugin: 'ostrakon', surface: 'terminal', ...BAND, props: { ...BAND.props, bodyColumns, ...props } })
 
 type Band = Awaited<ReturnType<typeof mountBand>>
@@ -63,15 +64,19 @@ const buttons = async (ui: Band) =>
     return { key: found.key, label: props.label, hotkey: props.hotkey }
   })
 
+// Which of the band's Buttons draw dim, by key.
+const dims = async (ui: Band) =>
+  Object.fromEntries((await ui.findAll({ type: 'Button' })).map(found => [found.key, (found.props as { dimColor?: boolean }).dimColor === true]))
+
 const composer = ($: Engine, text: string) => $.prompt.submit({ text, wait: false, origin: { kind: 'composer' } })
 
-test('the band draws this project\'s open notes as numbered chips, newest first, and the capture button', async ($, on) => {
+test('the band draws the opener, then this project\'s open notes as numbered chips, newest first', async ($, on) => {
   await startSession($, on, fixture())
   const ui = await mountBand($)
   expect(await buttons(ui)).toEqual([
-    { key: 'band-chip-1', label: 'check why the cache test is flaky'.slice(0, 17) + '…', hotkey: '1' },
-    { key: 'band-chip-2', label: 'rename the store…', hotkey: '2' },
-    { key: 'band-open', label: '✎', hotkey: undefined },
+    { key: 'band-open', label: '✎ cc', hotkey: undefined },
+    { key: 'band-chip-1', label: 'check why the cache…', hotkey: '1' },
+    { key: 'band-chip-2', label: 'rename the store helpers', hotkey: '2' },
   ])
   await ui.unmount()
 })
@@ -146,13 +151,27 @@ const harvested = async ($: Engine, on: Parameters<typeof startSession>[1]) => {
 
 test('after a turn that proposed notes the band shows the harvest row instead of the pocket', async ($, on) => {
   const { ui } = await harvested($, on)
-  expect(await ui.find({ type: 'Text', text: '◆ 2 notes from this turn' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
   expect(await buttons(ui)).toEqual([
-    { key: 'band-chip-1', label: 'follow up on the flaky cache test'.slice(0, 21) + '…', hotkey: '1' },
-    { key: 'band-chip-2', label: 'document the store he…', hotkey: '2' },
+    { key: 'band-open', label: '✎ cc', hotkey: undefined },
+    { key: 'band-chip-1', label: 'follow up on the…', hotkey: '1' },
+    { key: 'band-chip-2', label: 'document the store…', hotkey: '2' },
     { key: 'band-keep-all', label: 'keep all', hotkey: '0' },
-    { key: 'band-open', label: '✎', hotkey: undefined },
   ])
+  await ui.unmount()
+})
+
+test('a harvest row too narrow for a chip closes up to fit: one column apart, the opener without the project', async ($, on) => {
+  const { ui } = await harvested($, on)
+  // `✎ ◆ +2 0: keep all` is 18 cells.
+  await ui.redraw({ ...BAND.props, bodyColumns: 18 })
+  expect(await buttons(ui)).toEqual([
+    { key: 'band-open', label: '✎', hotkey: undefined },
+    { key: 'band-more', label: '+2', hotkey: undefined },
+    { key: 'band-keep-all', label: 'keep all', hotkey: '0' },
+  ])
+  expect(await ui.find({ type: 'Text', text: '◆' })).toBeDefined()
+  expect((await ui.findAll({ type: 'Box' })).map(box => (box.props as { gap?: number }).gap)).toContain(1)
   await ui.unmount()
 })
 
@@ -197,7 +216,7 @@ test('the next turn with text clears the harvest and leaves unkept proposals pro
   await clock.advance(10)
   await ui.redraw(BAND.props)
   expect(await ui.find({ type: 'Text', text: /from this turn/ })).toBeUndefined()
-  expect((await buttons(ui)).map(button => button.key)).toEqual(['band-chip-1', 'band-chip-2', 'band-open'])
+  expect((await buttons(ui)).map(button => button.key)).toEqual(['band-open', 'band-chip-1', 'band-chip-2'])
   expect(noteIn(dir, PROPOSED).status).toBe('proposed')
   expect(noteIn(dir, PROPOSED_TOO).status).toBe('proposed')
   await ui.unmount()
@@ -232,7 +251,7 @@ test('a turn with text that proposes nothing ends with Pocket; a continuation wi
   expect(await ui.find({ type: 'Text', text: /from this turn/ })).toBeUndefined()
   await $.turn.complete({ ...TURN_DONE, turnId: 'turn-2' })
   await ui.redraw(BAND.props)
-  expect(await ui.find({ type: 'Text', text: '◆ 1 note from this turn' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
 
   await $.turn.start({ text: 'and again', turnId: 'turn-3' })
   await $.turn.complete({ ...TURN_DONE, turnId: 'turn-3' })
@@ -292,7 +311,7 @@ test('a completion whose write waits doesn\'t lose the turn that starts meanwhil
   propose(dir, PROPOSED, 'from the second turn', { turnId: 'turn-2' })
   await $.turn.complete({ ...TURN_DONE, turnId: 'turn-2' })
   const ui = await mountBand($)
-  expect(await ui.find({ type: 'Text', text: '◆ 1 note from this turn' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
   await ui.unmount()
 })
 
@@ -315,7 +334,7 @@ test('a completion for a turn the module never knew, whose write waits, doesn\'t
   expect(await ui.find({ type: 'Text', text: /from this turn/ })).toBeUndefined()
   await $.turn.complete({ ...TURN_DONE, turnId: 'turn-2' })
   await ui.redraw(BAND.props)
-  expect(await ui.find({ type: 'Text', text: '◆ 1 note from this turn' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
   await ui.unmount()
 })
 
@@ -341,7 +360,7 @@ test('a session start whose write waits doesn\'t end a turn that starts meanwhil
   expect(await ui.find({ type: 'Text', text: /from this turn/ })).toBeUndefined()
   await $.turn.complete({ ...TURN_DONE, turnId: 'turn-3' })
   await ui.redraw(BAND.props)
-  expect(await ui.find({ type: 'Text', text: '◆ 1 note from this turn' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
   await ui.unmount()
 })
 
@@ -359,7 +378,7 @@ test('a /clear whose write waits doesn\'t hide the harvest of the new conversati
   held.open()
   await clearing
   const ui = await mountBand($)
-  expect(await ui.find({ type: 'Text', text: '◆ 1 note from this turn' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
   await ui.unmount()
 })
 
@@ -374,7 +393,7 @@ test('a subagent\'s turn.complete, or one for a turn that isn\'t running, collec
   expect(await ui.find({ type: 'Text', text: /from this turn/ })).toBeUndefined()
   await $.turn.complete(TURN_DONE)
   await ui.redraw(BAND.props)
-  expect(await ui.find({ type: 'Text', text: '◆ 1 note from this turn' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
   await ui.unmount()
 })
 
@@ -397,7 +416,7 @@ test('a completion the engine holds keeps its turn: a continuation starting mean
   await completing
   await $.turn.complete({ ...TURN_DONE, turnId: 'turn-2' })
   const ui = await mountBand($)
-  expect(await ui.find({ type: 'Text', text: '◆ 1 note from this turn' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
   await ui.unmount()
 })
 
@@ -525,5 +544,71 @@ test('a slow sent write that turns start during still ends with the note sent', 
   const sent = noteIn(dir, ONE)
   expect(sent.status).toBe('sent')
   expect(sent.sentAt).not.toBeNull()
+  await ui.unmount()
+})
+
+test('while a turn runs every chip, +N and the opener draw dim, and the digits still press', async ($, on) => {
+  const dir = fixture()
+  for (const i of [5, 6, 7, 8, 9, 10]) put(dir, `01JA7K2M3Q9X4ZB6C8D0EFG${String(i).padStart(3, '0')}`, `another note ${i}`, CC, 100 + i)
+  const { world, clock } = await startSession($, on, dir, '2')
+  const ui = await mountBand($, { isWorking: true }, 80)
+  const dim = await dims(ui)
+  expect(Object.keys(dim)).toContain('band-more')
+  expect(Object.values(dim).every(Boolean)).toBe(true)
+  await ui.press({ key: 'band-chip-2' })
+  await clock.advance(10)
+  expect(world.box.text).toBe('rename the store helpers')
+  // At rest only the opener and +N are dim.
+  await ui.redraw({ ...BAND.props, bodyColumns: 80 })
+  expect(Object.entries(await dims(ui)).filter(([, isDim]) => isDim).map(([key]) => key)).toEqual(['band-open', 'band-more'])
+  await ui.unmount()
+})
+
+test('a note just saved stands out in the pocket for MS.fresh: its chip at full strength, the rest dim', async ($, on) => {
+  const { clock } = await startSession($, on, fixture())
+  const ui = await mountBand($)
+  await run($, 'jot', 'buy milk')
+  await ui.redraw(BAND.props)
+  expect(await buttons(ui)).toContainEqual({ key: 'band-chip-1', label: 'buy milk', hotkey: '1' })
+  expect(await dims(ui)).toEqual({ 'band-open': true, 'band-chip-1': false, 'band-chip-2': true, 'band-chip-3': true })
+  await clock.advance(MS.fresh)
+  await ui.redraw(BAND.props)
+  expect(await dims(ui)).toEqual({ 'band-open': true, 'band-chip-1': false, 'band-chip-2': false, 'band-chip-3': false })
+  await ui.unmount()
+})
+
+test('a reload within MS.fresh, which stops the timer, ends the fresh chip at once', async ($, on) => {
+  const { clock } = await startSession($, on, fixture())
+  const ui = await mountBand($)
+  await run($, 'jot', 'buy milk')
+  await ui.redraw(BAND.props)
+  expect(await dims(ui)).toEqual({ 'band-open': true, 'band-chip-1': false, 'band-chip-2': true, 'band-chip-3': true })
+  // A reload keeps the atoms and runs session.start again.
+  const reloaded = $.session.start({ cwd: '/home/me/Work/cc', surface: 'terminal', isInteractive: true })
+  await clock.advance(100)
+  await reloaded
+  await ui.redraw(BAND.props)
+  expect(await dims(ui)).toEqual({ 'band-open': true, 'band-chip-1': false, 'band-chip-2': false, 'band-chip-3': false })
+  await ui.unmount()
+})
+
+test('the harvest row is one line, with the hint under it for the first three harvests only, each counted once', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  const ui = await mountBand($)
+  const hasHint = async () => (await ui.find({ type: 'Text', text: /keep one · 0 keep all/ })) !== undefined
+  for (const i of [1, 2, 3, 4]) {
+    await $.turn.start({ text: `go ${i}`, turnId: `turn-${i}` })
+    propose(dir, `01JA7K2M3Q9X4ZB6C8D0EFGH1${i}`, `proposal ${i}`, { turnId: `turn-${i}` })
+    await $.turn.complete({ ...TURN_DONE, turnId: `turn-${i}` })
+    await ui.redraw(BAND.props)
+    expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
+    expect(await hasHint()).toBe(i <= 3)
+    // Drawn again, or joined by a continuation, it's the same harvest: not counted again.
+    await $.turn.start({ text: '', turnId: `turn-${i}b` })
+    await $.turn.complete({ ...TURN_DONE, turnId: `turn-${i}b` })
+    await ui.redraw(BAND.props)
+    expect(await hasHint()).toBe(i <= 3)
+  }
   await ui.unmount()
 })

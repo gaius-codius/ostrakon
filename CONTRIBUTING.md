@@ -16,10 +16,20 @@ Or run `./install.sh` (without `--release`) to load it in every session from thi
 
 ## Before a pull request
 
-- `tools/check.sh` runs everything: `claude plugin validate`, the type-check, the mod's tests and the hub's tests. CI runs only the hub's tests, shellcheck and the security scans, because the mod's tests need the `claude` CLI, so run `tools/check.sh` yourself.
+- `tools/check.sh` runs everything: `claude plugin validate`, the design check, the type-check, the mod's tests and the hub's tests. CI runs only the hub's tests, the design check, shellcheck and the security scans, because the mod's tests need the `claude` CLI, so run `tools/check.sh` yourself.
 - Add a line under **Unreleased** in [`CHANGELOG.md`](CHANGELOG.md) for anything a user would notice.
 - Keep to the style around you: short comments that say why, the same naming, and docs in plain, short sentences.
 - `main` takes changes only through pull requests, and CI has to pass.
+
+## Changing the design
+
+[`docs/DESIGN.md`](docs/DESIGN.md) is what the pane and the phone agree on: colours, symbols, fixed copy, motion. To change any of it:
+
+1. Change the code and the doc's tables in the same commit.
+2. Bump `Version:` at the top (major when a meaning changes or something goes, minor when something is added, patch for a tweak).
+3. Add an entry at the top of its changelog with `- Change:` and `- Why:` lines, and `Fingerprint:` set to what `bun tools/check-design.ts --fingerprint` prints.
+
+`tools/check.sh` and CI fail until the doc matches the code and the change is logged.
 
 ## Releases
 

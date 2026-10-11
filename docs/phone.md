@@ -1,26 +1,36 @@
 # Ostrakon on the phone
 
-The hub (`server/hub.ts`) serves a small capture page: write a note, pick a project (or leave it
-`unfiled`), Save. The note lands in every open ostrakon pane within a couple of seconds. Below
-the form is the inbox of open notes, grouped by project as in the pane (each project's heading in
-the colour the pane gives it, `unfiled` last; `◆` marks a note from Claude, `▪` one from the
-phone). A heading stays at the top while you scroll its group; tap it to fold the group (the
-phone remembers which are folded; filtering shows matches in folded groups too). Tap a note to edit it, swipe it left to archive
-(a strip behind the row says `Archive` and turns solid when letting go will archive; Undo in the
-toast). Hold a note still for about half a second and an action sheet comes up: **Edit**, **Copy
-text**, **Move to project…** (the same list as the form's picker; the current one is ticked),
-**Mark sent** (for a note you used somewhere else) and **Archive**, then **Cancel**. A move, Mark
-sent and Archive each come with Undo in the toast. Tap outside the sheet to close it.
+The hub (`server/hub.ts`) serves a small capture page. Tap the note field and write; project
+chips come up under it, the project you used last first. Tap one to file the note there (tap it
+again for `unfiled`, the default), or `N more` for the full list with a search. Save, and the note
+lands in every open ostrakon pane within a couple of seconds; the form says `✓ saved · waiting to
+sync` until the hub has it. **Close** puts the form away and keeps what you typed.
+
+Below the form is the inbox of open notes, grouped by project as in the pane: each heading has the
+project's dot, its name and how many notes it holds, `unfiled` last. `◆` marks a note from
+Claude, `▪` one from the phone. Notes Claude proposed (harvest) come first under **Proposed by
+Claude**, with **Keep** and **Dismiss**. A heading stays at the top while you scroll its group; tap
+it to fold the group (the phone remembers which are folded). The search button at the top filters
+open notes, folded groups included.
+
+Tap a note to edit it. Each row has a `⋯` button (or hold the note still for about half a second)
+for its actions: **Edit**, **Copy text**, **Move to project** (the same list as the form's), **Mark
+sent** (for a note you used somewhere else) and **Archive**, then **Cancel**. Swipe a note left to
+archive it: a strip behind the row says `Archive` and turns solid while letting go will archive;
+change your mind and drag back right, and the row springs home. A move, Mark sent and Archive each
+come with Undo in the toast.
 
 Saving never waits for the network. Notes go into a queue on the phone and are sent as soon as the
-hub answers; while it can't, the page says `Offline · 2 queued` and keeps trying. The inbox is kept
-on the phone too, so it still shows when you're offline, and the page itself opens from the
-phone's cache straight away even when the hub is down.
+hub answers; while it can't, the page says `hub offline · 2 queued` and keeps trying. The inbox is
+kept on the phone too, so it still shows when you're offline, and the page itself (fonts and all)
+opens from the phone's cache straight away even when the hub is down.
 
-A note the hub won't accept (it fails the hub's checks) isn't thrown away: it moves to a
-**Not accepted by the hub** box above the inbox with the reason, a **Copy** button and a
-**Dismiss** button. If the phone can't store anything (storage full, or blocked), Save says so and
-leaves your text in the field.
+A note the hub won't accept (it fails the hub's checks) isn't thrown away: it stays in a box above
+the inbox, `The hub wouldn't take 1 note`, with the hub's reason and **Edit**, **Retry** and
+**Discard local copy**. If the phone can't store anything (storage full, or blocked), Save says so
+and leaves your text in the field.
+
+The page follows the phone's light or dark setting, its text size, and Reduce Motion.
 
 ## Open it
 
@@ -38,7 +48,8 @@ connected).
 ## First run: the token
 
 Every `/api` call carries the hub's token (`HUB_TOKEN` in the hub's environment). The first time
-the page opens it asks for it. Paste it and tap **Connect**; it's kept on the phone.
+the page opens it shows **Connect this phone** with the pairing steps below. To paste the token
+instead, open **Paste a hub token instead**, paste it and tap **Connect**; it's kept on the phone.
 
 Easiest: on the hub host, run `ostrakon pair` (`./install.sh` puts the command on your PATH). It
 asks the running hub for a one-time code and prints a QR code of a link that carries it; the phone
@@ -48,7 +59,7 @@ Home Screen works (below). The QR itself never carries the token. It takes `HUB_
 environment or from `~/.config/ostrakon-hub/env`, the systemd unit's file. If it can't find this
 machine's Tailscale name, pass the hub's address: `ostrakon pair https://<host>.<tailnet>.ts.net:8443`.
 It needs `qrencode`. If the code has expired or was used, a phone that isn't paired yet says so on
-the token screen; run `ostrakon pair` again. A phone that had the page before pairing codes existed
+the Connect this phone screen; run `ostrakon pair` again. A phone that had the page before pairing codes existed
 may open its old cached copy, which doesn't know them: open the page once first so it updates.
 
 The fallback is `ostrakon pair --token [url]`, which prints a QR code and link that carry the token
@@ -62,7 +73,7 @@ address bar straight away:
 https://<host>.<tailnet>.ts.net:8443/?token=<HUB_TOKEN>
 ```
 
-If the token is ever changed on the hub, the page shows the token screen again with
+If the token is ever changed on the hub, the page shows the Connect this phone screen again, with
 `That token was refused.`
 
 ## Add to Home Screen
