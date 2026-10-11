@@ -1487,20 +1487,29 @@ const closePicker = (picked = false) => {
 // The current choice: the project the note is under (move), or the next note's (file).
 const pickedKey = () => (picking?.mode === 'move' ? current()[picking.id]?.project?.key ?? null : chosen)
 
+// What the list last drew: a sync that changes none of it leaves the buttons (and focus) alone.
+let pickerDrawn = ''
+
 const renderPickerList = () => {
   if (!picking) return
   const words = $('picker-search').value.trim().toLowerCase()
   const counts = new Map()
   for (const note of Object.values(current())) if (!note.deleted && note.status === 'open' && note.project) counts.set(note.project.key, (counts.get(note.project.key) ?? 0) + 1)
   const here = pickedKey()
-  const items = projects
-    .filter(project => words === '' || labelOf(project).toLowerCase().includes(words))
+  const shown = projects.filter(project => words === '' || labelOf(project).toLowerCase().includes(words))
+  const drawn = JSON.stringify([picking.mode, words, here, shown.map(project => [project.key, labelOf(project), counts.get(project.key) ?? 0])])
+  if (drawn === pickerDrawn && $('picker-list').childElementCount === shown.length) return
+  pickerDrawn = drawn
+  // Focus on a project stays on it when the list is drawn again.
+  const focused = $('picker-list').contains(document.activeElement) ? document.activeElement.dataset.key : undefined
+  const items = shown
     .map(project => {
       const label = labelOf(project)
       const at = words === '' ? -1 : label.toLowerCase().indexOf(words)
       const name = at < 0 ? make('span', 'label', label) : make('span', 'label', label.slice(0, at), make('b', '', label.slice(at, at + words.length)), label.slice(at + words.length))
       const count = counts.get(project.key) ?? 0
       const item = button('', () => choose(project.key), 'pick')
+      item.dataset.key = project.key
       item.append(dot(project), name, make('span', 'aside count', count === 0 ? '—' : `${count} open`))
       if (count === 0) item.lastChild.setAttribute('aria-label', 'none open')
       const isHere = project.key === here
@@ -1509,6 +1518,7 @@ const renderPickerList = () => {
       return make('li', '', item)
     })
   $('picker-list').replaceChildren(...items)
+  if (focused !== undefined) $('picker-list').querySelector(`[data-key="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true })
   $('picker-none').hidden = items.length > 0
   const unfiled = $('picker-unfiled')
   unfiled.setAttribute('aria-pressed', String(here === null))
