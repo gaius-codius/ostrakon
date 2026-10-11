@@ -652,14 +652,27 @@ const toast = (text, undo, detail = '') => {
   $('toast-text').replaceChildren(text, ...(detail ? [make('span', 'detail', ` · ${detail.split('\n')[0]}`)] : []))
   toastUndo = undo
   $('toast-undo').hidden = !undo
+  const wasHidden = $('toast').hidden
   $('toast').hidden = false
+  if (wasHidden || toastLeaving) motion.toastIn($('toast'))
+  toastLeaving = false
   // Said by a live region that's always there; the toast itself comes and goes.
   $('live').textContent = text
+  const shown = ++toasts
   toastTimer = setTimeout(() => {
-    $('toast').hidden = true
     toastUndo = null
+    toastLeaving = true
+    motion.toastOut($('toast'), () => {
+      // A newer toast took its place meanwhile.
+      if (shown !== toasts) return
+      toastLeaving = false
+      $('toast').hidden = true
+      $('toast').style.opacity = ''
+    })
   }, 5000)
 }
+let toasts = 0
+let toastLeaving = false
 
 // One change to a note from this phone, queued; false when the note is gone or nothing was queued.
 const change = (id, edit) => {
@@ -746,10 +759,85 @@ const moveTo = (id, project) => {
 
 // ---- movement ----
 
-// How sheets and drawers come and go; each `…Out` calls `done` once it has gone.
+// Springs and exits come from Motion (vendor/motion.js); screen changes are View Transitions. With
+// reduced motion nothing moves: things appear and go at once, or fade.
+const M = window.Motion
+const reduced = matchMedia('(prefers-reduced-motion: reduce)')
+const isStill = () => reduced.matches || !M
+
+// Starts an animation through Motion, or jumps to the end when it would move something and nothing
+// may move (a fade still fades).
+const run = (target, keyframes, options) => {
+  const isMove = Object.keys(keyframes).some(key => key !== 'opacity')
+  if (!M || (reduced.matches && isMove)) {
+    for (const [key, frames] of Object.entries(keyframes)) target.style[key] = Array.isArray(frames) ? frames[frames.length - 1] : frames
+    return { stop: () => {}, finished: Promise.resolve() }
+  }
+  const controls = M.animate(target, keyframes, options)
+  return { stop: () => controls.stop(), finished: controls.finished ?? Promise.resolve(controls) }
+}
+
+// A number from `from` to `to` on a spring (or a tween), each step handed to `onUpdate`.
+const tweenValue = (from, to, options, onUpdate) => {
+  if (isStill()) {
+    onUpdate(to)
+    return { stop: () => {}, finished: Promise.resolve() }
+  }
+  const controls = M.animate(from, to, { ...options, onUpdate })
+  return { stop: () => controls.stop(), finished: controls.finished ?? Promise.resolve(controls) }
+}
+
+const SPRING = { type: 'spring', visualDuration: 0.32, bounce: 0.12 }
+
+// Sheets and drawers: the panel rises over a fading scrim, and sinks on the way out. A dialog
+// opened again while it's still leaving cancels that leaving (its `done` never runs).
+const leaving = new WeakMap()
+const enter = dialog => {
+  leaving.delete(dialog)
+  const panel = dialog.querySelector('.panel')
+  const scrim = dialog.querySelector('.scrim')
+  if (reduced.matches) {
+    run(dialog, { opacity: [0, 1] }, { duration: 0.15 })
+    return
+  }
+  dialog.style.opacity = ''
+  run(scrim, { opacity: [0, 1] }, { duration: 0.2 })
+  run(panel, { transform: ['translateY(100%)', 'translateY(0%)'] }, SPRING)
+}
+const leave = (dialog, done) => {
+  const token = {}
+  leaving.set(dialog, token)
+  const finish = () => {
+    if (leaving.get(dialog) !== token) return
+    leaving.delete(dialog)
+    dialog.style.opacity = ''
+    dialog.querySelector('.panel').style.transform = ''
+    dialog.querySelector('.scrim').style.opacity = ''
+    done()
+  }
+  if (!M) return finish()
+  if (reduced.matches) return void run(dialog, { opacity: [1, 0] }, { duration: 0.12 }).finished.then(finish, finish)
+  run(dialog.querySelector('.scrim'), { opacity: 0 }, { duration: 0.18 })
+  run(dialog.querySelector('.panel'), { transform: 'translateY(100%)' }, { duration: 0.2, ease: [0.4, 0, 1, 1] }).finished.then(finish, finish)
+}
+
 const motion = {
-  sheetIn: () => {},
-  sheetOut: (dialog, done) => done(),
+  sheetIn: enter,
+  sheetOut: leave,
+  // The search bar and its matches settle in (entering search can't wait for a View Transition:
+  // the field must take focus at once for the keyboard to come up).
+  searchIn: () => {
+    for (const node of [$('search-bar'), $('main')]) run(node, { opacity: [0, 1], transform: ['translateY(-6px)', 'translateY(0px)'] }, { duration: 0.18, ease: 'easeOut' })
+  },
+  toastIn: node => (reduced.matches ? run(node, { opacity: [0, 1] }, { duration: 0.15 }) : run(node, { opacity: [0, 1], transform: ['translateY(12px)', 'translateY(0px)'] }, SPRING)),
+  toastOut: (node, done) => run(node, { opacity: 0 }, { duration: 0.15 }).finished.then(done, done),
+}
+
+// A change of screen (list, capture, search) as a View Transition where there are any; `update`
+// changes the page.
+const viewTransition = update => {
+  if (reduced.matches || !document.startViewTransition) return update()
+  document.startViewTransition(update)
 }
 
 // ---- action sheet (⋯, or a long press on a row) ----
@@ -777,6 +865,8 @@ const openSheet = (id, trigger = moreOf(id)) => {
   isSheetPressed = false
   sheetReturn = trigger ?? document.activeElement
   renderSheet()
+  // Still leaving from last time: gone at once.
+  if ($('sheet').open) $('sheet').close()
   $('sheet').showModal()
   $('sheet-actions').querySelector('button')?.focus({ preventScroll: true })
   motion.sheetIn($('sheet'))
@@ -887,40 +977,130 @@ document.addEventListener('keydown', event => {
   stops[(at + (event.shiftKey ? -1 : 1) + stops.length) % stops.length]?.focus()
 })
 
-// Tap edits; swipe left archives, over a strip that says so and firms up past the point where
-// letting go archives. Holding still opens the action sheet, at once, with the finger still down;
-// what the finger does after that (a small move, the lift) is ignored.
+// Tap edits; swipe left archives, over a strip that says so and firms up while letting go would
+// archive. Letting go archives only while the finger is still heading left past ARCHIVE_PX, or on a
+// quick flick left; a finger that turned back right springs the row home. Holding still opens the
+// action sheet, at once, with the finger still down; what the finger does after that (a small move,
+// the lift) is ignored.
 const HOLD_MS = 550
 const ARCHIVE_PX = 80
+const FLICK_PX_PER_MS = 0.5 // 500 px/s
+const FLICK_MIN_PX = 24
+const TURN_PX = 4 // a move this far sets which way the finger is heading
+const VELOCITY_MS = 100 // velocity over the last this many ms
+
 const gestures = (row, face, behind, id) => {
-  let start = null
+  let start = null // { x, y, pointer }
   let isDragging = false
   let holdTimer = 0
-  const reset = () => {
+  let dx = 0 // where the face is, px (≤ 0)
+  let heading = 0 // -1 left, 1 right
+  let turnX = 0 // where the finger was when `heading` was last set
+  let samples = [] // { t, x }, the last VELOCITY_MS of the finger
+  let frame = 0
+  let spring = null
+  let isLeaving = false
+
+  // The face follows the finger once a frame, by transform only.
+  const paint = () => {
+    frame = 0
+    face.style.transform = dx === 0 ? '' : `translate3d(${dx}px, 0, 0)`
+    row.classList.toggle('armed', dx < -ARCHIVE_PX && heading < 0)
+  }
+  const schedule = () => {
+    if (!frame) frame = requestAnimationFrame(paint)
+  }
+  const settle = () => {
+    cancelAnimationFrame(frame)
+    frame = 0
     clearTimeout(holdTimer)
-    row.classList.remove('dragging', 'armed')
-    face.style.transform = ''
     start = null
     isDragging = false
+    samples = []
+  }
+  // Done with the row: the list may be drawn again.
+  const release = () => {
+    row.classList.remove('dragging', 'armed')
+    face.style.transform = ''
+    dx = 0
     isTouching = false
     if (isStale) renderList()
   }
+  const velocity = () => {
+    const now = performance.now()
+    const recent = samples.filter(sample => now - sample.t <= VELOCITY_MS)
+    if (recent.length < 2) return 0
+    const first = recent[0]
+    const last = recent[recent.length - 1]
+    return last.t - first.t < 8 ? 0 : (last.x - first.x) / (last.t - first.t)
+  }
+  // Home again on a spring that starts at the finger's speed.
+  const springBack = v => {
+    spring = tweenValue(dx, 0, { type: 'spring', stiffness: 520, damping: 42, velocity: v * 1000 }, x => {
+      dx = Math.min(0, x)
+      face.style.transform = `translate3d(${dx}px, 0, 0)`
+    })
+    spring.finished.then(() => {
+      spring = null
+      release()
+    })
+  }
+  // Off to the left, then the row closes up, then the note is archived (with Undo).
+  const throwOut = v => {
+    row.classList.add('armed')
+    if (reduced.matches || !M) {
+      release()
+      return archive(id)
+    }
+    isLeaving = true
+    const width = row.offsetWidth
+    spring = tweenValue(dx, -width, { type: 'spring', bounce: 0, visualDuration: 0.2, velocity: Math.min(v, 0) * 1000 }, x => {
+      dx = x
+      face.style.transform = `translate3d(${x}px, 0, 0)`
+    })
+    spring.finished
+      .then(() => run(row, { height: [`${row.offsetHeight}px`, '0px'], opacity: [1, 0] }, { duration: 0.2, ease: [0.2, 0, 0, 1] }).finished)
+      .then(() => {
+        spring = null
+        isTouching = false
+        archive(id)
+        // Not archived after all (storage refused it): the row comes back.
+        if (row.isConnected) {
+          isLeaving = false
+          row.style.height = ''
+          row.style.opacity = ''
+          release()
+        }
+      })
+  }
+
   // A right click (or a browser's own long press) opens the sheet too; the hold has usually opened it.
   row.addEventListener('contextmenu', event => {
     event.preventDefault()
-    if (!editing) openSheet(id)
+    if (!editing && !isDragging) openSheet(id)
   })
   row.addEventListener('pointerdown', event => {
-    // One finger at a time: a second one on the row is ignored.
-    // The ⋯ button is a plain button: no swipe, hold or tap-to-edit starts on it.
-    if (editing || event.button > 0 || start || event.target.closest('.more')) return
-    start = { x: event.clientX, y: event.clientY, pointer: event.pointerId }
+    // The ⋯ button is a plain button: no swipe, hold or tap-to-edit starts on it. One finger at a
+    // time: a second one on the row is ignored.
+    if (editing || isLeaving || event.button > 0 || start || event.target.closest('.more')) return
+    // Caught mid-spring: the row stays where it is, under the finger.
+    if (spring) {
+      spring.stop()
+      spring = null
+      isDragging = dx !== 0
+    }
+    start = { x: event.clientX - dx, y: event.clientY, pointer: event.pointerId }
+    samples = [{ t: performance.now(), x: event.clientX }]
+    heading = 0
+    turnX = event.clientX
     isTouching = true
-    holdTimer = setTimeout(() => {
-      reset()
-      navigator.vibrate?.(10)
-      openSheet(id)
-    }, HOLD_MS)
+    if (!isDragging)
+      holdTimer = setTimeout(() => {
+        settle()
+        release()
+        navigator.vibrate?.(10)
+        openSheet(id)
+      }, HOLD_MS)
     // Moves and the lift stay with this row even when the finger (or mouse) leaves it.
     try {
       row.setPointerCapture(event.pointerId)
@@ -929,28 +1109,54 @@ const gestures = (row, face, behind, id) => {
   const isOurs = event => start !== null && event.pointerId === start.pointer
   row.addEventListener('pointermove', event => {
     if (!isOurs(event)) return
-    const dx = event.clientX - start.x
+    const moved = event.clientX - start.x
     const dy = event.clientY - start.y
-    if (!isDragging && Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) return reset()
-    if (Math.abs(dx) > 10) {
+    // Mostly up or down before any drag: a scroll, not ours.
+    if (!isDragging && Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(moved)) {
+      settle()
+      return release()
+    }
+    const now = performance.now()
+    samples.push({ t: now, x: event.clientX })
+    while (samples.length > 2 && now - samples[0].t > VELOCITY_MS) samples.shift()
+    if (Math.abs(event.clientX - turnX) >= TURN_PX) {
+      heading = Math.sign(event.clientX - turnX)
+      turnX = event.clientX
+    }
+    if (!isDragging && Math.abs(moved) > 10) {
       clearTimeout(holdTimer)
       isDragging = true
       row.classList.add('dragging')
-      row.classList.toggle('armed', dx < -ARCHIVE_PX)
-      face.style.transform = `translateX(${Math.min(0, dx)}px)`
+    }
+    if (isDragging) {
+      dx = Math.min(0, moved)
+      schedule()
     }
   })
   row.addEventListener('pointerup', event => {
     if (!isOurs(event)) return
-    const dx = event.clientX - start.x
     const wasDragging = isDragging
-    reset()
-    if (wasDragging) {
-      if (dx < -ARCHIVE_PX) archive(id)
-    } else startEdit(id)
+    const v = velocity()
+    settle()
+    if (!wasDragging) {
+      release()
+      return startEdit(id)
+    }
+    const isFlick = v <= -FLICK_PX_PER_MS && dx <= -FLICK_MIN_PX && heading <= 0
+    const isPast = dx < -ARCHIVE_PX && heading < 0 && v <= 0.05
+    paint()
+    if (isFlick || isPast) throwOut(v)
+    else springBack(v)
   })
-  row.addEventListener('pointercancel', event => isOurs(event) && reset())
-  row.addEventListener('lostpointercapture', event => isOurs(event) && reset())
+  const cancel = event => {
+    if (!isOurs(event)) return
+    const wasDragging = isDragging
+    settle()
+    if (wasDragging && dx !== 0) springBack(0)
+    else release()
+  }
+  row.addEventListener('pointercancel', cancel)
+  row.addEventListener('lostpointercapture', cancel)
 }
 
 // ---- screens ----
@@ -1070,12 +1276,11 @@ const pick = key => {
 
 let mode = 'list'
 
-const setMode = next => {
-  if (next === mode) return
-  mode = next
-  document.body.dataset.mode = next
-  const isCapture = next === 'capture'
-  const isSearch = next === 'search'
+// The page for a mode. `after` runs once it's drawn (focus that has to land on what it shows).
+const drawMode = after => {
+  const isCapture = mode === 'capture'
+  const isSearch = mode === 'search'
+  document.body.dataset.mode = mode
   $('close-capture').hidden = !isCapture
   // While typing, the list beneath is dimmed and out of reach; a tap on it closes the form.
   for (const id of ['refused', 'inbox']) $(id).inert = isCapture
@@ -1086,17 +1291,26 @@ const setMode = next => {
   $('clear-filter').hidden = $('filter').value === ''
   renderCapture()
   renderList()
+  after?.()
 }
 
-const startSearch = () => {
-  setMode('search')
-  $('filter').focus()
+// A change of mode is a View Transition, but for going into search: its field has to take focus
+// while the tap still counts, for the keyboard to come up, so it's drawn at once and settles in.
+const setMode = (next, after) => {
+  if (next === mode) return after?.()
+  mode = next
+  if (next === 'search') {
+    drawMode(after)
+    return motion.searchIn()
+  }
+  viewTransition(() => drawMode(after))
 }
+
+const startSearch = () => setMode('search', () => $('filter').focus())
 
 const endSearch = () => {
   if (mode !== 'search') return
-  setMode('list')
-  $('open-search').focus({ preventScroll: true })
+  setMode('list', () => $('open-search').focus({ preventScroll: true }))
 }
 
 $('open-search').addEventListener('click', startSearch)
@@ -1134,8 +1348,9 @@ const startCapture = () => {
 const closeCapture = () => {
   if (mode !== 'capture') return
   const wasInForm = $('capture').contains(document.activeElement) || document.activeElement === $('close-capture')
-  setMode('list')
-  if (wasInForm) $('pill').focus({ preventScroll: true })
+  // The keyboard goes away with the form.
+  if (document.activeElement === $('text')) $('text').blur()
+  setMode('list', () => wasInForm && $('pill').focus({ preventScroll: true }))
 }
 
 $('text').addEventListener('focus', startCapture)
@@ -1214,20 +1429,30 @@ const openPicker = ({ mode: pickMode, id = null, trigger = null }) => {
   $('picker-title').textContent = pickMode === 'move' ? 'Move to' : 'File under'
   $('picker-search').value = ''
   renderPickerList()
+  // Still leaving from last time: gone at once.
+  if ($('picker').open) $('picker').close()
   $('picker').showModal()
   ;($('picker').querySelector('[aria-pressed="true"]') ?? $('picker-search')).focus({ preventScroll: true })
+  motion.sheetIn($('picker'))
 }
 
-// `picked`: true when something was chosen (focus then goes back to the note field).
+// `picked`: true when something was chosen. A project picked for the next note closes the picker at
+// once and puts focus back in the note field while the tap still counts, so the keyboard comes back;
+// otherwise it sinks away first and focus goes back to what opened it.
 const closePicker = (picked = false) => {
   if (!picking) return
   const { trigger, mode: pickMode, id } = picking
   picking = null
-  $('picker').close()
-  if (picked && pickMode === 'file') return $('text').focus({ preventScroll: true })
-  // A moved note's row was drawn again, in its new group: focus its new ⋯.
-  const back = trigger?.isConnected ? trigger : id ? moreOf(id) : null
-  back?.focus({ preventScroll: true })
+  if (picked && pickMode === 'file') {
+    $('picker').close()
+    return $('text').focus({ preventScroll: true })
+  }
+  motion.sheetOut($('picker'), () => {
+    $('picker').close()
+    // A moved note's row was drawn again, in its new group: focus its new ⋯.
+    const back = trigger?.isConnected ? trigger : id ? moreOf(id) : null
+    back?.focus({ preventScroll: true })
+  })
 }
 
 // The current choice: the project the note is under (move), or the next note's (file).
@@ -1287,7 +1512,9 @@ $('picker').addEventListener('cancel', event => {
 $('toast-undo').addEventListener('click', () => {
   const undo = toastUndo
   clearTimeout(toastTimer)
+  toasts += 1
   $('toast').hidden = true
+  $('toast').style.opacity = ''
   toastUndo = null
   if (undo) undo()
 })

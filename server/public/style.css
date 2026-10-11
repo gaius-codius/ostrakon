@@ -238,6 +238,8 @@ input[type="search"]::-webkit-search-cancel-button, input[type="search"]::-webki
 
 /* ---- the inbox: a group per project ---- */
 #inbox { margin-top: 1.625rem; }
+/* Room below the last row to scroll it clear of the toast. */
+#main { padding-bottom: 4.5rem; }
 #list { display: flex; flex-direction: column; gap: 1.125rem; }
 .group h2 { position: sticky; top: 0; z-index: 2; margin: 0; background: var(--bg); font-size: 0.8125rem; font-weight: 600; }
 .group h2 button {
@@ -299,7 +301,8 @@ input[type="search"]::-webkit-search-cancel-button, input[type="search"]::-webki
 .proposal .dismiss { padding: 0 1.125rem; color: var(--dim); }
 .note .behind {
   position: absolute;
-  inset: 0;
+  /* A pixel short top and bottom, so no sliver shows under the face's edge. */
+  inset: 1px 0;
   display: none;
   align-items: center;
   justify-content: flex-end;
@@ -565,3 +568,16 @@ mark { background: var(--fresh); color: var(--text); border-radius: 3px; padding
 .no-match p { margin: 0; font-size: 0.875rem; color: var(--dim); }
 .no-match .title { font-size: 0.9375rem; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
 .top .icon-btn { margin-right: -0.625rem; }
+
+/* ---- movement ---- */
+/* Screen changes (list, capture, search) are View Transitions: the form card grows or shrinks in
+   place, the rest cross-fades. */
+.card { view-transition-name: capture-card; }
+::view-transition-group(*) { animation-duration: 0.26s; animation-timing-function: cubic-bezier(0.2, 0, 0, 1); }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.2s; }
+.note.dragging .face { will-change: transform; }
+/* Nothing moves with reduced motion; changes land at once. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+  .pair summary::after { transition: none; }
+}
