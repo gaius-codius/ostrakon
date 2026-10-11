@@ -245,6 +245,19 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .note .text { flex: 1; min-width: 0; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .note .age { flex: none; font: 0.75rem/1.4375rem var(--mono); color: var(--dim); white-space: nowrap; }
 .note .queued { color: var(--warn); }
+.note .more { width: 2.75rem; height: 2.75rem; margin: -0.625rem -0.875rem -0.625rem -0.375rem; color: var(--faint); }
+.note .behind svg { flex: none; }
+
+/* Claude's proposals: accent heading, the text indented under it, Keep and Dismiss. */
+.group.proposed h2 button { color: var(--accent); }
+.group .diamond { font-size: 0.8125rem; }
+.proposal { padding: 0.25rem 0 0.25rem 1.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.proposal .text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.proposal .for { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.4375rem; font: 0.75rem var(--mono); color: var(--dim); }
+.proposal .for .dot { width: 0.4375rem; height: 0.4375rem; }
+.proposal .choices { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.125rem; }
+.proposal .keep { padding: 0 1.25rem; border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.proposal .dismiss { padding: 0 1.125rem; color: var(--dim); }
 .note .behind {
   position: absolute;
   inset: 0;

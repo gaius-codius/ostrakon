@@ -440,6 +440,20 @@ const renderList = () => {
   }
   const order = [...groups.keys()].sort((a, b) => (a === '') - (b === ''))
   const sections = []
+  // Claude's proposals (harvest, SPEC §8) come first, to keep or dismiss; a filter shows open notes only.
+  const proposals = words === '' ? Object.values(current()).filter(note => !note.deleted && note.status === 'proposed').sort((a, b) => Date.parse(b.updated) - Date.parse(a.updated)) : []
+  if (proposals.length > 0) {
+    const isFolded = folded.has(PROPOSED)
+    const rowsId = `rows-${++groupIds}`
+    const lead = make('span', 'diamond', '◆')
+    lead.setAttribute('aria-hidden', 'true')
+    const head = heading(PROPOSED, lead, 'Proposed by Claude', proposals.length, !isFolded, isFolded ? '▸' : '', rowsId)
+    const list = make('ul', 'rows')
+    list.id = rowsId
+    list.hidden = isFolded
+    if (!isFolded) list.append(...proposals.map(proposalRow))
+    sections.push(make('div', 'group proposed', head, list))
+  }
   for (const key of order) {
     const notes = groups.get(key)
     const project = notes[0].project
@@ -456,25 +470,81 @@ const renderList = () => {
     sections.push(group)
   }
   $('list').replaceChildren(...sections)
-  $('empty').hidden = shown.length > 0
+  $('empty').hidden = shown.length + proposals.length > 0
   $('empty').textContent = words === '' ? 'No open notes.' : 'No notes match.'
 }
 
-// One open note: its marker (◆ from Claude, ▪ from the phone), the text and its age, over the
-// archive strip a swipe uncovers.
+const PROPOSED = ':proposed' // the proposals group's fold key; a project key never starts with ':'
+
+// An inline SVG icon from path data, hidden from assistive tech (the button carries the name).
+const SVG_NS = 'http://www.w3.org/2000/svg'
+const icon = (markup, { size = 18, fill = false, stroke = 1.8 } = {}) => {
+  const svg = document.createElementNS(SVG_NS, 'svg')
+  svg.setAttribute('width', String(size))
+  svg.setAttribute('height', String(size))
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('aria-hidden', 'true')
+  svg.setAttribute('fill', fill ? 'currentColor' : 'none')
+  if (!fill) {
+    svg.setAttribute('stroke', 'currentColor')
+    svg.setAttribute('stroke-width', String(stroke))
+    svg.setAttribute('stroke-linecap', 'round')
+    svg.setAttribute('stroke-linejoin', 'round')
+  }
+  svg.innerHTML = markup
+  return svg
+}
+const ICONS = {
+  more: '<circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle>',
+  archive: '<rect x="3" y="4" width="18" height="5" rx="1"></rect><path d="M5 9v10h14V9M10 13h4"></path>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16z"></path>',
+  copy: '<rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"></path>',
+  move: '<path d="M4 12h14M13 6l6 6-6 6"></path>',
+  sent: '<circle cx="12" cy="12" r="8.5"></circle><path d="m8.5 12.2 2.4 2.4 4.8-5"></path>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5 20 20"></path>',
+  clear: '<path d="M6 6l12 12M18 6 6 18"></path>',
+  chevron: '<path d="m6 9 6 6 6-6"></path>',
+  check: '<path d="m5 12.5 4.5 4.5L19 7.5"></path>',
+}
+
+let textIds = 0
+
+// One open note: its marker (◆ from Claude, ▪ from the phone), the text, its age and a ⋯ button for
+// its actions, over the archive strip a swipe uncovers.
 const noteRow = (note, isQueued) => {
   const marker = make('span', `marker ${note.by}`, note.by === 'claude' ? '◆' : note.by === 'phone' ? '▪' : '')
   if (note.by === 'claude') {
     marker.setAttribute('role', 'img')
     marker.setAttribute('aria-label', 'From Claude')
   } else marker.setAttribute('aria-hidden', 'true')
+  const text = make('p', 'text', note.text)
+  text.id = `text-${++textIds}`
   const age = isQueued ? make('span', 'age queued', make('span', '', '↑ '), 'queued') : make('span', 'age', ageOf(note.updated))
-  const face = make('div', 'face', marker, make('p', 'text', note.text), age)
-  const behind = make('div', 'behind', make('span', '', 'Archive'))
+  const more = button('', event => openSheet(note.id, event.currentTarget), 'more icon-btn')
+  more.append(icon(ICONS.more, { fill: true }))
+  more.setAttribute('aria-label', 'Note actions')
+  more.setAttribute('aria-describedby', text.id)
+  more.setAttribute('aria-haspopup', 'dialog')
+  const face = make('div', 'face', marker, text, age, more)
+  const behind = make('div', 'behind', icon(ICONS.archive, { stroke: 2 }), make('span', '', 'Archive'))
   behind.setAttribute('aria-hidden', 'true')
   const row = make('li', note.id === sheetFor ? 'note chosen' : 'note', behind, face)
   row.dataset.id = note.id
   gestures(row, face, behind, note.id)
+  return row
+}
+
+// A proposal from Claude: its text, the project it's for and its age, Keep and Dismiss.
+const proposalRow = note => {
+  const text = make('p', 'text', note.text)
+  text.id = `text-${++textIds}`
+  const keep = button('Keep', () => decide(note.id, 'open'), 'btn keep')
+  const dismiss = button('Dismiss', () => decide(note.id, 'dismissed'), 'btn dismiss')
+  for (const choice of [keep, dismiss]) choice.setAttribute('aria-describedby', text.id)
+  const article = make('article', 'proposal', text, make('p', 'for', 'for ', dot(note.project), `${labelOf(note.project)} · ${ageOf(note.updated)}`), make('div', 'choices', keep, dismiss))
+  article.setAttribute('aria-labelledby', text.id)
+  const row = make('li', '', article)
+  row.dataset.id = note.id
   return row
 }
 
@@ -519,6 +589,11 @@ const archive = id => {
   if (setStatus(id, 'archived')) {
     toast('Archived', undo(id, note => !note.deleted && note.status === 'archived', () => ({ status: 'open' })))
   }
+}
+
+// Keep makes a proposal an open note; Dismiss puts it with the dismissed ones. Each comes with Undo.
+const decide = (id, status) => {
+  if (setStatus(id, status)) toast(status === 'open' ? 'Kept' : 'Dismissed', undo(id, note => !note.deleted && note.status === status, () => ({ status: 'proposed' })))
 }
 
 const startEdit = id => {
@@ -587,12 +662,14 @@ let sheetDrawn = ''
 // The sheet acts only on an open note: one archived, sent or deleted meanwhile closes it.
 const isActionable = note => note !== undefined && !note.deleted && note.status === 'open'
 
-const openSheet = id => {
+// `trigger`: the ⋯ button it opened from, where focus goes back on close (the row's own ⋯ after a
+// long press).
+const openSheet = (id, trigger = moreOf(id)) => {
   if (sheetFor !== null || !isActionable(current()[id])) return
   sheetFor = id
   sheetView = 'actions'
   isSheetPressed = false
-  sheetReturn = document.activeElement
+  sheetReturn = trigger ?? document.activeElement
   renderSheet()
   $('sheet').hidden = false
   // The page beneath can't be focused, tapped or read while the sheet is up.
@@ -607,8 +684,11 @@ const openSheet = id => {
   renderList()
 }
 
+const moreOf = id => $('list').querySelector(`li.note[data-id="${CSS.escape(id)}"] .more`)
+
 const closeSheet = () => {
   if (sheetFor === null) return
+  const id = sheetFor
   sheetFor = null
   sheetView = null
   sheetDrawn = ''
@@ -616,7 +696,9 @@ const closeSheet = () => {
   $('sheet').hidden = true
   $('app').inert = false
   renderList()
-  if (sheetReturn?.isConnected && sheetReturn !== document.body) sheetReturn.focus({ preventScroll: true })
+  // The list was drawn again: the same row's ⋯ is a new button.
+  const back = sheetReturn?.isConnected ? sheetReturn : sheetReturn?.classList?.contains('more') ? moreOf(id) : null
+  if (back && back !== document.body) back.focus({ preventScroll: true })
   sheetReturn = null
 }
 
@@ -714,7 +796,8 @@ const gestures = (row, face, behind, id) => {
   })
   row.addEventListener('pointerdown', event => {
     // One finger at a time: a second one on the row is ignored.
-    if (editing || event.button > 0 || start) return
+    // The ⋯ button is a plain button: no swipe, hold or tap-to-edit starts on it.
+    if (editing || event.button > 0 || start || event.target.closest('.more')) return
     start = { x: event.clientX, y: event.clientY, pointer: event.pointerId }
     isTouching = true
     holdTimer = setTimeout(() => {
