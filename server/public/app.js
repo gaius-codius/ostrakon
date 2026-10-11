@@ -1348,12 +1348,23 @@ const startCapture = () => {
 }
 
 // Leaves the form; whatever was typed stays, here and in storage, for next time.
-const closeCapture = () => {
+// `next`: where focus goes once the list is back, when it was in the form (else the pill).
+const closeCapture = (next = () => $('pill')) => {
   if (mode !== 'capture') return
   const wasInForm = $('capture').contains(document.activeElement) || document.activeElement === $('close-capture')
   // The keyboard goes away with the form.
   if (document.activeElement === $('text')) $('text').blur()
-  setMode('list', () => wasInForm && $('pill').focus({ preventScroll: true }))
+  setMode('list', () => wasInForm && next()?.focus({ preventScroll: true }))
+}
+
+const isShown = node => node.getClientRects().length > 0
+// Tab past the form's last control leaves it: the form closes and focus goes on into the list
+// (which is out of reach while the form is open).
+const tabOut = event => {
+  const stops = [...$('capture').querySelectorAll('textarea, button')].filter(stop => !stop.disabled && isShown(stop))
+  if (event.shiftKey || event.target !== stops[stops.length - 1]) return
+  event.preventDefault()
+  closeCapture(() => [...document.querySelectorAll('#refused button, #list button')].find(isShown) ?? $('open-search'))
 }
 
 $('text').addEventListener('focus', startCapture)
@@ -1362,10 +1373,11 @@ $('text').addEventListener('input', () => {
   $('save').disabled = $('text').value.trim() === ''
 })
 $('pill').addEventListener('click', () => $('text').focus())
-$('close-capture').addEventListener('click', closeCapture)
+$('close-capture').addEventListener('click', () => closeCapture())
 $('save').addEventListener('mousedown', event => event.preventDefault())
 $('capture').addEventListener('keydown', event => {
   if (event.key === 'Escape') closeCapture()
+  if (event.key === 'Tab') tabOut(event)
   if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) $('capture').requestSubmit()
 })
 // A tap outside the form (on the dimmed list) closes it.
