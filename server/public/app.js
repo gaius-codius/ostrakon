@@ -52,6 +52,10 @@ let sheetFor = null // the note the action sheet is open for
 // Folded groups, by project key ('' for unfiled); kept on the phone across opens.
 let folded = new Set(load('sp.folded', []))
 
+// The marks the phone draws as text; the shared ones as the pane's (plugin/src/ui/look.ts GLYPH).
+// docs/DESIGN.md lists them, and tools/check.sh fails when the two differ.
+const GLYPH = { claude: '◆', phone: '▪', quote: '▎', folded: '▸', saved: '✓', queued: '↑', next: '›' }
+
 const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
 const ulid = () => {
   let time = Date.now()
@@ -411,7 +415,7 @@ const renderRefused = () => {
       row.dataset.id = item.id
       return row
     }
-    const bar = make('span', 'bar', '▎')
+    const bar = make('span', 'bar', GLYPH.quote)
     bar.setAttribute('aria-hidden', 'true')
     const edit = button('Edit', () => {
       refusedEditing = { id: item.id, draft: item.text }
@@ -503,9 +507,9 @@ const renderList = () => {
   if (proposals.length > 0) {
     const isFolded = folded.has(PROPOSED)
     const rowsId = `rows-${++groupIds}`
-    const lead = make('span', 'diamond', '◆')
+    const lead = make('span', 'diamond', GLYPH.claude)
     lead.setAttribute('aria-hidden', 'true')
-    const head = heading(PROPOSED, lead, 'Proposed by Claude', proposals.length, !isFolded, isFolded ? '▸' : '', rowsId)
+    const head = heading(PROPOSED, lead, 'Proposed by Claude', proposals.length, !isFolded, isFolded ? GLYPH.folded : '', rowsId)
     const list = make('ul', 'rows')
     list.id = rowsId
     list.hidden = isFolded
@@ -519,7 +523,7 @@ const renderList = () => {
     const isFolded = folded.has(key)
     const isShut = isFolded && mode !== 'search'
     const rowsId = `rows-${++groupIds}`
-    const head = heading(key, dot(project), labelOf(project), notes.length, !isShut, isShut ? '▸' : isFolded ? 'folded · showing matches' : '', rowsId)
+    const head = heading(key, dot(project), labelOf(project), notes.length, !isShut, isShut ? GLYPH.folded : isFolded ? 'folded · showing matches' : '', rowsId)
     const list = make('ul', 'rows')
     list.id = rowsId
     list.hidden = isShut
@@ -597,7 +601,7 @@ let textIds = 0
 // One open note: its marker (◆ from Claude, ▪ from the phone), the text, its age and a ⋯ button for
 // its actions, over the archive strip a swipe uncovers.
 const noteRow = (note, isQueued, words = '') => {
-  const marker = make('span', `marker ${note.by}`, note.by === 'claude' ? '◆' : note.by === 'phone' ? '▪' : '')
+  const marker = make('span', `marker ${note.by}`, note.by === 'claude' ? GLYPH.claude : note.by === 'phone' ? GLYPH.phone : '')
   if (note.by === 'claude') {
     marker.setAttribute('role', 'img')
     marker.setAttribute('aria-label', 'From Claude')
@@ -606,7 +610,7 @@ const noteRow = (note, isQueued, words = '') => {
   text.id = `text-${++textIds}`
   // The note just saved says `now` rather than `queued`: the form already says it's waiting to sync.
   const isFresh = note.id === freshId
-  const age = isQueued && !isFresh ? make('span', 'age queued', make('span', '', '↑ '), 'queued') : make('span', 'age', ageOf(note.updated))
+  const age = isQueued && !isFresh ? make('span', 'age queued', make('span', '', `${GLYPH.queued} `), 'queued') : make('span', 'age', ageOf(note.updated))
   const more = button('', event => openSheet(note.id, event.currentTarget), 'more icon-btn')
   more.append(icon(ICONS.more, { fill: true }))
   more.setAttribute('aria-label', 'Note actions')
@@ -939,7 +943,7 @@ const renderSheet = () => {
   sheetDrawn = drawn
   const list = $('sheet-actions')
   const focused = list.contains(document.activeElement) ? document.activeElement.dataset.key : undefined
-  const by = note.by === 'claude' ? '◆ Claude' : note.by === 'phone' ? '▪ phone' : 'you'
+  const by = note.by === 'claude' ? `${GLYPH.claude} Claude` : note.by === 'phone' ? `${GLYPH.phone} phone` : 'you'
   $('sheet-text').textContent = note.text
   $('sheet-meta').replaceChildren(dot(note.project), `${labelOf(note.project)} · ${by} · ${ageOf(note.updated)}`)
   const items = [
@@ -948,7 +952,7 @@ const renderSheet = () => {
     sheetAction('move', 'Move to project', () => {
       const id = sheetFor
       closeSheet(back => openPicker({ mode: 'move', id, trigger: back }))
-    }, { aside: `${labelOf(note.project)} ›` }),
+    }, { aside: `${labelOf(note.project)} ${GLYPH.next}` }),
     sheetAction('sent', 'Mark sent', act(markSent, 'gone'), { sub: 'used elsewhere; leaves open notes' }),
     sheetAction('archive', 'Archive', act(archive, 'gone'), { className: 'danger' }),
   ]
@@ -1230,7 +1234,7 @@ const renderSaved = () => {
   const saved = $('saved')
   if (savedId === null || mode === 'capture') saved.replaceChildren()
   else {
-    const tick = make('span', '', '✓')
+    const tick = make('span', '', GLYPH.saved)
     tick.setAttribute('aria-hidden', 'true')
     // Out of the outbox is synced only when the hub took it: a refused note leaves it too.
     const isRefused = refused.some(item => item.id === savedId) || [...held.keys()].some(note => note.id === savedId)

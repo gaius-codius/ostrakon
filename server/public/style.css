@@ -60,7 +60,6 @@
   --lime: #4f7410;
   --sand: #7e5e38;
   --inactive: rgb(102, 102, 102);
-  --claude: rgb(215, 119, 87);
 }
 @media (prefers-color-scheme: dark) {
   :root {
