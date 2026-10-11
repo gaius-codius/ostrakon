@@ -33,7 +33,7 @@ dark160() {
   keys Tab Enter; sleep 0.5
   keys n; lit "check the arm runner minutes"; keys Enter; lit "the inline pane has 11 rows"; sleep 1; snap capture-160 "capture"
   close_pane
-  open_pane; keys Enter l; for i in $(seq 1 26); do T send-keys -t rv Down; sleep 0.3; done; sleep 1; snap paging-160 "list · paged, sentinels"
+  open_pane; keys Enter l; for _ in $(seq 1 26); do T send-keys -t rv Down; sleep 0.3; done; sleep 1; snap paging-160 "list · paged, sentinels"
   close_pane
   echo 'not a note' > $R/fixture-many/notes/broken.md; sleep 2.5
   open_pane; snap problem-160 "storage problem row"

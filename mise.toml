@@ -1,0 +1,9 @@
+# The code-quality tools, at pinned versions: `mise install` here gets the same ones CI uses
+# (.github/workflows/ci.yml). tools/lint.sh runs them all.
+[tools]
+biome = "2.5.14"
+shfmt = "3.14.1"
+actionlint = "1.7.12"
+typos = "1.50.3"
+lychee = "0.24.2"
+shellcheck = "0.11.0"

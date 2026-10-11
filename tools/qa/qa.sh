@@ -9,7 +9,9 @@
 Q=${QA_DIR:-/tmp/ostrakon-qa}
 P=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../plugin" && pwd)
 TOOLS=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck disable=SC2034  # where the Obsidian and Dropbox QA runs point; not read by every run
 VAULT="${QA_VAULT:-$HOME/Documents/vault/ostrakon}"
+# shellcheck disable=SC2034
 DBX=${QA_DROPBOX:-$HOME/Dropbox/ostrakon-qa}
 mkdir -p $Q/shots
 QT() { tmux -L qa "$@"; }
@@ -26,7 +28,7 @@ EOF
   QT kill-session -t $name 2>/dev/null
   QT new-session -d -s $name -x 160 -y 40 -c "${QA_CWD:-$HOME}" \
     "CLAUDE_CODE_PLUGIN_DIRS= OSTRAKON_DIR=$Q/$name COLORTERM=truecolor claude --plugin-dir $P --debug-file $Q/debug-$name.log --settings $Q/settings-$name.json"
-  for i in $(seq 1 40); do QT capture-pane -p -t $name | grep -q "shift+tab" && break; sleep 1; done; sleep 3
+  for _ in $(seq 1 40); do QT capture-pane -p -t $name | grep -q "shift+tab" && break; sleep 1; done; sleep 3
 }
 qkeys() { local n=$1; shift; for k in "$@"; do QT send-keys -t $n "$k"; sleep 0.35; done; sleep 1; }
 qlit() { QT send-keys -t $1 -l "$2"; sleep 0.5; }
@@ -37,8 +39,8 @@ qshot() { # name shot caption
   chromium --headless=new --disable-gpu --hide-scrollbars --screenshot=$Q/shots/$2.png --window-size=1400,770 file://$Q/shots/$2.html >/dev/null 2>&1
 }
 qwait() { # seconds 'test'
-  local t0=$(date +%s%N) limit=$(( $1 * 20 ))
-  for i in $(seq 1 $limit); do if eval "$2" >/dev/null 2>&1; then echo "$(( ($(date +%s%N) - t0) / 1000000 ))ms"; return 0; fi; sleep 0.05; done
+  local t0 limit; t0=$(date +%s%N) limit=$(( $1 * 20 ))
+  for _ in $(seq 1 $limit); do if eval "$2" >/dev/null 2>&1; then echo "$(( ($(date +%s%N) - t0) / 1000000 ))ms"; return 0; fi; sleep 0.05; done
   echo TIMEOUT; return 1
 }
 qstop() { QT kill-session -t $1 2>/dev/null; }

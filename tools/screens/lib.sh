@@ -32,7 +32,7 @@ start() { # fixture cols rows
   rm -f $DEBUG_LOG
   T new-session -d -s rv -x $2 -y $3 -c "$SCREENS_CWD" \
     "CLAUDE_CODE_PLUGIN_DIRS= OSTRAKON_DIR=$fx COLORTERM=truecolor claude --plugin-dir $PLUGIN --debug-file $DEBUG_LOG ${SCREENS_SESSION:+--session-id $SCREENS_SESSION} --settings ${SCREENS_SETTINGS:-$(isolated)}"
-  for i in $(seq 1 30); do T capture-pane -p -t rv | grep -q "shift+tab" && break; sleep 1; done; sleep 3
+  for _ in $(seq 1 30); do T capture-pane -p -t rv | grep -q "shift+tab" && break; sleep 1; done; sleep 3
   COLS=$2; ROWS=$3
 }
 keys() { for k in "$@"; do T send-keys -t rv "$k"; sleep 0.35; done; sleep 1.2; }

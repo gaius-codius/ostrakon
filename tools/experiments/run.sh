@@ -8,7 +8,7 @@ xstart() {
   X kill-session -t x 2>/dev/null; rm -f $XR/debug.log
   X new-session -d -s x -x $1 -y $2 -c "${SCREENS_CWD:-$HOME}" \
     "OSTRAKON_DIR=$XR/notes claude --plugin-dir ${XMOD:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/spx} --debug-file $XR/debug.log --settings $XR/isolated.json"
-  for i in $(seq 1 30); do X capture-pane -p -t x | grep -q "shift+tab" && break; sleep 1; done; sleep 2
+  for _ in $(seq 1 30); do X capture-pane -p -t x | grep -q "shift+tab" && break; sleep 1; done; sleep 2
 }
 xk() { for k in "$@"; do X send-keys -t x "$k"; sleep 0.4; done; sleep 1; }
 xl() { X send-keys -t x -l "$1"; sleep 0.5; }
