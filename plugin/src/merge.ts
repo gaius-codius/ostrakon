@@ -20,10 +20,7 @@ const compareText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 // and the result never depends on argument order or on which machine merges. The hub and every
 // adapter use this function rather than their own reading of the rules.
 export const compareNotes = (a: Note, b: Note) =>
-  time(a.updated) - time(b.updated) ||
-  finality(a) - finality(b) ||
-  compareText(a.origin, b.origin) ||
-  compareText(serializeNote(a), serializeNote(b))
+  time(a.updated) - time(b.updated) || finality(a) - finality(b) || compareText(a.origin, b.origin) || compareText(serializeNote(a), serializeNote(b))
 
 export const winner = (a: Note, b: Note) => (compareNotes(a, b) >= 0 ? a : b)
 
@@ -38,8 +35,7 @@ export const mergeAll = (notes: Iterable<Note>) => {
 
 // A hybrid-logical-clock step: never earlier than the previous stamp, so a local change always
 // beats the copy it changed even when this machine's clock is behind the one that wrote it.
-export const nextStamp = (now: number, previous?: string) =>
-  new Date(Math.max(now, previous === undefined ? 0 : time(previous) + 1)).toISOString()
+export const nextStamp = (now: number, previous?: string) => new Date(Math.max(now, previous === undefined ? 0 : time(previous) + 1)).toISOString()
 
 // Tombstones are kept this long after their last change, then dropped from storage.
 export const PURGE_AFTER_MS = 60 * 24 * 60 * 60 * 1000

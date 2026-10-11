@@ -21,7 +21,18 @@ import {
   toField,
   visibleNotes,
 } from '../src/model'
-import { DEFAULT_HARVEST_MODE, JOT_DESCRIPTION, JOT_REPLY, JOT_SCHEMA, JOT_TOOL, harvestModeOf, jotText, lightRequest, parseReview, reviewPrompt } from '../src/harvest'
+import {
+  DEFAULT_HARVEST_MODE,
+  JOT_DESCRIPTION,
+  JOT_REPLY,
+  JOT_SCHEMA,
+  JOT_TOOL,
+  harvestModeOf,
+  jotText,
+  lightRequest,
+  parseReview,
+  reviewPrompt,
+} from '../src/harvest'
 import type { HarvestMode } from '../src/harvest'
 import { basename, normalizeRemote } from '../src/project'
 import { freshReport, withProblem } from '../src/report'
@@ -32,7 +43,19 @@ import type { Sync, SyncIO } from '../src/sync/core'
 import { ARCHIVE_FOLDER, folderAdapter } from '../src/sync/folder'
 import type { MirrorIO } from '../src/sync/folder'
 import { hubAdapter } from '../src/sync/hub'
-import { canReview, freshTurns, isHarvestShown, mergeHarvest, sessionEnded, sessionRestored, sessionStarted, turnCompleted, turnProposals, turnStarted, waitingProposals } from '../src/turns'
+import {
+  canReview,
+  freshTurns,
+  isHarvestShown,
+  mergeHarvest,
+  sessionEnded,
+  sessionRestored,
+  sessionStarted,
+  turnCompleted,
+  turnProposals,
+  turnStarted,
+  waitingProposals,
+} from '../src/turns'
 import type { RunningTurn } from '../src/turns'
 import { HarvestRow, PocketRow, harvestOf, openerOf, pocketOf } from '../src/ui/band'
 import type { BandHandlers } from '../src/ui/band'
@@ -58,7 +81,11 @@ const problems = atom({ plugin: 'ostrakon', key: 'problems' } as const, [])
 const pane = atom({ plugin: 'ostrakon', key: 'pane' } as const, freshPane())
 // Shaped: the value was a list of ids before the band was drawn against the latest turn.
 const harvest = atom({ plugin: 'ostrakon', key: 'harvest' } as const, null, { shape: 'order' })
-const turns = atom({ plugin: 'ostrakon', key: 'turns' } as const, { latest: '', latestOrder: { generation: 0, seq: 0 }, running: '', generation: 0, seq: 0 }, { shape: 'order' })
+const turns = atom(
+  { plugin: 'ostrakon', key: 'turns' } as const,
+  { latest: '', latestOrder: { generation: 0, seq: 0 }, running: '', generation: 0, seq: 0 },
+  { shape: 'order' },
+)
 const syncState = atom({ plugin: 'ostrakon', key: 'sync' } as const, { isOn: false, isOnline: false, queued: 0, problem: '' })
 const mirrorState = atom({ plugin: 'ostrakon', key: 'mirror' } as const, { isOn: false, isOnline: false, queued: 0, problem: '' })
 // The hint line's tail (SPEC §4.4): a /jot draft says what Enter will do, then that it did.
@@ -185,9 +212,7 @@ const storeIO = async ($: EngineInterface): Promise<StoreIO> => ({
   rmdir: async path => (await $.process.run(['rmdir', path])).exitCode === 0,
   remove: async path => (await $.process.run(['rm', '-f', path])).exitCode === 0,
   mkdirs: async path => (await $.process.run(['mkdir', '-p', path])).exitCode === 0,
-  hostname: async () =>
-    (await $.fs.read('/etc/hostname').then(String, () => '')).trim() ||
-    (await $.process.run(['uname', '-n'])).stdout,
+  hostname: async () => (await $.fs.read('/etc/hostname').then(String, () => '')).trim() || (await $.process.run(['uname', '-n'])).stdout,
   // process.run's parent is this Claude Code process (checked: its PPID is the claude binary).
   processId: async () => Number((await $.process.run(['sh', '-c', 'echo $PPID'])).stdout.trim()) || undefined,
   processState: async pid => {
@@ -686,11 +711,6 @@ const showSaved = async ($: EngineInterface) => {
   })
 }
 
-const notesOf = async ($: EngineInterface, ids: string[]) => {
-  const all = await read($, notes)
-  return ids.map(id => all[id]).filter((note): note is Note => note !== undefined)
-}
-
 // Fills the prompt with the held draft, anything typed there since, and the note; closes the pane
 // if it's open. `typed` is what the prompt held that isn't the person's draft (the band's digit).
 const fillPrompt = async ($: EngineInterface, text: string, ids: string[], typed?: string) => {
@@ -740,7 +760,12 @@ const act = async ($: EngineInterface, action: Action) => {
       await setPane($, current => ({ ...current, picks: [], undo: [...current.undo, { kind: 'picks', before: current.picks }] }))
       return
     case 'toPrompt': {
-      if (state.mode === 'bundle') return fillPrompt($, bundleText(view.ctx, view.bundle), view.bundle.map(item => item.id))
+      if (state.mode === 'bundle')
+        return fillPrompt(
+          $,
+          bundleText(view.ctx, view.bundle),
+          view.bundle.map(item => item.id),
+        )
       if (note) return fillPrompt($, dispatchText(view.ctx, note), [note.id])
       return
     }
@@ -788,7 +813,11 @@ const act = async ($: EngineInterface, action: Action) => {
         return toast($, TOAST.hasNewline)
       }
       // Editing the same note again picks its kept draft back up.
-      await setPane($, current => ({ ...current, mode: 'edit', edit: current.edit?.id === note.id ? current.edit : { id: note.id, draft: toField(note.text) } }))
+      await setPane($, current => ({
+        ...current,
+        mode: 'edit',
+        edit: current.edit?.id === note.id ? current.edit : { id: note.id, draft: toField(note.text) },
+      }))
       focusKey($, EDIT_KEY)
       return
     }
@@ -858,7 +887,12 @@ const act = async ($: EngineInterface, action: Action) => {
       focusKey($, SEARCH_KEY)
       return
     case 'new':
-      await setPane($, current => ({ ...current, mode: 'capture', focus: 'control', capture: { ...current.capture, target: current.capture.target ?? project.key, error: null } }))
+      await setPane($, current => ({
+        ...current,
+        mode: 'capture',
+        focus: 'control',
+        capture: { ...current.capture, target: current.capture.target ?? project.key, error: null },
+      }))
       focusKey($, CAPTURE_KEY)
       return
     case 'scope':
@@ -951,7 +985,12 @@ const captureSubmit = async ($: EngineInterface, value: string) => {
     // Text typed while the save ran is the next note: leave it.
     await setPane($, state => ({
       ...state,
-      capture: { ...state.capture, draft: state.capture.draft === value ? '' : state.capture.draft, error: null, saved: [...state.capture.saved, text].slice(-10) },
+      capture: {
+        ...state.capture,
+        draft: state.capture.draft === value ? '' : state.capture.draft,
+        error: null,
+        saved: [...state.capture.saved, text].slice(-10),
+      },
     }))
   } catch (error) {
     noteProblem($, 'storage', error)
@@ -979,7 +1018,8 @@ const editSubmit = async ($: EngineInterface, value: string) => {
       return
     }
     const was = before
-    if (was !== undefined && was !== text) await setPane($, current => ({ ...current, undo: [...current.undo, { kind: 'text' as const, id, before: was }].slice(-50) }))
+    if (was !== undefined && was !== text)
+      await setPane($, current => ({ ...current, undo: [...current.undo, { kind: 'text' as const, id, before: was }].slice(-50) }))
   }
   await setPane($, current => ({ ...current, mode: 'browse', edit: null }))
   await focusLine($, id)
@@ -1107,7 +1147,10 @@ const reviewTurn = async ($: EngineInterface, turn: RunningTurn, answer: string)
     $.ui.log(`ostrakon: harvest review skipped: a newer turn or conversation started`, { to: 'debug' })
     return
   }
-  const reply = mode === 'light' ? await $.model.complete(lightRequest(turn.prompt.text, answer, jotted, room)) : await $.model.fork({ prompt: reviewPrompt(answer, jotted, room) })
+  const reply =
+    mode === 'light'
+      ? await $.model.complete(lightRequest(turn.prompt.text, answer, jotted, room))
+      : await $.model.fork({ prompt: reviewPrompt(answer, jotted, room) })
   const usage = 'usage' in reply ? reply.usage : { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
   $.ui.log(
     `ostrakon: harvest review (${mode}) ${reply.isAnswered ? 'answered' : reply.reason} in ${(await $.clock.now()) - started} ms: input=${usage.input_tokens} output=${usage.output_tokens} cacheRead=${usage.cache_read_input_tokens} cacheCreate=${usage.cache_creation_input_tokens}`,
@@ -1126,7 +1169,13 @@ const reviewTurn = async ($: EngineInterface, turn: RunningTurn, answer: string)
   if (found.length === 0) return
   const io = await storeIO($)
   for (const text of found) {
-    await store.create(io, { text, by: 'claude', status: 'proposed', project, context: { ...(sessionId !== undefined ? { sessionId } : {}), turnId: turn.turnId } })
+    await store.create(io, {
+      text,
+      by: 'claude',
+      status: 'proposed',
+      project,
+      context: { ...(sessionId !== undefined ? { sessionId } : {}), turnId: turn.turnId },
+    })
   }
   // Shown only while this turn is still the latest; otherwise they wait in the pane.
   await collectHarvest($, turn)
@@ -1182,7 +1231,11 @@ const startSync = async ($: EngineInterface) => {
   }
   for (const syncing of syncs) {
     void setSyncState($, syncing, state => ({ ...state, isOn: true }))
-    syncing.sync.run(syncIO($, syncing), (ms, fn) => void $.clock.after(ms, fn), () => true)
+    syncing.sync.run(
+      syncIO($, syncing),
+      (ms, fn) => void $.clock.after(ms, fn),
+      () => true,
+    )
   }
 }
 
@@ -1198,7 +1251,10 @@ export const register: Register = (on, options) => {
   mirrorOptions.dir = typeof options.mirrorDir === 'string' ? options.mirrorDir.trim() : ''
   harvestOptions.isOn = options.harvest === true
   harvestOptions.mode = harvestModeOf(options.harvestMode)
-  harvestOptions.max = typeof options.harvestMaxPerTurn === 'number' && Number.isFinite(options.harvestMaxPerTurn) ? Math.max(1, Math.min(9, Math.floor(options.harvestMaxPerTurn))) : 3
+  harvestOptions.max =
+    typeof options.harvestMaxPerTurn === 'number' && Number.isFinite(options.harvestMaxPerTurn)
+      ? Math.max(1, Math.min(9, Math.floor(options.harvestMaxPerTurn)))
+      : 3
   pocketOptions.max = typeof options.pocketMax === 'number' && Number.isFinite(options.pocketMax) ? Math.max(1, Math.min(9, Math.floor(options.pocketMax))) : 5
 
   on('session.start', async ($, e, next) => {
@@ -1207,11 +1263,16 @@ export const register: Register = (on, options) => {
     const started = sessionStarted(turnState)
     turnState = started.state
     // A new report per load: which Claude Code this is, and (from here on) what goes wrong.
-    const claude = await $.session.version().then(v => v.version, () => 'unknown')
+    const claude = await $.session.version().then(
+      v => v.version,
+      () => 'unknown',
+    )
     report = freshReport(new Date(await $.clock.now()).toISOString(), claude)
     await $.command.register({ name: 'jot', description: 'Save a note to ostrakon (alone: open the pane)', immediate: true, argumentHint: '<note>' })
     // The same whether harvest is on or off: the person can always ask Claude to jot something.
-    await $.tool.register({ name: JOT_TOOL, description: JOT_DESCRIPTION, inputSchema: JOT_SCHEMA, isDeferred: false }).catch(error => noteProblem($, 'jot tool not registered', error))
+    await $.tool
+      .register({ name: JOT_TOOL, description: JOT_DESCRIPTION, inputSchema: JOT_SCHEMA, isDeferred: false })
+      .catch(error => noteProblem($, 'jot tool not registered', error))
     if (started.facts) await update($, turns, started.facts)
     // A reload keeps the atoms but not the module: later decisions order above what they hold, and
     // the latest prompt comes back, so a continuation after the reload still joins its harvest.
@@ -1222,7 +1283,10 @@ export const register: Register = (on, options) => {
     await update($, fresh, () => '')
     await update($, savedAt, () => 0)
     project = await currentProject($)
-      .then(found => ((isProjectKnown = true), found))
+      .then(found => {
+        isProjectKnown = true
+        return found
+      })
       .catch(() => project)
     tone = await themeTone($).catch(() => 'dark')
     await store.loadAll(await storeIO($)).catch(error => reportStorage($, error))
@@ -1429,16 +1493,26 @@ export const register: Register = (on, options) => {
       keepAll: ids => run(serially(() => keep($, ids))),
       open: () => serially(() => openPane($, 'browse')).catch(error => reportStorage($, error)),
     }
-    let row
+    let row: JSX.Element
     if (proposals.length > 0) {
       const hasHint = (await read($, harvest))?.turnId === (await read($, harvestHint))
-      row = <HarvestRow el={el} proposals={proposals} harvest={harvestOf(proposals, columns, opener)} look={look} hasHint={hasHint} columns={columns} handlers={handlers} />
+      row = (
+        <HarvestRow
+          el={el}
+          proposals={proposals}
+          harvest={harvestOf(proposals, columns, opener)}
+          look={look}
+          hasHint={hasHint}
+          columns={columns}
+          handlers={handlers}
+        />
+      )
     } else {
       const all = pocketOptions.isOn ? Object.values(await read($, notes)) : []
       row = <PocketRow el={el} pocket={pocketOf(all, project.key, pocketOptions.max, columns, opener)} opener={opener} look={look} handlers={handlers} />
     }
     return (
-      <Box flexDirection="column">
+      <Box flexDirection='column'>
         {below}
         {row}
       </Box>

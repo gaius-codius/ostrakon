@@ -25,7 +25,7 @@ const after = (landing: { pane?: (state: PaneState) => PaneState }, state: PaneS
 const editing = (): PaneState => ({ ...freshPane(), mode: 'edit', edit: { id: 'n1', draft: 'half typed' }, focus: 'control' })
 
 describe('focus', () => {
-  test('the engine\'s own move is passed on and remembered at once; onto the action layer it is routed like the person\'s', () => {
+  test("the engine's own move is passed on and remembered at once; onto the action layer it is routed like the person's", () => {
     expect(focusMove(engine('slot-2'))).toEqual({ kind: 'pass' })
     expect(needsView(focusMove(engine('slot-2')))).toBe(false)
     expect(land(engine('slot-2'), SEARCH_KEY)).toEqual({ to: 'slot-2' })
@@ -49,7 +49,7 @@ describe('focus', () => {
     expect(after(fromFooter, { ...freshPane(), focus: 'control', cursor: 'n2' })).toMatchObject({ cursor: 'n2', focus: 'search' })
   })
 
-  test('off search with no rows the layer sends the ring to search; from a row that left the window the pane\'s focus goes to search', () => {
+  test("off search with no rows the layer sends the ring to search; from a row that left the window the pane's focus goes to search", () => {
     const empty = land(person('key-e'), SEARCH_KEY, EMPTY)
     expect(empty.to).toBe(SEARCH_KEY)
     expect(after(empty).focus).toBe('search')

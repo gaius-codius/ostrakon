@@ -99,4 +99,10 @@ export const routeFocus = (move: FocusMove, e: FocusEvent, previous: string | un
 }
 
 // A paged line's slot in the window drawn after paging (the first, if it isn't there).
-export const pagedSlot = (view: FocusView, key: string) => slotKey(Math.max(0, view.page.lines.findIndex(line => line.key === key)))
+export const pagedSlot = (view: FocusView, key: string) =>
+  slotKey(
+    Math.max(
+      0,
+      view.page.lines.findIndex(line => line.key === key),
+    ),
+  )

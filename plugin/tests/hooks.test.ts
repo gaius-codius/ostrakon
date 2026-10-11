@@ -1,10 +1,9 @@
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
-import { serializeNote } from '../src/frontmatter'
 import { MemDir } from './memdir'
 import { COLOUR, GLYPH } from '../src/ui/look'
-import { CC, INFRA, NOTE, PANE, mountPane, noteIn, put, run, startSession, texts } from './world'
+import { CC, INFRA, PANE, mountPane, noteIn, put, run, startSession, texts } from './world'
 
 const fixture = () => {
   const dir = new MemDir()
@@ -147,7 +146,7 @@ test('notes load at session start, and unreadable files show as a problem row', 
 
 const composer = ($: Engine, text: string) => $.prompt.submit({ text, wait: false, origin: { kind: 'composer' } })
 
-test('the person\'s next submit carrying a filled note marks it sent; after that the fill is spent', async ($, on) => {
+test("the person's next submit carrying a filled note marks it sent; after that the fill is spent", async ($, on) => {
   const dir = fixture()
   const { world } = await startSession($, on, dir)
   await run($, 'jot', '')
@@ -256,7 +255,7 @@ test('a dropped submit of a filled note keeps it tracked, so the retry marks it 
 
 // The ui.focus hook's boundary: a landing is the ring's last element at once, before the view is
 // read, so a move onto the action layer while that read waits goes back to it.
-test('a focus move waiting on the view is already the ring\'s last: the action layer meanwhile sends the ring back to it', async ($, on) => {
+test("a focus move waiting on the view is already the ring's last: the action layer meanwhile sends the ring back to it", async ($, on) => {
   const dir = fixture()
   // Holds the next read of the pane's state once armed (the view's), until open.
   let open = () => {}

@@ -70,7 +70,7 @@ const dims = async (ui: Band) =>
 
 const composer = ($: Engine, text: string) => $.prompt.submit({ text, wait: false, origin: { kind: 'composer' } })
 
-test('the band draws the opener, then this project\'s open notes as numbered chips, newest first', async ($, on) => {
+test("the band draws the opener, then this project's open notes as numbered chips, newest first", async ($, on) => {
   await startSession($, on, fixture())
   const ui = await mountBand($)
   expect(await buttons(ui)).toEqual([
@@ -222,7 +222,7 @@ test('the next turn with text clears the harvest and leaves unkept proposals pro
   await ui.unmount()
 })
 
-test('the harvest is this turn\'s: Claude\'s, this project\'s, by turn id (a note without one is no turn\'s)', async ($, on) => {
+test("the harvest is this turn's: Claude's, this project's, by turn id (a note without one is no turn's)", async ($, on) => {
   const dir = fixture()
   await startSession($, on, dir)
   await $.turn.start({ text: 'go', turnId: 'turn-1' })
@@ -296,7 +296,7 @@ const heldTurnEnd = (on: Parameters<typeof startSession>[1]) => {
   return { ...held, arm: () => held.arm() }
 }
 
-test('a completion whose write waits doesn\'t lose the turn that starts meanwhile: that turn still collects its harvest', async ($, on) => {
+test("a completion whose write waits doesn't lose the turn that starts meanwhile: that turn still collects its harvest", async ($, on) => {
   const dir = fixture()
   const held = heldTurnEnd(on)
   const { clock } = await startSession($, on, dir)
@@ -315,7 +315,7 @@ test('a completion whose write waits doesn\'t lose the turn that starts meanwhil
   await ui.unmount()
 })
 
-test('a completion for a turn the module never knew, whose write waits, doesn\'t end a turn that starts meanwhile', async ($, on) => {
+test("a completion for a turn the module never knew, whose write waits, doesn't end a turn that starts meanwhile", async ($, on) => {
   const dir = fixture()
   const held = heldTurnEnd(on)
   const { clock } = await startSession($, on, dir)
@@ -338,7 +338,7 @@ test('a completion for a turn the module never knew, whose write waits, doesn\'t
   await ui.unmount()
 })
 
-test('a session start whose write waits doesn\'t end a turn that starts meanwhile: the harvest stays hidden while it runs', async ($, on) => {
+test("a session start whose write waits doesn't end a turn that starts meanwhile: the harvest stays hidden while it runs", async ($, on) => {
   const dir = fixture()
   const held = heldWrites(on, value => value.running === '')
   const { clock } = await startSession($, on, dir)
@@ -364,7 +364,7 @@ test('a session start whose write waits doesn\'t end a turn that starts meanwhil
   await ui.unmount()
 })
 
-test('a /clear whose write waits doesn\'t hide the harvest of the new conversation\'s first turn', async ($, on) => {
+test("a /clear whose write waits doesn't hide the harvest of the new conversation's first turn", async ($, on) => {
   const dir = fixture()
   const held = heldWrites(on, value => value.latest === '')
   on('session.end', (_, e) => ({ sessionId: e.sessionId }))
@@ -382,7 +382,7 @@ test('a /clear whose write waits doesn\'t hide the harvest of the new conversati
   await ui.unmount()
 })
 
-test('a subagent\'s turn.complete, or one for a turn that isn\'t running, collects nothing and ends nothing', async ($, on) => {
+test("a subagent's turn.complete, or one for a turn that isn't running, collects nothing and ends nothing", async ($, on) => {
   const dir = fixture()
   await startSession($, on, dir)
   await $.turn.start({ text: 'go', turnId: 'turn-1' })
@@ -399,7 +399,7 @@ test('a subagent\'s turn.complete, or one for a turn that isn\'t running, collec
 
 // The hook's boundary: the completion is decided at entry, before the engine's next(e), so a turn
 // that starts while the engine holds it doesn't take its place.
-test('a completion the engine holds keeps its turn: a continuation starting meanwhile doesn\'t take it, and its harvest is still collected', async ($, on) => {
+test("a completion the engine holds keeps its turn: a continuation starting meanwhile doesn't take it, and its harvest is still collected", async ($, on) => {
   const dir = fixture()
   const { world } = await startSession($, on, dir)
   await $.turn.start({ text: 'go', turnId: 'turn-1' })
@@ -482,7 +482,7 @@ test('a queued prompt that is taken back (no row ever enters) leaves the note op
   await ui.unmount()
 })
 
-test('a subagent\'s row, a tool result or an assistant row carrying the text never marks the note', async ($, on) => {
+test("a subagent's row, a tool result or an assistant row carrying the text never marks the note", async ($, on) => {
   const { dir, ui, clock, text } = await queued($, on)
   await append($, text, { door: 'delivery', agentId: 'agent-1' })
   await append($, text, { door: 'tool-result' })
@@ -560,7 +560,11 @@ test('while a turn runs every chip, +N and the opener draw dim, and the digits s
   expect(world.box.text).toBe('rename the store helpers')
   // At rest only the opener and +N are dim.
   await ui.redraw({ ...BAND.props, bodyColumns: 80 })
-  expect(Object.entries(await dims(ui)).filter(([, isDim]) => isDim).map(([key]) => key)).toEqual(['band-open', 'band-more'])
+  expect(
+    Object.entries(await dims(ui))
+      .filter(([, isDim]) => isDim)
+      .map(([key]) => key),
+  ).toEqual(['band-open', 'band-more'])
   await ui.unmount()
 })
 

@@ -31,7 +31,16 @@ const machine = (host: string, dir: MemDir): Machine => {
   const archived = mirrorOf(dir, host)
   const live = createMirrorStore(MIRROR)
   const archive = createMirrorStore(`${MIRROR}/Archive`)
-  const sync = createSync(folderAdapter(live, archive, async () => mirror, async () => archived, async () => `/${host}/notes`, async (id: string) => io.view[id]))
+  const sync = createSync(
+    folderAdapter(
+      live,
+      archive,
+      async () => mirror,
+      async () => archived,
+      async () => `/${host}/notes`,
+      async (id: string) => io.view[id],
+    ),
+  )
   const statuses: SyncStatus[] = []
   const cache: { text?: string } = {}
   const syncIO: SyncIO = {
@@ -87,7 +96,9 @@ describe('folder adapter', () => {
     const two = await office.store.create(office.io, { text: 'Buy milk', by: 'you', project: CC })
     await office.sync.pull(office.syncIO)
     expect(dir.names(MIRROR).sort()).toEqual(['Buy milk 2.md', 'Buy milk.md'])
-    expect(new Set([parseNote(dir.get(`${MIRROR}/Buy milk.md`) ?? '').id, parseNote(dir.get(`${MIRROR}/Buy milk 2.md`) ?? '').id])).toEqual(new Set([one.id, two.id]))
+    expect(new Set([parseNote(dir.get(`${MIRROR}/Buy milk.md`) ?? '').id, parseNote(dir.get(`${MIRROR}/Buy milk 2.md`) ?? '').id])).toEqual(
+      new Set([one.id, two.id]),
+    )
     await office.store.change(office.io, one.id, note => ({ ...note, text: 'Something else now' }))
     await office.sync.push(office.syncIO)
     expect(dir.names(MIRROR).sort()).toEqual(['Buy milk 2.md', 'Buy milk.md'])
@@ -264,7 +275,7 @@ describe('folder adapter', () => {
     expect(office.io.view[made.id]).toEqual(newer)
   })
 
-  test("a late older live copy of an archived note is taken out, though it changes nothing the core sees", async () => {
+  test('a late older live copy of an archived note is taken out, though it changes nothing the core sees', async () => {
     const { dir, office } = await twoMachines()
     const made = await office.store.create(office.io, { text: 'late copy', by: 'you', project: CC })
     await office.sync.pull(office.syncIO)
@@ -299,7 +310,7 @@ describe('folder adapter', () => {
     expect(live(dir)).toEqual([])
   })
 
-  test("a file renamed with a # in it that comes back unreadable still holds the archive", async () => {
+  test('a file renamed with a # in it that comes back unreadable still holds the archive', async () => {
     const { dir, office } = await twoMachines()
     const made = await office.store.create(office.io, { text: 'tagged', by: 'you', project: CC })
     await office.sync.pull(office.syncIO)
@@ -526,14 +537,30 @@ describe('folder adapter', () => {
     const plain = { ...io, env: { home: '/home/me' } }
     const [one, two] = [createMirrorStore('/sync/m'), createMirrorStore('/sync/m/')]
     const note = parseNote(
-      serializeNote({ id: '01JA0000000000000000000001', status: 'open', by: 'you', created: '2026-10-10T00:00:00.000Z', updated: '2026-10-10T00:00:00.000Z', origin: 'office', project: null, context: {}, sentAt: null, deleted: false, text: 'a', extra: [] }),
+      serializeNote({
+        id: '01JA0000000000000000000001',
+        status: 'open',
+        by: 'you',
+        created: '2026-10-10T00:00:00.000Z',
+        updated: '2026-10-10T00:00:00.000Z',
+        origin: 'office',
+        project: null,
+        context: {},
+        sentAt: null,
+        deleted: false,
+        text: 'a',
+        extra: [],
+      }),
     )
     // The first write stalls holding the note's lock; the second spelling must wait for it.
     let open = () => {}
     const gate = new Promise<void>(resolve => {
       open = resolve
     })
-    const stalled = { ...plain, write: async (path: string, text: string) => (path.endsWith('.tmp') ? gate.then(() => plain.write(path, text)) : plain.write(path, text)) }
+    const stalled = {
+      ...plain,
+      write: async (path: string, text: string) => (path.endsWith('.tmp') ? gate.then(() => plain.write(path, text)) : plain.write(path, text)),
+    }
     const first = one.absorb(stalled, [note])
     for (let i = 0; i < 50; i++) await Promise.resolve()
     const second = await two.absorb(plain, [{ ...note, text: 'b', updated: '2026-10-10T00:00:01.000Z' }])
@@ -557,7 +584,14 @@ describe('folder adapter', () => {
       ),
     )
     const statuses: SyncStatus[] = []
-    const syncIO: SyncIO = { local: async () => io.view, absorb: async () => ({ failed: [] }), load: async () => undefined, save: async () => {}, status: async status => void statuses.push(status), warn: () => {} }
+    const syncIO: SyncIO = {
+      local: async () => io.view,
+      absorb: async () => ({ failed: [] }),
+      load: async () => undefined,
+      save: async () => {},
+      status: async status => void statuses.push(status),
+      warn: () => {},
+    }
     await expect(sync.pull(syncIO)).rejects.toThrow('mirror folder is the notes folder')
     expect(statuses[statuses.length - 1]?.problem).toBe('mirror folder is the notes folder')
   })
@@ -633,7 +667,12 @@ describe('folder adapter', () => {
 
 describe("a folder's memory between sessions", () => {
   const NOTES = '/data/ostrakon/notes'
-  const memo = (dir: MemDir) => JSON.parse(dir.get(`/home/me/.cache/ostrakon/seen-${hashOf(NOTES)}.json`) ?? '{}') as { dir?: string; isUsed?: boolean; files?: Record<string, { updated: string }> }
+  const memo = (dir: MemDir) =>
+    JSON.parse(dir.get(`/home/me/.cache/ostrakon/seen-${hashOf(NOTES)}.json`) ?? '{}') as {
+      dir?: string
+      isUsed?: boolean
+      files?: Record<string, { updated: string }>
+    }
 
   test('a session saves only what it saw change, never its older view of the rest', async () => {
     const dir = new MemDir()
@@ -662,7 +701,7 @@ describe("a folder's memory between sessions", () => {
     expect(await createStore().hasHistory(io)).toBe(true)
   })
 
-  test("a save that fails is tried again with the next, though nothing new changed", async () => {
+  test('a save that fails is tried again with the next, though nothing new changed', async () => {
     const dir = new MemDir()
     const io = memIO(dir)
     const move = io.move
@@ -689,8 +728,22 @@ describe("a folder's memory between sessions", () => {
     const dir = new MemDir()
     const io = memIO(dir)
     const old = [
-      '---', 'id: 01JA0000000000000000000001', 'status: open', 'by: you', 'created: 2026-10-10T00:00:00.000Z', 'updated: 2026-10-10T00:00:00.000Z',
-      'origin: office', 'project:', '  key: github.com/example/cc', '  name: cc', '  path: /home/user/work/cc', 'sentAt: null', 'deleted: false', '---', 'old form', '',
+      '---',
+      'id: 01JA0000000000000000000001',
+      'status: open',
+      'by: you',
+      'created: 2026-10-10T00:00:00.000Z',
+      'updated: 2026-10-10T00:00:00.000Z',
+      'origin: office',
+      'project:',
+      '  key: github.com/example/cc',
+      '  name: cc',
+      '  path: /home/user/work/cc',
+      'sentAt: null',
+      'deleted: false',
+      '---',
+      'old form',
+      '',
     ].join('\n')
     dir.put(`${NOTES}/01JA0000000000000000000001.md`, old)
     await createStore().loadAll(io)
@@ -721,7 +774,20 @@ describe('tidying conflict copies never loses a note', () => {
     const io = { ...memIO(dir), env: { home: '/home/me' } }
     const store = createMirrorStore(M)
     const base = parseNote(
-      serializeNote({ id: '01JA0000000000000000000001', status: 'open', by: 'you', created: '2026-10-10T00:00:00.000Z', updated: '2026-10-10T00:00:00.000Z', origin: 'office', project: null, context: {}, sentAt: null, deleted: false, text: 'old', extra: [] }),
+      serializeNote({
+        id: '01JA0000000000000000000001',
+        status: 'open',
+        by: 'you',
+        created: '2026-10-10T00:00:00.000Z',
+        updated: '2026-10-10T00:00:00.000Z',
+        origin: 'office',
+        project: null,
+        context: {},
+        sentAt: null,
+        deleted: false,
+        text: 'old',
+        extra: [],
+      }),
     )
     const newer = { ...base, text: 'newer', updated: '2026-10-10T00:01:00.000Z' }
     dir.put(`${M}/${base.id}.md`, serializeNote(base))
@@ -761,7 +827,20 @@ describe('tidying conflict copies never loses a note', () => {
     const io = { ...memIO(dir), env: { home: '/home/me' } }
     const store = createMirrorStore(M)
     const a = parseNote(
-      serializeNote({ id: '01JA000000000000000000000A', status: 'open', by: 'you', created: '2026-10-10T00:00:00.000Z', updated: '2026-10-10T00:00:00.000Z', origin: 'office', project: null, context: {}, sentAt: null, deleted: false, text: 'note a', extra: [] }),
+      serializeNote({
+        id: '01JA000000000000000000000A',
+        status: 'open',
+        by: 'you',
+        created: '2026-10-10T00:00:00.000Z',
+        updated: '2026-10-10T00:00:00.000Z',
+        origin: 'office',
+        project: null,
+        context: {},
+        sentAt: null,
+        deleted: false,
+        text: 'note a',
+        extra: [],
+      }),
     )
     const b = { ...a, id: '01JA000000000000000000000B', text: 'note b' }
     dir.put(`${M}/${a.id}.md`, serializeNote(b))
@@ -771,7 +850,7 @@ describe('tidying conflict copies never loses a note', () => {
     expect(parseNote(dir.get(`${M}/${a.id} (conflicted copy).md`) ?? '').text).toBe('note a')
   })
 
-  test("a changed copy whose name was taken meanwhile stays in _conflicts; nothing is written over", async () => {
+  test('a changed copy whose name was taken meanwhile stays in _conflicts; nothing is written over', async () => {
     const { dir, io, store, base } = await setup()
     const changed = { ...base, id: '01JA0000000000000000000009', text: 'changed copy' }
     const arrived = { ...base, id: '01JA0000000000000000000008', text: 'arrived meanwhile' }
@@ -797,11 +876,23 @@ describe('tidying conflict copies never loses a note', () => {
     const io = { ...memIO(dir), env: { home: '/home/me' } }
     const store = createMirrorStore(M)
     const a = parseNote(
-      serializeNote({ id: '01JA000000000000000000000A', status: 'open', by: 'you', created: '2026-10-10T00:00:00.000Z', updated: '2026-10-10T00:00:00.000Z', origin: 'office', project: null, context: {}, sentAt: null, deleted: false, text: 'only a copy', extra: [] }),
+      serializeNote({
+        id: '01JA000000000000000000000A',
+        status: 'open',
+        by: 'you',
+        created: '2026-10-10T00:00:00.000Z',
+        updated: '2026-10-10T00:00:00.000Z',
+        origin: 'office',
+        project: null,
+        context: {},
+        sentAt: null,
+        deleted: false,
+        text: 'only a copy',
+        extra: [],
+      }),
     )
     dir.put(`${M}/${a.id} (conflicted copy).md`, serializeNote(a))
     await store.tidy(io)
     expect(dir.names(M)).toEqual([`${a.id} (conflicted copy).md`])
   })
 })
-

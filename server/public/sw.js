@@ -4,19 +4,29 @@
 // The page asks for its scripts, styles and fonts under /v<release>/, the number here: a page always
 // runs with its own release's files, even one fetched fresh while an older worker still answers.
 // A release that changes the shell bumps it here and in index.html together (server/hub.test.ts).
-const RELEASE = 13
+const RELEASE = 14
 const CACHE = `ostrakon-shell-v${RELEASE}`
 const SHELL = [
   '/',
   '/icon.svg',
   '/icon-180.png',
-  ...['app.js', 'style.css', 'vendor/motion.js', 'fonts/ibm-plex-sans-latin-wght-normal.woff2', 'fonts/ibm-plex-mono-latin-400-normal.woff2', 'fonts/ibm-plex-mono-latin-500-normal.woff2'].map(
-    file => `/v${RELEASE}/${file}`,
-  ),
+  ...[
+    'app.js',
+    'style.css',
+    'vendor/motion.js',
+    'fonts/ibm-plex-sans-latin-wght-normal.woff2',
+    'fonts/ibm-plex-mono-latin-400-normal.woff2',
+    'fonts/ibm-plex-mono-latin-500-normal.woff2',
+  ].map(file => `/v${RELEASE}/${file}`),
 ]
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()))
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      .then(cache => cache.addAll(SHELL))
+      .then(() => self.skipWaiting()),
+  )
 })
 
 self.addEventListener('activate', event => {

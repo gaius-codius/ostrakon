@@ -129,7 +129,7 @@ export const openHub = (dataDir: string) => {
 
   const changes = (after: number, limit = MAX_BATCH) => {
     const rows = since.all(after, limit)
-    return { hub: hubId, notes: rows.map(row => JSON.parse(row.doc) as Note), cursor: rows.length === limit ? rows[rows.length - 1]!.seq : cursor }
+    return { hub: hubId, notes: rows.map(row => JSON.parse(row.doc) as Note), cursor: rows.length === limit ? (rows.at(-1)?.seq ?? cursor) : cursor }
   }
 
   // Resolves once something past `after` exists, or after `ms`.
@@ -177,7 +177,10 @@ export const openHub = (dataDir: string) => {
     const file = join(dir, `hub-${now.toISOString().slice(0, 10)}.sqlite`)
     rmSync(file, { force: true })
     db.run(`VACUUM INTO '${file.replaceAll("'", "''")}'`)
-    const old = readdirSync(dir).filter(name => /^hub-\d{4}-\d\d-\d\d\.sqlite$/.test(name)).sort().slice(0, -KEEP_BACKUPS)
+    const old = readdirSync(dir)
+      .filter(name => /^hub-\d{4}-\d\d-\d\d\.sqlite$/.test(name))
+      .sort()
+      .slice(0, -KEEP_BACKUPS)
     for (const name of old) rmSync(join(dir, name), { force: true })
     return file
   }
@@ -225,10 +228,15 @@ export const handler = (hub: Hub, auth: { token?: string; login?: string }, { no
       const asked = url.searchParams.get('token')
       const isRight = asked !== null && auth.token !== undefined && auth.token !== '' && sameText(asked, auth.token)
       if (name === 'index.html' || name === 'manifest.json') {
-        console.log(`${name === 'index.html' ? 'page' : 'manifest'}: token ${asked === null ? 'none' : isRight ? 'ok' : 'wrong'} from ${request.headers.get('user-agent')?.slice(0, 80) ?? 'unknown agent'}`)
+        console.log(
+          `${name === 'index.html' ? 'page' : 'manifest'}: token ${asked === null ? 'none' : isRight ? 'ok' : 'wrong'} from ${request.headers.get('user-agent')?.slice(0, 80) ?? 'unknown agent'}`,
+        )
       }
       if (name === 'index.html' && isRight) {
-        const page = (await file.text()).replace('<link rel="manifest" href="manifest.json">', `<link rel="manifest" href="manifest.json?token=${encodeURIComponent(asked)}">`)
+        const page = (await file.text()).replace(
+          '<link rel="manifest" href="manifest.json">',
+          `<link rel="manifest" href="manifest.json?token=${encodeURIComponent(asked)}">`,
+        )
         return new Response(page, { headers: { 'content-type': TYPES['.html'] ?? 'text/html', 'cache-control': 'no-store' } })
       }
       if (name === 'manifest.json' && isRight) {
@@ -258,7 +266,7 @@ export const handler = (hub: Hub, auth: { token?: string; login?: string }, { no
     // The one /api call without auth: the phone trades a pairing code (from POST /api/pair) for the token. A code is
     // 128 random bits looked up whole, so there is nothing to guess a prefix of; unknown, expired and used look alike.
     if (path === '/api/pair/claim' && request.method === 'POST') {
-      if (!isOwnPage) return json({ error: 'pairing must come from the hub\'s own page' }, 403)
+      if (!isOwnPage) return json({ error: "pairing must come from the hub's own page" }, 403)
       expire()
       const body = (await request.json().catch(() => ({}))) as { code?: unknown }
       const code = typeof body?.code === 'string' ? body.code : ''
@@ -312,10 +320,19 @@ export const handler = (hub: Hub, auth: { token?: string; login?: string }, { no
         const text = typeof body.text === 'string' ? body.text.trim() : ''
         if (text === '') return json({ error: 'expected { text }' }, 400)
         const key = typeof body.project === 'string' ? body.project : ''
-        const project = key === '' ? null : hub.projects().find(known => known.key === key || known.name === key) ?? null
+        const project = key === '' ? null : (hub.projects().find(known => known.key === key || known.name === key) ?? null)
         const stamp = nextStamp(Date.now())
         const [note] = hub.push([
-          toNote({ id: ulid(Date.now()), status: 'open', by: 'phone', created: stamp, updated: stamp, origin: 'iphone', text, project: project && { key: project.key, name: project.name, path: project.path } }),
+          toNote({
+            id: ulid(Date.now()),
+            status: 'open',
+            by: 'phone',
+            created: stamp,
+            updated: stamp,
+            origin: 'iphone',
+            text,
+            project: project && { key: project.key, name: project.name, path: project.path },
+          }),
         ])
         return json({ note })
       }
@@ -353,7 +370,7 @@ const pair = async (args: string[]) => {
   const isToken = args.includes('--token')
   const arg = args.find(a => a !== '--token')
   const token = process.env.HUB_TOKEN
-  if (!token) fail('set HUB_TOKEN to the hub\'s token, or put it in ~/.config/ostrakon-hub/env and run `ostrakon pair` (bin/ostrakon), which reads that file')
+  if (!token) fail("set HUB_TOKEN to the hub's token, or put it in ~/.config/ostrakon-hub/env and run `ostrakon pair` (bin/ostrakon), which reads that file")
   let base = arg
   if (!base) {
     try {
@@ -361,7 +378,7 @@ const pair = async (args: string[]) => {
       const dns = run.exitCode === 0 ? JSON.parse(run.stdout.toString()).Self?.DNSName : undefined
       if (typeof dns === 'string' && dns) base = `https://${dns.replace(/\.$/, '')}:8443`
     } catch {}
-    if (!base) fail('could not get this machine\'s name from `tailscale status --json`; pass the hub\'s URL: ostrakon pair https://<host>.<tailnet>.ts.net:8443')
+    if (!base) fail("could not get this machine's name from `tailscale status --json`; pass the hub's URL: ostrakon pair https://<host>.<tailnet>.ts.net:8443")
   }
   let secret: { pair: string } | { token: string } = { token: token as string }
   if (!isToken) {
@@ -370,7 +387,9 @@ const pair = async (args: string[]) => {
     try {
       response = await fetch(`http://127.0.0.1:${port}/api/pair`, { method: 'POST', headers: { authorization: `Bearer ${token}` } })
     } catch {
-      fail(`could not reach the hub on 127.0.0.1:${port}. Is it running? Try \`systemctl --user status ostrakon-hub\` or \`ostrakon hub\`. Without a local hub, \`ostrakon pair --token\` prints a link that carries the token.`)
+      fail(
+        `could not reach the hub on 127.0.0.1:${port}. Is it running? Try \`systemctl --user status ostrakon-hub\` or \`ostrakon hub\`. Without a local hub, \`ostrakon pair --token\` prints a link that carries the token.`,
+      )
     }
     const body = (await response?.json().catch(() => ({}))) as { code?: string; error?: string }
     if (response?.status !== 200 || !body.code) fail(`the hub refused to make a pairing code (${response?.status}): ${body.error ?? 'no reason given'}`)
@@ -389,7 +408,10 @@ const pair = async (args: string[]) => {
     console.error('qrencode is not installed (e.g. `sudo pacman -S qrencode` or `sudo apt install qrencode`); use the link below')
   }
   console.log(`\n${link}\n`)
-  if (isToken) console.log('The code and the link carry the hub token. Treat a screenshot of either like the token, clear this terminal after scanning, and rotate HUB_TOKEN if it leaks.')
+  if (isToken)
+    console.log(
+      'The code and the link carry the hub token. Treat a screenshot of either like the token, clear this terminal after scanning, and rotate HUB_TOKEN if it leaks.',
+    )
   else console.log('The code and the link work once, within 5 minutes; the phone then holds the hub token.')
 }
 

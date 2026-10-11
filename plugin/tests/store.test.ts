@@ -8,7 +8,10 @@ import { MemDir, memIO } from './memdir'
 const DIR = '/data/ostrakon/notes'
 const CC = { key: 'github.com/example/cc', name: 'cc', path: '/home/user/work/cc' }
 
-const texts = (view: Record<string, Note>) => Object.values(view).map(note => note.text).sort()
+const texts = (view: Record<string, Note>) =>
+  Object.values(view)
+    .map(note => note.text)
+    .sort()
 
 describe('store', () => {
   test('creates notes as files and reads them back in a new session', async () => {
@@ -33,10 +36,7 @@ describe('store', () => {
     await Promise.all([one.loadAll(a), two.loadAll(b)])
     await Promise.all(
       Array.from({ length: 10 }, (_, i) =>
-        Promise.all([
-          one.create(a, { text: `a${i}`, by: 'you', project: CC }),
-          two.create(b, { text: `b${i}`, by: 'you', project: null }),
-        ]),
+        Promise.all([one.create(a, { text: `a${i}`, by: 'you', project: CC }), two.create(b, { text: `b${i}`, by: 'you', project: null })]),
       ),
     )
     await Promise.all([one.scan(a), two.scan(b)])

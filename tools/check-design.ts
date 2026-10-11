@@ -41,7 +41,13 @@ export const FILES = {
   motion: 'server/public/vendor/motion.js',
 } as const
 // What the doc's tables call a file.
-const SHORT: Record<string, string> = { 'look.ts': FILES.look, 'app.js': FILES.app, 'style.css': FILES.css, 'index.html': FILES.html, 'motion.js': FILES.motion }
+const SHORT: Record<string, string> = {
+  'look.ts': FILES.look,
+  'app.js': FILES.app,
+  'style.css': FILES.css,
+  'index.html': FILES.html,
+  'motion.js': FILES.motion,
+}
 
 // The engine draws a plain Button's hotkey digit in this theme key: never a project's colour.
 const RESERVED = 'suggestion'
@@ -50,7 +56,8 @@ const MIN_CONTRAST = 4.5
 // ---- reading the code ----
 
 type Vars = Map<string, string>
-const varsOf = (block: string): Vars => new Map([...block.matchAll(/--([a-z0-9-]+):\s*([^;]+);/gi)].map(match => [match[1], match[2].trim().replace(/\s+/g, ' ')]))
+const varsOf = (block: string): Vars =>
+  new Map([...block.matchAll(/--([a-z0-9-]+):\s*([^;]+);/gi)].map(match => [match[1], match[2].trim().replace(/\s+/g, ' ')]))
 // The light tokens are the first :root's; the dark ones the :root under prefers-color-scheme: dark.
 const cssTokens = (css: string) => {
   const at = css.indexOf('@media (prefers-color-scheme: dark)')
@@ -116,9 +123,7 @@ const isNone = (cell: Cell | undefined) => cell === undefined || cell.text === '
 // ---- contrast (WCAG 2) ----
 
 const luminance = (hex: string) => {
-  const [r, g, b] = [1, 3, 5]
-    .map(at => Number.parseInt(hex.slice(at, at + 2), 16) / 255)
-    .map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+  const [r, g, b] = [1, 3, 5].map(at => Number.parseInt(hex.slice(at, at + 2), 16) / 255).map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 export const contrast = (a: string, b: string) => {
@@ -139,7 +144,11 @@ const canonical = (value: unknown): unknown => {
     )
   return value
 }
-const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex').slice(0, 12)
+const hash = (value: unknown) =>
+  createHash('sha256')
+    .update(JSON.stringify(canonical(value)))
+    .digest('hex')
+    .slice(0, 12)
 
 // ---- the changelog ----
 
@@ -182,7 +191,8 @@ export const parseChangelog = (doc: string) => {
       if (!SEMVER.test(entry.version)) problems.push(`${where}: ${entry.version} isn't a version (major.minor.patch)`)
       const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(entry.date)
       const day = date ? new Date(Date.UTC(+date[1], +date[2] - 1, +date[3])) : undefined
-      if (!date || !day || day.getUTCMonth() !== +date[2] - 1 || day.getUTCDate() !== +date[3]) problems.push(`${where}: ${entry.date} isn't a date (YYYY-MM-DD)`)
+      if (!date || !day || day.getUTCMonth() !== +date[2] - 1 || day.getUTCDate() !== +date[3])
+        problems.push(`${where}: ${entry.date} isn't a date (YYYY-MM-DD)`)
       continue
     }
     if (!entry || line.trim() === '') continue
@@ -257,7 +267,8 @@ export const checkDesign = ({ look = LOOK as unknown as Look, read = readRepo, b
       if (!isHex(bg)) continue
       const ratio = contrast(colour[tone], bg)
       if (ratio < MIN_CONTRAST) problems.push(`palette ${colour.name} (${tone}) is ${ratio.toFixed(2)}:1 on --bg ${bg}, under ${MIN_CONTRAST}:1`)
-      if (cell?.text !== `${ratio.toFixed(1)}:1`) problems.push(`DESIGN.md palette ${colour.name} on ${tone} bg says ${cell?.text}, it is ${ratio.toFixed(1)}:1`)
+      if (cell?.text !== `${ratio.toFixed(1)}:1`)
+        problems.push(`DESIGN.md palette ${colour.name} on ${tone} bg says ${cell?.text}, it is ${ratio.toFixed(1)}:1`)
     }
   }
 
@@ -269,7 +280,8 @@ export const checkDesign = ({ look = LOOK as unknown as Look, read = readRepo, b
     const role = row[0]?.text ?? ''
     if (!(role in roles)) problems.push(`DESIGN.md colour role \`${role}\` isn't in look.ts COLOUR`)
     else if (row[1]?.text !== roles[role]) problems.push(`DESIGN.md colour role ${role} is \`${row[1]?.text}\`, look.ts has \`${roles[role]}\``)
-    for (const token of listOf(row[2])) if (!tokens.light.has(token.text.replace(/^--/, ''))) problems.push(`DESIGN.md colour role ${role}: style.css has no ${token.text}`)
+    for (const token of listOf(row[2]))
+      if (!tokens.light.has(token.text.replace(/^--/, ''))) problems.push(`DESIGN.md colour role ${role}: style.css has no ${token.text}`)
   }
   const ansiRows = table('ansi')
   if (ansiRows.map(row => row[1]?.text).join(' ') !== look.COLOUR.ansiPalette.join(' '))
@@ -289,9 +301,11 @@ export const checkDesign = ({ look = LOOK as unknown as Look, read = readRepo, b
       problems.push(`DESIGN.md token --${name} isn't in style.css`)
       continue
     }
-    if (row[1]?.text !== tokens.light.get(name)) problems.push(`DESIGN.md token --${name} light is ${row[1]?.text}, style.css has ${tokens.light.get(name) ?? 'none'}`)
+    if (row[1]?.text !== tokens.light.get(name))
+      problems.push(`DESIGN.md token --${name} light is ${row[1]?.text}, style.css has ${tokens.light.get(name) ?? 'none'}`)
     const dark = tokens.dark.get(name)
-    if (isNone(row[2]) ? dark !== undefined : row[2]?.text !== dark) problems.push(`DESIGN.md token --${name} dark is ${row[2]?.text}, style.css has ${dark ?? '— (the light value)'}`)
+    if (isNone(row[2]) ? dark !== undefined : row[2]?.text !== dark)
+      problems.push(`DESIGN.md token --${name} dark is ${row[2]?.text}, style.css has ${dark ?? '— (the light value)'}`)
   }
 
   // Contrast: text on its background in both themes, from the tokens.
@@ -301,8 +315,8 @@ export const checkDesign = ({ look = LOOK as unknown as Look, read = readRepo, b
       [row[2], 'light'],
       [row[3], 'dark'],
     ] as const) {
-      const valueOf = (token: string) => tokens[tone].get(token.replace(/^--/, '')) ?? tokens.light.get(token.replace(/^--/, ''))
-      const [fg, bg] = [valueOf(text), valueOf(on)]
+      const tokenValue = (token: string) => tokens[tone].get(token.replace(/^--/, '')) ?? tokens.light.get(token.replace(/^--/, ''))
+      const [fg, bg] = [tokenValue(text), tokenValue(on)]
       if (!isHex(fg) || !isHex(bg)) {
         problems.push(`DESIGN.md contrast ${text} on ${on} (${tone}): both need a hex value in style.css`)
         continue
@@ -376,8 +390,17 @@ export const checkDesign = ({ look = LOOK as unknown as Look, read = readRepo, b
     const versions = new Set(log.entries.map(item => item.version))
     for (const item of base) if (!versions.has(item.version)) problems.push(`changelog ${item.version} is in the base but gone here: entries are never removed`)
     const last = base[0]
-    if (last && newest && last.fingerprint !== fingerprint && SEMVER.test(last.version) && SEMVER.test(newest.version) && compareVersions(newest.version, last.version) <= 0)
-      problems.push(`Design values differ from the base's (${last.version}), so they need a new version above ${last.version} with its own Change: and Why:, not ${newest.version}.`)
+    if (
+      last &&
+      newest &&
+      last.fingerprint !== fingerprint &&
+      SEMVER.test(last.version) &&
+      SEMVER.test(newest.version) &&
+      compareVersions(newest.version, last.version) <= 0
+    )
+      problems.push(
+        `Design values differ from the base's (${last.version}), so they need a new version above ${last.version} with its own Change: and Why:, not ${newest.version}.`,
+      )
   }
   return { problems, fingerprint, version: newest?.version }
 }

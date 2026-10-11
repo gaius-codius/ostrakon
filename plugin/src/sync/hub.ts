@@ -4,7 +4,10 @@ import type { Note } from '../../types'
 import type { SyncAdapter } from './core'
 import { SyncRefused, checked } from './core'
 
-export type Fetch = (url: string, init: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<{ status: number; ok: boolean; text: string }>
+export type Fetch = (
+  url: string,
+  init: { method?: string; headers?: Record<string, string>; body?: string },
+) => Promise<{ status: number; ok: boolean; text: string }>
 
 export const hubAdapter = (fetch: Fetch, hubUrl: string, token: string): SyncAdapter => {
   const base = hubUrl.replace(/\/+$/, '')

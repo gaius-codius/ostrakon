@@ -162,7 +162,7 @@ const readProject = (nested: Nested | null | undefined, flat: (key: string) => S
   const path = nested.values.get('path')
   return {
     key,
-    name: typeof name === 'string' && name !== '' ? name : key.split(/[/:]/).pop() ?? key,
+    name: typeof name === 'string' && name !== '' ? name : (key.split(/[/:]/).pop() ?? key),
     path: typeof path === 'string' ? path : '',
   }
 }
@@ -262,5 +262,5 @@ export const serializeNote = (note: Note) => {
     for (const key of context) lines.push(`${key}: ${formatScalar(note.context[key] ?? null)}`)
   }
   lines.push(`sentAt: ${note.sentAt ?? 'null'}`, `deleted: ${note.deleted}`, ...note.extra, '---', note.text)
-  return lines.join('\n') + '\n'
+  return `${lines.join('\n')}\n`
 }

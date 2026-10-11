@@ -29,15 +29,25 @@ export type Gone = { since: number; file: string; updated: string }
 // systems or Obsidian links can't take become spaces; empty, or a name a conflict copy or the
 // conflicts folder could have, gives '' (the note's id names it instead).
 export const titleOf = (text: string) => {
-  const line = text.split('\n').map(part => part.trim()).find(part => part !== '') ?? ''
+  const line =
+    text
+      .split('\n')
+      .map(part => part.trim())
+      .find(part => part !== '') ?? ''
   let title = line
     .replace(/^(#+|[-*+>]|\d+[.)]|- \[[ xX]\])\s+/, '')
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters can't be in a file name
     .replace(/[\\/:*?"<>|#^[\]\u0000-\u001f]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/^\.+/, '')
     .trim()
-  if (title.length > 60) title = title.slice(0, 60).replace(/\s+\S*$/, '').trim() || title.slice(0, 60).trim()
+  if (title.length > 60)
+    title =
+      title
+        .slice(0, 60)
+        .replace(/\s+\S*$/, '')
+        .trim() || title.slice(0, 60).trim()
   return title === '' || CONFLICT_COPY.test(title) || title === CONFLICTS || title.toLowerCase().endsWith('.tmp') ? '' : title
 }
 
@@ -135,6 +145,7 @@ export const createMirrorStore = (dir?: string) => {
     const present = new Set([...kit.files.values()].map(note => note.id))
     const files = [...vanished]
       .filter(([, { id }]) => !present.has(id) && unreadableFileOf(id) === undefined)
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: the key joins file and id with a NUL
       .map(([file, { id, updated }]) => ({ id, file: file.replace(/\u0000.*$/, ''), updated }))
     vanished.clear()
     return { files, known: kit.knownCount() + files.length }

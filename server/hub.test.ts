@@ -22,7 +22,10 @@ const fresh = (auth: { token?: string; login?: string } = { token: 'secret', log
     fetch(
       new Request(`http://hub${path}`, {
         ...init,
-        headers: { ...(init.auth === null ? {} : { authorization: `Bearer ${init.auth ?? 'secret'}` }), ...(init.headers as Record<string, string> | undefined) },
+        headers: {
+          ...(init.auth === null ? {} : { authorization: `Bearer ${init.auth ?? 'secret'}` }),
+          ...(init.headers as Record<string, string> | undefined),
+        },
       }),
     )
   return { dir, hub, call, advance: (ms: number) => (clock += ms) }
@@ -50,7 +53,8 @@ const B = '01JA7K2M3Q9X4ZB6C8D0EFGH0B'
 describe('hub', () => {
   test('a push stores the merge winner and moves the cursor only when the stored copy changes', async () => {
     const { call } = fresh()
-    const push = async (...notes: Note[]) => (await (await call('/api/notes', { method: 'POST', body: JSON.stringify({ notes }) })).json()) as { notes: Note[]; cursor: number }
+    const push = async (...notes: Note[]) =>
+      (await (await call('/api/notes', { method: 'POST', body: JSON.stringify({ notes }) })).json()) as { notes: Note[]; cursor: number }
     expect((await push(note(A))).cursor).toBe(1)
     expect((await push(note(A))).cursor).toBe(1)
     const older = await push(note(A, { updated: '2026-10-09T00:00:00.000Z', text: 'stale' }))
@@ -149,7 +153,9 @@ describe('hub', () => {
   test('jot makes a phone note from one line, filed under a known project by key or name', async () => {
     const { call } = fresh()
     await call('/api/notes', { method: 'POST', body: JSON.stringify({ notes: [note(A)] }) })
-    const body = (await (await call('/api/jot', { method: 'POST', body: JSON.stringify({ text: ' call the plumber ', project: 'cc' }) })).json()) as { note: Note }
+    const body = (await (await call('/api/jot', { method: 'POST', body: JSON.stringify({ text: ' call the plumber ', project: 'cc' }) })).json()) as {
+      note: Note
+    }
     expect(body.note).toMatchObject({ text: 'call the plumber', by: 'phone', origin: 'iphone', status: 'open', project: { key: 'github.com/me/cc' } })
     const plain = (await (await call('/api/jot', { method: 'POST', body: JSON.stringify({ text: 'x', project: 'nope' }) })).json()) as { note: Note }
     expect(plain.note.project).toBeNull()
@@ -165,7 +171,11 @@ describe('hub', () => {
     await call('/api/notes', {
       method: 'POST',
       body: JSON.stringify({
-        notes: [note(A), note(B, { project: infra, updated: '2026-10-10T05:00:00.000Z' }), note('01JA7K2M3Q9X4ZB6C8D0EFGH0C', { project: { key: 'gone', name: 'gone', path: '' }, deleted: true })],
+        notes: [
+          note(A),
+          note(B, { project: infra, updated: '2026-10-10T05:00:00.000Z' }),
+          note('01JA7K2M3Q9X4ZB6C8D0EFGH0C', { project: { key: 'gone', name: 'gone', path: '' }, deleted: true }),
+        ],
       }),
     })
     const body = (await (await call('/api/projects')).json()) as { projects: { key: string }[] }
@@ -179,7 +189,12 @@ describe('hub', () => {
     const file = hub.backup(new Date('2026-10-10T03:00:00Z'))
     expect(existsSync(file)).toBe(true)
     const copy = new Database(file, { readonly: true })
-    expect(copy.query<{ id: string }, []>('SELECT id FROM notes').all().map(row => row.id)).toEqual([A])
+    expect(
+      copy
+        .query<{ id: string }, []>('SELECT id FROM notes')
+        .all()
+        .map(row => row.id),
+    ).toEqual([A])
     copy.close()
     expect(readdirSync(join(dir, 'backups'))).toHaveLength(7)
   })
@@ -259,7 +274,8 @@ describe('hub', () => {
 })
 
 describe('pairing codes', () => {
-  const mint = async (call: ReturnType<typeof fresh>['call']) => ((await (await call('/api/pair', { method: 'POST' })).json()) as { code: string; expiresIn: number })
+  const mint = async (call: ReturnType<typeof fresh>['call']) =>
+    (await (await call('/api/pair', { method: 'POST' })).json()) as { code: string; expiresIn: number }
   const claim = (call: ReturnType<typeof fresh>['call'], code: string, headers: Record<string, string> = {}) =>
     call('/api/pair/claim', { method: 'POST', auth: null, headers, body: JSON.stringify({ code }) })
 
