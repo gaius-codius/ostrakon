@@ -13,7 +13,7 @@ To change the design, change the code and this file in the same commit, bump `Ve
 | Quiet by default: no rules, no boxes but the one you're typing in, metadata dim. | Note text should be the brightest thing on screen. |
 | Accent means act, now or yours: the current project, picks, `◆`, the primary button. | One colour that always means the same thing is easy to read. |
 | Colour is never the only signal: a dot sits beside a name, a status has words. | Some people can't tell the colours apart, and 16-colour terminals have few. |
-| Copy is plain, short and literal. | The owner rejects copy that reads as written by an AI. |
+| Copy is plain, short and literal. | Short literal words are quick to read and promise nothing the app doesn't do. |
 | A mark or word means the same on every surface. | People move between the terminal and the phone. |
 
 ## 2. Colour roles
@@ -289,7 +289,7 @@ Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one
 - Change: Project colours became a fixed palette of eight, each a dark and a light value at 4.5:1 or better, chosen by the person's theme and shared with the phone; `*-ansi` themes take four theme keys instead.
 - Why: Theme keys gave four distinct colours at most, since `merged` and `autoAccept` are one colour in every built-in theme; `suggestion` is the colour the engine draws hotkey digits in; `warning` read as an alarm; and the phone could only copy one theme's values.
 - Change: Plain copy rules (§6).
-- Why: The owner rejected "Pair once; the phone remembers" and "Notes from anywhere land here" as AI-sounding, and cut "over Tailscale" because people reach the hub in different ways.
+- Why: Early phone copy such as "Pair once; the phone remembers" and "Notes from anywhere land here" read as written by an AI, and "over Tailscale" named one way to reach the hub when people use several.
 - Change: The phone takes its own light and dark tokens, and IBM Plex Sans and Mono served from the hub, sized in rem.
 - Why: Fonts from the hub, cached with the app, look the same offline; rem lets text settings and Dynamic Type scale the page.
 - Change: Swipe archives only while still heading left past 80px, or on a flick; otherwise the row springs home.
