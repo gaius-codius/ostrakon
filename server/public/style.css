@@ -239,7 +239,8 @@ button {
   font: 500 0.9375rem var(--mono);
   letter-spacing: 0.01em;
 }
-.pen {
+.mark {
+  flex: none;
   color: var(--accent);
 }
 .status {
