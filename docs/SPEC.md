@@ -392,7 +392,7 @@ A host that is always on, on the tailnet: Bun installed, systemd (for the unit i
 - **Zero notes:** the opener alone. `pocket: false` keeps only the opener.
 - **Composition:** draw `await next(e)` first, inside a column Box, then the chip row.
 - **Harvest** takes the chip row's place while the last turn has proposals:
-  - One line: the opener, `◆ from this turn` in bold, the proposals as digit chips, `+N`, then `0: keep all`. Too narrow for a chip beside the title, the title shortens to `◆`. Under the first 3 harvests ever (counted in `$.store`, once per turn) a dim second line: `1–3 keep one · 0 keep all · the rest wait in the pane under “proposed”`.
+  - One line: the opener, `◆ from this turn` in bold, the proposals as digit chips, `+N`, then `0: keep all`. Too narrow for a chip beside the title, the title shortens to `◆`; too narrow for any chip, the row closes up to fit: one column apart, then `✎` without the project, then no `◆`. Under the first 3 harvests ever (counted in `$.store`, once per turn) a dim second line: `1–3 keep one · 0 keep all · the rest wait in the pane under “proposed”`.
   - A turn's proposals are Claude's `proposed` notes in this project carrying the turn's id. Only the main loop's `turn.complete` counts (subagents complete too); a turn that proposed nothing leaves the last harvest up, and a late harvest of an earlier turn never replaces a later one's.
   - Each turn fact (a conversation's generation, then a count per decision) is decided in order when its hook starts, so a write that waited never undoes a newer one. The band is drawn from these facts rather than synchronized to them.
   - Kept notes become `open` (only if still `proposed`). The band returns to Pocket when the next prompt starts a turn.

@@ -1361,7 +1361,7 @@ export const register: Register = (on, options) => {
     let row
     if (proposals.length > 0) {
       const hasHint = (await read($, harvest))?.turnId === (await read($, harvestHint))
-      row = <HarvestRow el={el} proposals={proposals} harvest={harvestOf(proposals, columns, opener)} opener={opener} look={look} hasHint={hasHint} columns={columns} handlers={handlers} />
+      row = <HarvestRow el={el} proposals={proposals} harvest={harvestOf(proposals, columns, opener)} look={look} hasHint={hasHint} columns={columns} handlers={handlers} />
     } else {
       const all = pocketOptions.isOn ? Object.values(await read($, notes)) : []
       row = <PocketRow el={el} pocket={pocketOf(all, project.key, pocketOptions.max, columns, opener)} opener={opener} look={look} handlers={handlers} />

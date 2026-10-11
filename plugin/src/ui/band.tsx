@@ -87,16 +87,31 @@ export const pocketOf = (notes: Note[], projectKey: string, max: number, columns
   return fit(open, cap, columns, WIDTH.chip, cells(opener), true)
 }
 
+export type Harvest = Chips & { title: string; opener: string; gap: number }
+
 // The harvest row, one line: the opener, the title and `0: keep all` always stay; proposals that
 // don't fit wait in the pane, counted in a `+N` that opens it. Too narrow for a chip beside the
-// title, the title shortens to the ◆.
-export const harvestOf = (proposals: Note[], columns: number, opener: string): Chips & { title: string } => {
+// title, the title shortens to the ◆. Too narrow for any chip, the row closes up to fit: one
+// column apart, then the opener without the project, then no title.
+export const harvestOf = (proposals: Note[], columns: number, opener: string): Harvest => {
   const fixed = (title: string) => cells(opener) + GAP + cells(title) + GAP + chipWidth(TEXT.keepAll)
   const title = TEXT.harvestTitle
   const full = fit(proposals, 9, columns, WIDTH.harvestChip, fixed(title), false)
-  if (full.chips.length > 0 || proposals.length === 0) return { ...full, title }
+  if (full.chips.length > 0 || proposals.length === 0) return { ...full, title, opener, gap: GAP }
   const short = TEXT.harvestShort
-  return { ...fit(proposals, 9, columns, WIDTH.harvestChip, fixed(short), false), title: short }
+  const narrow = fit(proposals, 9, columns, WIDTH.harvestChip, fixed(short), false)
+  if (narrow.chips.length > 0) return { ...narrow, title: short, opener, gap: GAP }
+  // Each part and the gap before it; `0: keep all` is a Button's `0: label`.
+  const width = (row: { opener: string; title: string; gap: number }) =>
+    [row.opener, row.title, narrow.more > 0 ? `+${narrow.more}` : '', `0: ${TEXT.keepAll}`]
+      .filter(part => part !== '')
+      .reduce((sum, part) => sum + row.gap + cells(part), -row.gap)
+  const rows = [
+    { opener, title: short, gap: GAP },
+    { opener, title: short, gap: 1 },
+    { opener: GLYPH.capture, title: short, gap: 1 },
+  ]
+  return { ...narrow, ...(rows.find(row => width(row) <= columns) ?? { opener: GLYPH.capture, title: '', gap: 1 }) }
 }
 
 // How a row is drawn now: all of it dim while a turn runs; a just-saved note's chip at full
@@ -135,7 +150,6 @@ export const HarvestRow = ({
   el,
   proposals,
   harvest,
-  opener,
   look,
   hasHint,
   columns,
@@ -143,8 +157,7 @@ export const HarvestRow = ({
 }: {
   el: E
   proposals: Note[]
-  harvest: Chips & { title: string }
-  opener: string
+  harvest: Harvest
   look: Look
   hasHint: boolean
   columns: number
@@ -154,11 +167,13 @@ export const HarvestRow = ({
   const ids = proposals.map(note => note.id)
   return (
     <Box flexDirection="column">
-      <Box gap={GAP}>
-        <Open el={el} opener={opener} handlers={handlers} />
-        <Text color={COLOUR.accent} bold dimColor={look.isWorking}>
-          {harvest.title}
-        </Text>
+      <Box gap={harvest.gap}>
+        <Open el={el} opener={harvest.opener} handlers={handlers} />
+        {harvest.title !== '' && (
+          <Text color={COLOUR.accent} bold dimColor={look.isWorking}>
+            {harvest.title}
+          </Text>
+        )}
         {harvest.chips.map(chip => (
           <Button key={chipKey(chip.n)} plain dimColor={look.isWorking} hotkey={String(chip.n)} label={chip.label} onPress={() => handlers.keep(chip.id)} />
         ))}

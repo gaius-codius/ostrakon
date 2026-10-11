@@ -161,6 +161,20 @@ test('after a turn that proposed notes the band shows the harvest row instead of
   await ui.unmount()
 })
 
+test('a harvest row too narrow for a chip closes up to fit: one column apart, the opener without the project', async ($, on) => {
+  const { ui } = await harvested($, on)
+  // `✎ ◆ +2 0: keep all` is 18 cells.
+  await ui.redraw({ ...BAND.props, bodyColumns: 18 })
+  expect(await buttons(ui)).toEqual([
+    { key: 'band-open', label: '✎', hotkey: undefined },
+    { key: 'band-more', label: '+2', hotkey: undefined },
+    { key: 'band-keep-all', label: 'keep all', hotkey: '0' },
+  ])
+  expect(await ui.find({ type: 'Text', text: '◆' })).toBeDefined()
+  expect((await ui.findAll({ type: 'Box' })).map(box => (box.props as { gap?: number }).gap)).toContain(1)
+  await ui.unmount()
+})
+
 test('proposals made before the turn started are not its harvest', async ($, on) => {
   const dir = fixture()
   propose(dir, PROPOSED, 'an old proposal', { turnId: 'turn-0', created: '2020-01-01T00:00:00.000Z' })

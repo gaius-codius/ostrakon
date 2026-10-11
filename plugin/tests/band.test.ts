@@ -130,14 +130,18 @@ describe('pocketOf', () => {
     }
   })
 
-  test('the harvest row stays one line within the columns', () => {
-    const proposals = Array.from({ length: 5 }, (_, i) => note(`${LONG} ${i}`, i, { by: 'claude', status: 'proposed' }))
-    for (const columns of [60, 100, 160]) {
-      const { chips, more, title } = harvestOf(proposals, columns, OPENER)
-      const drawn = [OPENER, title, ...chips.map(chip => `${chip.n}: ${chip.label}`), ...(more > 0 ? [`+${more}`] : []), `0: ${TEXT.keepAll}`]
-      const width = drawn.reduce((sum, text) => sum + cellsIn(text), 0) + GAP * (drawn.length - 1)
-      expect(chips.length).toBeGreaterThan(0)
-      expect(width).toBeLessThanOrEqual(columns)
+  test('the harvest row stays one line within the columns, with chips or without', () => {
+    const proposals = Array.from({ length: 12 }, (_, i) => note(`${LONG} ${i}`, i, { by: 'claude', status: 'proposed' }))
+    for (const columns of [60, 100, 160]) expect(harvestOf(proposals.slice(0, 5), columns, OPENER).chips.length).toBeGreaterThan(0)
+    // Down to `✎ +12 0: keep all`, the narrowest the row gets.
+    const opener = openerOf('ostrakon')
+    for (const count of [1, 5, 12]) {
+      for (let columns = 17; columns <= 160; columns++) {
+        const { chips, more, title, gap, opener: shown } = harvestOf(proposals.slice(0, count), columns, opener)
+        const drawn = [shown, title, ...chips.map(chip => `${chip.n}: ${chip.label}`), ...(more > 0 ? [`+${more}`] : []), `0: ${TEXT.keepAll}`].filter(text => text !== '')
+        const width = drawn.reduce((sum, text) => sum + cellsIn(text), 0) + gap * (drawn.length - 1)
+        expect(width).toBeLessThanOrEqual(columns)
+      }
     }
   })
 
@@ -172,8 +176,15 @@ describe('pocketOf', () => {
     expect(harvestOf([note('x', 1, { status: 'proposed' })], 80, OPENER).title).toBe('◆ from this turn')
   })
 
-  test('a harvest too narrow for any chip even with the short title counts them all in more', () => {
-    expect(harvestOf([note('x', 1, { status: 'proposed' })], 20, OPENER)).toMatchObject({ chips: [], more: 1, title: '◆' })
+  test('a harvest too narrow for any chip counts them all in more and closes up to fit: one apart, then no project, then no ◆', () => {
+    const one = [note('x', 1, { status: 'proposed' })]
+    const opener = openerOf('ostrakon')
+    // `✎ ostrakon   ◆   +1   0: keep all` takes 33.
+    expect(harvestOf(one, 33, opener)).toMatchObject({ chips: [], more: 1, title: '◆', opener: '✎ ostrakon', gap: 3 })
+    expect(harvestOf(one, 30, opener)).toMatchObject({ chips: [], more: 1, title: '◆', opener: '✎ ostrakon', gap: 1 })
+    expect(harvestOf(one, 26, opener)).toMatchObject({ chips: [], more: 1, title: '◆', opener: '✎', gap: 1 })
+    expect(harvestOf(one, 17, opener)).toMatchObject({ chips: [], more: 1, title: '', opener: '✎', gap: 1 })
+    expect(harvestOf(one, 21, OPENER)).toMatchObject({ chips: [], more: 1, title: '◆', opener: '✎ cc', gap: 1 })
   })
 
   test('cells count grapheme clusters: ZWJ sequences and flags are 2, combining marks 0, wide brackets 2', () => {
