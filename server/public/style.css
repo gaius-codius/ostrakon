@@ -352,37 +352,69 @@ code { font: 0.875rem var(--mono); }
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
   font-size: 0.9375rem;
 }
-.toast span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#toast-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.toast .detail { color: var(--dim-inverse); }
 .toast button { flex: none; min-height: 2.75rem; padding: 0 0.875rem; border: 0; border-radius: 0.75rem; background: none; color: var(--accent-inverse); font-weight: 600; }
 
-/* ---- the action sheet ---- */
-.sheet { position: fixed; inset: 0; z-index: 10; display: flex; align-items: flex-end; justify-content: center; }
-.sheet .scrim { position: absolute; inset: 0; touch-action: none; background: var(--scrim); opacity: 0; transition: opacity 0.2s ease; }
-.sheet .panel {
-  position: relative;
+/* ---- the action sheet: the note quoted, its actions, Cancel apart ---- */
+dialog.sheet {
+  position: fixed;
+  inset: 0;
   width: 100%;
-  max-width: 40rem;
-  max-height: 85vh;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  overflow: hidden;
+}
+dialog.sheet::backdrop { background: transparent; }
+.sheet .scrim { position: absolute; inset: 0; touch-action: none; background: var(--scrim); }
+.sheet .panel {
+  position: absolute;
+  left: max(0.5rem, env(safe-area-inset-left));
+  right: max(0.5rem, env(safe-area-inset-right));
+  bottom: max(0.5rem, env(safe-area-inset-bottom), 2.125rem);
+  max-width: 39rem;
+  max-height: calc(100% - 3rem);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  padding: 0 max(0.5rem, env(safe-area-inset-right)) max(0.5rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
-  transform: translateY(100%);
-  transition: transform 0.22s ease;
 }
-.sheet.open .scrim { opacity: 1; }
-.sheet.open .panel { transform: none; }
 .sheet .group { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-radius: 1.125rem; overflow: hidden; }
-.sheet .title { margin: 0; padding: 0.75rem 1rem; font-size: 0.8125rem; color: var(--dim); text-align: center; border-bottom: 1px solid var(--line); }
-.sheet .title.quote { white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sheet .head { flex: none; padding: 1rem 1.125rem 0.875rem; display: flex; flex-direction: column; gap: 0.5rem; border-bottom: 1px solid var(--line); touch-action: none; }
+.sheet .quote { margin: 0; display: flex; gap: 0.625rem; font-size: 0.9375rem; line-height: 1.45; }
+.sheet .quote #sheet-text { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.sheet .bar { color: var(--faint); }
+.sheet .meta { margin: 0 0 0 1.125rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font: 0.75rem var(--mono); color: var(--dim); }
+.sheet .meta .dot { width: 0.4375rem; height: 0.4375rem; }
 .sheet .actions { overflow-y: auto; overscroll-behavior: contain; }
-.sheet button { width: 100%; min-height: 3.5rem; border: 0; border-radius: 0; background: var(--surface); color: var(--text); font-size: 1rem; }
-.sheet .actions button + button { border-top: 1px solid var(--line); }
-.sheet .actions button.here { color: var(--dim); }
-.sheet .actions button.here::after { content: "  ✓"; }
-.sheet .cancel { border-radius: 1.125rem; font-weight: 600; }
-.sheet .title, .sheet .cancel { touch-action: none; }
-@media (prefers-reduced-motion: reduce) { .sheet .scrim, .sheet .panel { transition: none; } }
+.sheet .action {
+  width: 100%;
+  min-height: 3.375rem;
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.5rem 1.125rem;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 1rem;
+  text-align: left;
+}
+.sheet .action + .action { border-top: 1px solid var(--line); }
+.sheet .action svg { flex: none; color: var(--dim); }
+.sheet .action .words { display: flex; flex-direction: column; gap: 0.0625rem; min-width: 0; }
+.sheet .action .sub { font-size: 0.75rem; color: var(--dim); }
+.sheet .action .aside { margin-left: auto; padding-left: 0.5rem; font: 0.8125rem var(--mono); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+.sheet .action.danger, .sheet .action.danger svg { color: var(--accent-text); font-weight: 500; }
+.sheet .action:active, .sheet .cancel:active { background: var(--raised); }
+.sheet .cancel { flex: none; width: 100%; min-height: 3.5rem; border: 0; border-radius: 1.125rem; background: var(--surface); color: var(--text); font-size: 1rem; font-weight: 600; touch-action: none; }
+.sheet :focus-visible { outline-offset: -3px; }
 
 /* ---- capture mode: the form takes over, the list stays dim behind it ---- */
 [data-mode="capture"] #refused, [data-mode="capture"] #inbox { opacity: 0.28; }

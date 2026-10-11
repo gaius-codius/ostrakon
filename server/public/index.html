@@ -58,16 +58,19 @@
     <p id="login-error" class="error" hidden>That token was refused.</p>
   </form>
 </main>
-<div id="sheet" class="sheet" hidden>
+<dialog id="sheet" class="sheet" aria-labelledby="sheet-text">
   <div id="sheet-scrim" class="scrim"></div>
-  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+  <div class="panel">
     <div class="group">
-      <p id="sheet-title" class="title"></p>
+      <div class="head">
+        <p class="quote"><span class="bar" aria-hidden="true">▎</span><span id="sheet-text"></span></p>
+        <p id="sheet-meta" class="meta"></p>
+      </div>
       <div id="sheet-actions" class="actions"></div>
     </div>
     <button id="sheet-cancel" type="button" class="cancel">Cancel</button>
   </div>
-</div>
+</dialog>
 <dialog id="picker" class="drawer" aria-labelledby="picker-title">
   <div class="scrim" data-close></div>
   <div class="panel">
@@ -90,6 +93,7 @@
   </div>
 </dialog>
 <div id="toast" class="toast" hidden><span id="toast-text"></span><button id="toast-undo" type="button">Undo</button></div>
+<p id="live" class="sr-only" role="status"></p>
 <script src="app.js"></script>
 </body>
 </html>

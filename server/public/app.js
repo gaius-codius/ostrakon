@@ -461,6 +461,7 @@ const heading = (key, lead, name, count, isOpen, note, rowsId) => {
     renderList()
   })
   toggle.setAttribute('aria-expanded', String(isOpen))
+  toggle.dataset.focus = `head:${key}`
   toggle.setAttribute('aria-controls', rowsId)
   toggle.append(make('span', 'lead', lead), make('span', 'name', name))
   if (note) toggle.append(make('span', 'folded', note))
@@ -519,7 +520,10 @@ const renderList = () => {
     group.dataset.key = key
     sections.push(group)
   }
+  // Focus stays on the same control (a row's ⋯, a heading) when the list is drawn again.
+  const focused = $('list').contains(document.activeElement) ? document.activeElement.dataset.focus : undefined
   $('list').replaceChildren(...sections)
+  if (focused) $('list').querySelector(`[data-focus="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true })
   $('empty').hidden = shown.length + proposals.length > 0
   $('empty').textContent = words === '' ? 'No open notes.' : 'No notes match.'
 }
@@ -575,6 +579,7 @@ const noteRow = (note, isQueued) => {
   const more = button('', event => openSheet(note.id, event.currentTarget), 'more icon-btn')
   more.append(icon(ICONS.more, { fill: true }))
   more.setAttribute('aria-label', 'Note actions')
+  more.dataset.focus = `more:${note.id}`
   more.setAttribute('aria-describedby', text.id)
   more.setAttribute('aria-haspopup', 'dialog')
   const face = make('div', 'face', marker, text, age, more)
@@ -592,7 +597,10 @@ const proposalRow = note => {
   text.id = `text-${++textIds}`
   const keep = button('Keep', () => decide(note.id, 'open'), 'btn keep')
   const dismiss = button('Dismiss', () => decide(note.id, 'dismissed'), 'btn dismiss')
-  for (const choice of [keep, dismiss]) choice.setAttribute('aria-describedby', text.id)
+  for (const choice of [keep, dismiss]) {
+    choice.setAttribute('aria-describedby', text.id)
+    choice.dataset.focus = `${choice.textContent}:${note.id}`
+  }
   const article = make('article', 'proposal', text, make('p', 'for', 'for ', dot(note.project), `${labelOf(note.project)} · ${ageOf(note.updated)}`), make('div', 'choices', keep, dismiss))
   article.setAttribute('aria-labelledby', text.id)
   const row = make('li', '', article)
@@ -612,12 +620,15 @@ const render = () => {
 
 // ---- inbox actions ----
 
-const toast = (text, undo) => {
+// `detail`: the note it was about, dim after the words.
+const toast = (text, undo, detail = '') => {
   clearTimeout(toastTimer)
-  $('toast-text').textContent = text
+  $('toast-text').replaceChildren(text, ...(detail ? [make('span', 'detail', ` · ${detail.split('\n')[0]}`)] : []))
   toastUndo = undo
   $('toast-undo').hidden = !undo
   $('toast').hidden = false
+  // Said by a live region that's always there; the toast itself comes and goes.
+  $('live').textContent = text
   toastTimer = setTimeout(() => {
     $('toast').hidden = true
     toastUndo = null
@@ -642,13 +653,17 @@ const setStatus = (id, status) => change(id, () => ({ status }))
 
 const archive = id => {
   if (setStatus(id, 'archived')) {
-    toast('Archived', undo(id, note => !note.deleted && note.status === 'archived', () => ({ status: 'open' })))
+    toast('Archived', undo(id, note => !note.deleted && note.status === 'archived', () => ({ status: 'open' })), current()[id]?.text)
   }
 }
 
 // Keep makes a proposal an open note; Dismiss puts it with the dismissed ones. Each comes with Undo.
 const decide = (id, status) => {
-  if (setStatus(id, status)) toast(status === 'open' ? 'Kept' : 'Dismissed', undo(id, note => !note.deleted && note.status === status, () => ({ status: 'proposed' })))
+  const hadFocus = document.activeElement?.dataset.focus?.endsWith(`:${id}`)
+  if (!setStatus(id, status)) return
+  toast(status === 'open' ? 'Kept' : 'Dismissed', undo(id, note => !note.deleted && note.status === status, () => ({ status: 'proposed' })))
+  // Focus follows a kept note to its row, else goes to the next proposal or the first heading.
+  if (hadFocus) ((status === 'open' ? moreOf(id) : null) ?? $('list').querySelector('[data-focus^="Keep:"], h2 button'))?.focus({ preventScroll: true })
 }
 
 const startEdit = id => {
@@ -676,9 +691,11 @@ const endEdit = isSaved => {
   editing = null
   const note = current()[id]
   const text = draft.trim()
-  if (!(isSaved && note && text !== '' && text !== note.text)) return render()
+  const hadFocus = $('list').querySelector('li.note.editing')?.contains(document.activeElement)
+  if (!(isSaved && note && text !== '' && text !== note.text)) render()
   // Not queued: the editor stays open with the draft.
-  if (!queue({ ...note, text, updated: stamp(note.updated), origin: 'iphone' })) editing = { id, draft }
+  else if (!queue({ ...note, text, updated: stamp(note.updated), origin: 'iphone' })) return (editing = { id, draft })
+  if (hadFocus) moreOf(id)?.focus({ preventScroll: true })
 }
 
 const markSent = id => {
@@ -687,7 +704,7 @@ const markSent = id => {
   const { sentAt } = note
   const at = new Date().toISOString()
   if (change(id, () => ({ status: 'sent', sentAt: at }))) {
-    toast('Marked sent', undo(id, now => !now.deleted && now.status === 'sent' && now.sentAt === at, () => ({ status: 'open', sentAt })))
+    toast('Marked sent', undo(id, now => !now.deleted && now.status === 'sent' && now.sentAt === at, () => ({ status: 'open', sentAt })), note.text)
   }
 }
 
@@ -701,9 +718,16 @@ const moveTo = (id, project) => {
   if (change(id, () => ({ project: to }))) toast(`Moved to ${labelOf(to)}`, undo(id, isMoved, () => ({ project: was })))
 }
 
-// ---- action sheet (long press on a row) ----
+// ---- movement ----
 
-let sheetView = null // 'actions' | 'move'
+// How sheets and drawers come and go; each `…Out` calls `done` once it has gone.
+const motion = {
+  sheetIn: () => {},
+  sheetOut: (dialog, done) => done(),
+}
+
+// ---- action sheet (⋯, or a long press on a row) ----
+
 // The sheet opens under a finger that's still down. iOS turns that finger's lift into a click where
 // it lands, which may be the scrim or an action: the sheet takes a pointer's click only after a
 // press that began on it. Keyboard clicks (detail 0) always count.
@@ -717,93 +741,101 @@ let sheetDrawn = ''
 // The sheet acts only on an open note: one archived, sent or deleted meanwhile closes it.
 const isActionable = note => note !== undefined && !note.deleted && note.status === 'open'
 
+const moreOf = id => $('list').querySelector(`li.note[data-id="${CSS.escape(id)}"] .more`)
+
 // `trigger`: the ⋯ button it opened from, where focus goes back on close (the row's own ⋯ after a
 // long press).
 const openSheet = (id, trigger = moreOf(id)) => {
   if (sheetFor !== null || !isActionable(current()[id])) return
   sheetFor = id
-  sheetView = 'actions'
   isSheetPressed = false
   sheetReturn = trigger ?? document.activeElement
   renderSheet()
-  $('sheet').hidden = false
-  // The page beneath can't be focused, tapped or read while the sheet is up.
-  $('app').inert = true
-  // Drawn hidden first, so the panel slides up from below; focus goes in once it's drawn.
-  requestAnimationFrame(() =>
-    requestAnimationFrame(() => {
-      $('sheet').classList.add('open')
-      $('sheet-actions').querySelector('button')?.focus({ preventScroll: true })
-    }),
-  )
+  $('sheet').showModal()
+  $('sheet-actions').querySelector('button')?.focus({ preventScroll: true })
+  motion.sheetIn($('sheet'))
   renderList()
 }
 
-const moreOf = id => $('list').querySelector(`li.note[data-id="${CSS.escape(id)}"] .more`)
-
-const closeSheet = () => {
+// Focus goes back to the trigger once the sheet has gone (the page is out of reach until then);
+// `after`, when given, runs then instead, handed that trigger.
+const closeSheet = after => {
   if (sheetFor === null) return
   const id = sheetFor
+  const trigger = sheetReturn
   sheetFor = null
-  sheetView = null
   sheetDrawn = ''
-  $('sheet').classList.remove('open')
-  $('sheet').hidden = true
-  $('app').inert = false
-  renderList()
-  // The list was drawn again: the same row's ⋯ is a new button.
-  const back = sheetReturn?.isConnected ? sheetReturn : sheetReturn?.classList?.contains('more') ? moreOf(id) : null
-  if (back && back !== document.body) back.focus({ preventScroll: true })
   sheetReturn = null
+  renderList()
+  motion.sheetOut($('sheet'), () => {
+    $('sheet').close()
+    // The list was drawn again: the same row's ⋯ is a new button.
+    const back = trigger?.isConnected ? trigger : trigger?.classList?.contains('more') ? moreOf(id) : null
+    if (after) after(back)
+    else if (back && back !== document.body) back.focus({ preventScroll: true })
+  })
 }
 
-// Runs a sheet action once the sheet is closed, so the list it redraws is the plain one.
-const act = run => () => {
+// The ⋯ to focus once note `id` leaves the list: the next row's, else the one before.
+const neighbourOf = id => {
+  const rows = [...$('list').querySelectorAll('li.note')]
+  const at = rows.findIndex(row => row.dataset.id === id)
+  return (rows[at + 1] ?? rows[at - 1])?.dataset.id ?? null
+}
+
+// Runs a sheet action once the sheet is closed, so the list it redraws is the plain one. Focus then
+// goes back to the row's ⋯; `then`: 'gone' when the note leaves the list (focus goes to a
+// neighbour's ⋯), 'own' when the action puts focus somewhere itself (Edit, in its field).
+const act = (run, then = 'back') => () => {
   const id = sheetFor
-  closeSheet()
-  run(id)
+  const near = then === 'gone' ? neighbourOf(id) : null
+  closeSheet(back => {
+    run(id)
+    if (then === 'own') return
+    const target = then === 'gone' ? (near ? moreOf(near) : null) : back
+    target?.focus({ preventScroll: true })
+  })
 }
 
-// Redrawn on every sync while open. Keyboard focus stays on the same row of the list; `isEntering`
-// puts it on the current project (or the first) as the move list opens.
-const renderSheet = (isEntering = false) => {
+const sheetAction = (iconName, label, run, { sub = '', aside = '', className = '' } = {}) => {
+  const item = button('', run, `action ${className}`)
+  const words = sub ? make('span', 'words', label, make('span', 'sub', sub)) : make('span', 'words', label)
+  item.append(icon(ICONS[iconName]), words)
+  if (aside) item.append(make('span', 'aside', aside))
+  item.dataset.key = label
+  return item
+}
+
+// Redrawn on every sync while open; keyboard focus stays on the same action.
+const renderSheet = () => {
   const note = current()[sheetFor]
   if (!isActionable(note)) return closeSheet()
-  const drawn = JSON.stringify([sheetView, note.text, note.project, sheetView === 'move' ? projects : null])
-  if (drawn === sheetDrawn && !isEntering) return
+  const drawn = JSON.stringify([note.text, note.project, note.by, ageOf(note.updated)])
+  if (drawn === sheetDrawn) return
   sheetDrawn = drawn
   const list = $('sheet-actions')
-  // Kept by what it is (a project's key, an action's label), since a sync can reorder the projects.
   const focused = list.contains(document.activeElement) ? document.activeElement.dataset.key : undefined
-  const items =
-    sheetView === 'move'
-      ? [null, ...projects].map(project => {
-          const isHere = (project?.key ?? null) === (note.project?.key ?? null)
-          const item = button(labelOf(project), isHere ? closeSheet : act(id => moveTo(id, project)), isHere ? 'here' : '')
-          item.dataset.key = project?.key ?? ''
-          if (isHere) item.setAttribute('aria-current', 'true')
-          return item
-        })
-      : [
-          button('Edit', act(startEdit)),
-          button('Copy text', act(async id => toast((await copy(current()[id]?.text ?? '')) ? 'Copied' : "Couldn't copy"))),
-          button('Move to project…', () => {
-            sheetView = 'move'
-            renderSheet(true)
-            loadProjects()
-          }),
-          button('Mark sent', act(markSent)),
-          button('Archive', act(archive)),
-        ]
-  $('sheet-title').textContent = sheetView === 'move' ? `Move to project · now ${labelOf(note.project)}` : note.text
-  $('sheet-title').classList.toggle('quote', sheetView !== 'move')
-  if (sheetView !== 'move') for (const item of items) item.dataset.key = item.textContent
+  const by = note.by === 'claude' ? '◆ Claude' : note.by === 'phone' ? '▪ phone' : 'you'
+  $('sheet-text').textContent = note.text
+  $('sheet-meta').replaceChildren(dot(note.project), `${labelOf(note.project)} · ${by} · ${ageOf(note.updated)}`)
+  const items = [
+    sheetAction('edit', 'Edit', act(startEdit, 'own')),
+    sheetAction('copy', 'Copy text', act(async id => toast((await copy(current()[id]?.text ?? '')) ? 'Copied' : "Couldn't copy"))),
+    sheetAction('move', 'Move to project', () => {
+      const id = sheetFor
+      closeSheet(back => openPicker({ mode: 'move', id, trigger: back }))
+    }, { aside: `${labelOf(note.project)} ›` }),
+    sheetAction('sent', 'Mark sent', act(markSent, 'gone'), { sub: 'used elsewhere; leaves open notes' }),
+    sheetAction('archive', 'Archive', act(archive, 'gone'), { className: 'danger' }),
+  ]
+  items[2].setAttribute('aria-haspopup', 'dialog')
   list.replaceChildren(...items)
-  const target = isEntering ? list.querySelector('.here') ?? items[0] : focused === undefined ? null : items.find(item => item.dataset.key === focused) ?? items[0]
-  target?.focus({ preventScroll: true })
+  if (focused !== undefined) (items.find(item => item.dataset.key === focused) ?? items[0]).focus({ preventScroll: true })
 }
 
 $('sheet').addEventListener('pointerdown', () => (isSheetPressed = true))
+// Nor does that lift move focus off the first action (to the dialog itself).
+$('sheet').addEventListener('mousedown', event => isSheetPressed || event.preventDefault(), true)
 $('sheet').addEventListener(
   'click',
   event => {
@@ -813,14 +845,17 @@ $('sheet').addEventListener(
   },
   true,
 )
-$('sheet-scrim').addEventListener('click', closeSheet)
-$('sheet-cancel').addEventListener('click', closeSheet)
-// Tab and Shift+Tab go round the sheet's own buttons (the toast sits outside the inert page).
+$('sheet-scrim').addEventListener('click', () => closeSheet())
+$('sheet-cancel').addEventListener('click', () => closeSheet())
+$('sheet').addEventListener('cancel', event => {
+  event.preventDefault()
+  closeSheet()
+})
+// Tab and Shift+Tab go round the open dialog's own buttons and fields.
 document.addEventListener('keydown', event => {
-  if (sheetFor === null) return
-  if (event.key === 'Escape') return closeSheet()
-  if (event.key !== 'Tab') return
-  const stops = [...$('sheet').querySelectorAll('button')]
+  const dialog = $('sheet').open ? $('sheet') : $('picker').open ? $('picker') : null
+  if (!dialog || event.key !== 'Tab') return
+  const stops = [...dialog.querySelectorAll('button, input')].filter(stop => !stop.disabled && stop.getClientRects().length > 0)
   const at = stops.indexOf(document.activeElement)
   event.preventDefault()
   stops[(at + (event.shiftKey ? -1 : 1) + stops.length) % stops.length]?.focus()
@@ -1117,11 +1152,13 @@ const openPicker = ({ mode: pickMode, id = null, trigger = null }) => {
 // `picked`: true when something was chosen (focus then goes back to the note field).
 const closePicker = (picked = false) => {
   if (!picking) return
-  const { trigger, mode: pickMode } = picking
+  const { trigger, mode: pickMode, id } = picking
   picking = null
   $('picker').close()
   if (picked && pickMode === 'file') return $('text').focus({ preventScroll: true })
-  if (trigger?.isConnected) trigger.focus({ preventScroll: true })
+  // A moved note's row was drawn again, in its new group: focus its new ⋯.
+  const back = trigger?.isConnected ? trigger : id ? moreOf(id) : null
+  back?.focus({ preventScroll: true })
 }
 
 // The current choice: the project the note is under (move), or the next note's (file).
@@ -1160,8 +1197,8 @@ const choose = key => {
   if (!picking) return
   if (picking.mode === 'move') {
     const { id } = picking
-    closePicker(true)
     if ((current()[id]?.project?.key ?? null) !== key) moveTo(id, projectOf(key))
+    closePicker(true)
     return
   }
   chosen = key
