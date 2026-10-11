@@ -21,6 +21,7 @@ How it all works, and the Claude Code behaviour it relies on, is written up in [
 - Run `tools/check.sh`. It runs everything: `claude plugin validate`, the design check, the type-check, the mod's tests, the hub's tests and the code-quality checks. CI can't run the mod's tests (they need the `claude` CLI), so this step is on you. CI runs the rest.
 - The code-quality checks are `tools/lint.sh` on their own, in about a second: [Biome](https://biomejs.dev) formats and lints the TypeScript, JavaScript, JSON and CSS, shellcheck the shell scripts, actionlint the workflows, typos the spelling, and lychee the links between the docs. The tools and their versions are in `mise.toml`: install [mise](https://mise.jdx.dev), then `mise install`. `tools/lint.sh --fix` lets Biome format your changes and fix what it safely can.
 - To run them before every commit: `git config core.hooksPath tools/hooks` (skip once with `git commit --no-verify`).
+- `git blame` skips the one big reformat if you run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once (GitHub does it already).
 - Add a line under **Unreleased** in [`CHANGELOG.md`](CHANGELOG.md) for anything a user would notice.
 - Match the style around you: short comments that explain why, the same naming, and docs in plain, short sentences.
 - Changes reach `main` only through pull requests, and CI has to pass first.

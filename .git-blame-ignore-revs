@@ -1,0 +1,5 @@
+# Commits that only reformat, which `git blame` should look past. GitHub reads this file by itself;
+# locally, once per clone: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Format everything with Biome (#9)
+38a4794d6ec1cb192f712fb5a35975ce87e718fa
