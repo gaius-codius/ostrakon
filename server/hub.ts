@@ -212,7 +212,9 @@ export const handler = (hub: Hub, auth: { token?: string; login?: string }, { no
 
     if (!path.startsWith('/api/')) {
       if (request.method !== 'GET') return new Response('method not allowed', { status: 405 })
-      const name = path === '/' ? 'index.html' : path.slice(1)
+      // A release's page asks for its scripts, styles and fonts under v<release>/ (index.html, sw.js),
+      // so it never runs with another release's copies from the phone's cache; they're the same files.
+      const name = path === '/' ? 'index.html' : path.slice(1).replace(/^v\d+\//, '')
       // A file in public/, or in one of its folders (fonts/, vendor/); no part may start with a dot.
       if (!/^(?:[a-z0-9][a-z0-9_-]*\/)?[a-z0-9][a-z0-9._-]*$/i.test(name)) return new Response('not found', { status: 404 })
       const file = Bun.file(join(PUBLIC, name))

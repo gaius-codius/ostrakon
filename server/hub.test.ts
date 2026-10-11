@@ -103,6 +103,32 @@ describe('hub', () => {
     }
   })
 
+  test("the page loads its own release's files: index.html and sw.js name the same release, and the hub serves them", async () => {
+    const { call } = fresh()
+    const publicDir = join(import.meta.dir, 'public')
+    const page = await Bun.file(join(publicDir, 'index.html')).text()
+    const worker = await Bun.file(join(publicDir, 'sw.js')).text()
+    const release = worker.match(/^const RELEASE = (\d+)$/m)?.[1]
+    expect(release).toBeDefined()
+    // Every script, stylesheet and font the page asks for comes from v<release>/, nothing from the root.
+    const asked = [...page.matchAll(/(?:src|href)="([^"]+\.(?:js|css|woff2))"/g)].map(match => match[1] ?? '')
+    expect(asked.length).toBeGreaterThanOrEqual(3)
+    for (const path of asked) expect(path).toStartWith(`v${release}/`)
+    // The worker keeps each of them, and each one is there to serve (fonts too, which style.css asks
+    // for next to itself).
+    const shell = [...worker.matchAll(/'([a-z0-9./-]+\.(?:js|css|woff2))'/g)].map(match => `/v${release}/${match[1]}`)
+    for (const path of asked) expect(shell).toContain(`/${path}`)
+    const css = await Bun.file(join(publicDir, 'style.css')).text()
+    for (const font of css.matchAll(/url\(([^)]+)\)/g)) expect(shell).toContain(`/v${release}/${font[1]}`)
+    for (const path of shell) expect((await call(path, { auth: null })).status).toBe(200)
+    const script = await call(`/v${release}/app.js`, { auth: null })
+    expect(script.headers.get('content-type')).toStartWith('text/javascript')
+    expect(await script.text()).toBe(await Bun.file(join(publicDir, 'app.js')).text())
+    for (const path of [`/v${release}/`, `/v${release}/../hub.ts`, `/v${release}/fonts/a/b.woff2`, '/vx/app.js', `/v${release}/v${release}/app.js`]) {
+      expect((await call(path, { auth: null })).status).toBe(404)
+    }
+  })
+
   test('a note that is not one is refused, and the rest of the batch still lands', async () => {
     const { call } = fresh()
     const response = await call('/api/notes', {
