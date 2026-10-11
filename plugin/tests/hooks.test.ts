@@ -3,6 +3,7 @@ import type { Engine } from 'claude-code/testing'
 
 import { serializeNote } from '../src/frontmatter'
 import { MemDir } from './memdir'
+import { COLOUR, GLYPH } from '../src/ui/look'
 import { CC, INFRA, NOTE, PANE, mountPane, noteIn, put, run, startSession, texts } from './world'
 
 const fixture = () => {
@@ -31,7 +32,7 @@ test('the pane opens on this project, searches everywhere once typing, and Enter
   await ui.input({ key: 'q', text: 'kubernetes', kind: 'change' })
   expect(await ui.find({ type: 'Text', text: /No notes match “kubernetes” in any project/ })).toBeDefined()
   await ui.input({ key: 'q', text: 'kubernetes', kind: 'submit' })
-  expect(world.toasts.some(toast => toast.includes('saved to cc'))).toBe(true)
+  expect(world.toasts.some(toast => toast.includes('saved to'))).toBe(false)
   expect([...dir.files.values()].some(file => file.text.includes('kubernetes'))).toBe(true)
   await ui.unmount()
 })
@@ -54,7 +55,7 @@ test('t puts the note after the held draft, and the submit carrying it marks it 
   await run($, 'jot', '')
   const ui = await mountPane($)
   await ui.input({ key: 'q', text: '', kind: 'submit' })
-  expect(await ui.find({ type: 'Text', text: /^v$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^d$/ })).toBeDefined()
   await ui.press({ key: 'key-t' })
   expect(world.box.text).toBe('my draft\n\ncheck why the cache test is flaky')
   expect(world.closed).toBe(1)
@@ -113,7 +114,7 @@ test('/jot saves at once; alone it opens the pane, where ctrl+n captures, saving
   const dir = fixture()
   const { world } = await startSession($, on, dir)
   await run($, 'jot', 'buy milk')
-  expect(world.toasts.some(toast => toast.includes('saved to cc'))).toBe(true)
+  expect(world.toasts.some(toast => toast.includes('saved to'))).toBe(false)
   expect([...dir.files.values()].some(file => file.text.includes('buy milk'))).toBe(true)
 
   await run($, 'jot', '')
@@ -284,4 +285,158 @@ test('a focus move waiting on the view is already the ring\'s last: the action l
   open()
   await landing
   expect(world.focused.slice(-2)).toEqual(['slot-0', 'slot-0'])
+})
+
+test('inline, a selected row puts its meta before the scope, and drops it before the scope when short', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const inline = (bodyColumns: number) => ({ ...PANE.props, placement: 'inline' as const, bodyColumns, scroll: { offset: 0, bodyRows: 11 } })
+  const ui = await $.ui.mount({ plugin: 'ostrakon', surface: 'terminal', ...PANE, props: inline(100) })
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  expect(await ui.find({ type: 'Text', text: /^ ~\/Work\/cc · 12m ago · this project · 2 open$/ })).toBeDefined()
+  await ui.redraw(inline(60))
+  expect(await ui.find({ type: 'Text', text: /^ this project · 2 open$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the key sheet pages to fit the inline body, j and k turning the pages round, i closing it', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const props = { ...PANE.props, placement: 'inline' as const, bodyColumns: 40, scroll: { offset: 0, bodyRows: 11 } }
+  const ui = await $.ui.mount({ plugin: 'ostrakon', surface: 'terminal', ...PANE, props })
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-i' })
+  // 11 rows less the search row, the footer and the frame: 7 a page, so 19 keys take 3.
+  expect(await ui.find({ type: 'Text', text: /^jump to a row$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ close keys$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ more 1\/3$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^copy$/ })).toBeUndefined()
+  await ui.press({ key: 'key-j' })
+  expect(await ui.find({ type: 'Text', text: /^copy$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^jump to a row$/ })).toBeUndefined()
+  await ui.press({ key: 'key-k' })
+  await ui.press({ key: 'key-k' })
+  expect(await ui.find({ type: 'Text', text: /^ more 3\/3$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^jot from the prompt/ })).toBeDefined()
+  // At 40 columns the sheet is narrower than its 46, and no label line is wider than the pane.
+  for (const text of await texts(ui)) expect(text.length).toBeLessThanOrEqual(39)
+  await ui.press({ key: 'key-i' })
+  expect(await ui.find({ type: 'Text', text: /^ close keys$/ })).toBeUndefined()
+  await ui.press({ key: 'key-i' })
+  expect(await ui.find({ type: 'Text', text: /^ more 1\/3$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('docked in a body too short for the preview and three rows besides, the preview goes', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  const at = async (bodyRows: number) => {
+    const props = { ...PANE.props, scroll: { offset: 0, bodyRows } }
+    await ui.redraw(props)
+    await ui.redraw(props)
+    return (await ui.find({ type: 'Text', text: /you · ~\/Work\/cc/ })) !== undefined
+  }
+  // The search row and a blank, the preview's 8, a row between ↑ and ↓ counts, the blank and the footer.
+  expect(await at(15)).toBe(true)
+  expect(await at(14)).toBe(false)
+  expect(await ui.find({ type: 'Text', text: /rename the store helpers/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('at the shortest heights the key sheet drops its frame and stays off the footer', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-i' })
+  // The sheet's last row, frame and all, is above the footer's, the body's last.
+  const sheetAt = async (placement: 'dock' | 'inline', bodyRows: number) => {
+    const props = { ...PANE.props, placement, scroll: { offset: 0, bodyRows } }
+    await ui.redraw(props)
+    await ui.redraw(props)
+    const sheet = (await ui.findAll({ type: 'Box' })).find(box => box.props.position === 'absolute')
+    const isFramed = sheet?.props.borderStyle !== undefined
+    const lines = (sheet?.children ?? []).length
+    expect(Number(sheet?.props.top) + lines + (isFramed ? 2 : 0)).toBeLessThanOrEqual(bodyRows - 1)
+    return { isFramed, lines }
+  }
+  expect(await sheetAt('dock', 6)).toEqual({ isFramed: true, lines: 1 })
+  expect(await sheetAt('dock', 5)).toEqual({ isFramed: false, lines: 2 })
+  expect(await sheetAt('inline', 5)).toEqual({ isFramed: true, lines: 1 })
+  expect(await sheetAt('inline', 4)).toEqual({ isFramed: false, lines: 2 })
+  expect(await ui.find({ type: 'Text', text: /^ close keys$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test("opened on a row, the key sheet leads with the row's own keys and the row stays put", async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-i' })
+  const keys = (await texts(ui)).map(text => text.trim()).filter(text => ['⏎ / t', 's', 'e', 'd / u', 'v / x', '↑ ↓ j k'].includes(text))
+  expect(keys).toEqual(['⏎ / t', 's', 'e', 'd / u', 'v / x', '↑ ↓ j k'])
+  expect(await ui.find({ type: 'Text', text: /check why the cache test is flaky/ })).toBeDefined()
+  await ui.unmount()
+})
+
+const THEME_ROW = { key: 'theme', label: 'Theme', kind: 'choice', provider: { plugin: 'engine', tier: 'core' }, isLocked: false } as const
+
+test('project colours follow the theme: light, a 16-colour one, a custom theme by its base, and a change in /config', async ($, on) => {
+  const theme = { value: 'light' }
+  on('config.list', () => ({ value: [{ ...THEME_ROW, value: theme.value }] }))
+  on('config.set', (_, e) => ({ value: e.value }))
+  const dir = fixture()
+  dir.put('/home/me/.claude/themes/paper.json', JSON.stringify({ name: 'Paper', base: 'light-daltonized' }))
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.press({ key: 'key-app:toggleReplTab' })
+  // infra's dot in the list view; cc is this project, in the accent.
+  const infraDot = async () => {
+    await ui.redraw(PANE.props)
+    return (await ui.findAll({ type: 'Text', text: GLYPH.dot })).map(dot => dot.props.color).find(colour => colour !== COLOUR.accent)
+  }
+  expect(await infraDot()).toBe('#6f3fd1')
+  const set = async (value: string) => {
+    await $.config.set({ key: 'theme', value, previous: '', provider: THEME_ROW.provider, origin: { kind: 'composer' } })
+  }
+  await set('dark-ansi')
+  expect(await infraDot()).toBe('planMode')
+  await set('custom:paper')
+  expect(await infraDot()).toBe('#6f3fd1')
+  // A custom theme whose file is gone draws as dark.
+  await set('custom:gone')
+  expect(await infraDot()).toBe('#b08cf5')
+  await ui.unmount()
+})
+
+test('the empty pane names its scope and offers ctrl+n for a new note', async ($, on) => {
+  await startSession($, on, new MemDir())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  expect(await ui.find({ type: 'Text', text: /^Nothing pending in cc\.$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^new note$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /open this pane/ })).toBeUndefined()
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  expect(await ui.find({ type: 'Text', text: /^Nothing pending in any project\.$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a narrow docked empty pane drops the shard before cutting the ways in', async ($, on) => {
+  await startSession($, on, new MemDir())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  expect(await ui.find({ type: 'Text', text: /╲▁▁▁/ })).toBeDefined()
+  await ui.redraw({ ...PANE.props, bodyColumns: 56 })
+  expect(await ui.find({ type: 'Text', text: /╲▁▁▁/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^jot a note from the prompt, even mid-turn$/ })).toBeDefined()
+  await ui.unmount()
 })
