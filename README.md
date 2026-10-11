@@ -35,14 +35,22 @@ Tested on Linux. macOS should work for the mod but hasn't been tried yet; report
 
 ### Install it
 
-Clone this repo and run the install script:
+One command clones ostrakon into `~/.local/share/ostrakon-src` and installs the newest release:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/gaius-codius/ostrakon/main/get.sh | bash
+```
+
+Add `-s -- --hub` after `bash` to set up the hub too, or `-s -- --main` to follow the newest code on `main` instead of releases. Running it again updates what's there. To read the script before running it: `curl -fsSL https://raw.githubusercontent.com/gaius-codius/ostrakon/main/get.sh -o get.sh`, look it over, then `bash get.sh`.
+
+Or clone the repo wherever you like and run the install script yourself:
 
 ```sh
 git clone https://github.com/gaius-codius/ostrakon.git
 cd ostrakon && ./install.sh --release
 ```
 
-The script:
+Either way, the install script:
 
 - switches to the newest [release](https://github.com/gaius-codius/ostrakon/releases) (leave out `--release` to run what's on `main`),
 - loads the mod in every Claude Code session, by setting `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json` (only if it isn't set already, and it keeps a `.bak` copy),
