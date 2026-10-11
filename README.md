@@ -75,6 +75,14 @@ ostrakon version
 
 If you installed a release, `update` moves you to the newest one; if you're on a branch, it pulls that branch (and stops rather than touch commits of your own). It restarts the hub if it's running and lists what changed. Restart any open Claude Code sessions to pick up the new version. Each release's changes are in [`CHANGELOG.md`](CHANGELOG.md).
 
+### If something isn't working
+
+```sh
+ostrakon doctor
+```
+
+It checks that the mod loads, which Claude Code version last ran it and whether anything went wrong there, your notes folder, the hub and its token, and the tools ostrakon needs, and says what to fix. It changes nothing and never prints your token, so its output is safe to paste into a bug report.
+
 ### Keybindings
 
 A mod can't add keyboard shortcuts of its own, so ostrakon borrows some existing Claude Code actions (which is why the names below look unrelated). Bind your keys to them in `~/.claude/keybindings.json`:

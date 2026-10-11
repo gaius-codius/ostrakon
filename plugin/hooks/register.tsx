@@ -24,6 +24,7 @@ import {
 import { DEFAULT_HARVEST_MODE, JOT_DESCRIPTION, JOT_REPLY, JOT_SCHEMA, JOT_TOOL, harvestModeOf, jotText, lightRequest, parseReview, reviewPrompt } from '../src/harvest'
 import type { HarvestMode } from '../src/harvest'
 import { basename, normalizeRemote } from '../src/project'
+import { freshReport, withProblem } from '../src/report'
 import { StorageError, createStore } from '../src/store'
 import type { StoreIO } from '../src/store'
 import { createSync } from '../src/sync/core'
@@ -106,6 +107,60 @@ let isPushScheduled = false
 // How soon after a local change it goes out (SPEC §7.1).
 const PUSH_DEBOUNCE_MS = 1000
 
+// The load report for `ostrakon doctor` (src/report.ts): replaced at session start, and saved
+// then and, after a problem, on the next poll.
+let report = freshReport('', '')
+let isReportDirty = false
+let isReportSaving = false
+
+const reportPath = async ($: EngineInterface) => `${((await $.env.get('HOME')) ?? '').replace(/\/+$/, '')}/.cache/ostrakon/report.json`
+
+// Never in the way: a report that can't be written is only a debug line, and tried again on the
+// next poll. One save at a time, so an older one never lands over a newer; a call while one runs,
+// or a problem noted after its snapshot, is saved on the next poll.
+const saveReport = async ($: EngineInterface) => {
+  if (isReportSaving) {
+    isReportDirty = true
+    return
+  }
+  isReportSaving = true
+  isReportDirty = false
+  let tmp = ''
+  try {
+    const path = await reportPath($)
+    report = { ...report, writtenAt: new Date(await $.clock.now()).toISOString() }
+    await $.process.run(['mkdir', '-p', path.replace(/\/[^/]+$/, '')])
+    tmp = `${path}.${Math.random().toString(36).slice(2)}.tmp`
+    await $.fs.write(tmp, `${JSON.stringify(report, null, 2)}\n`)
+    const moved = await $.process.run(['mv', '-f', tmp, path])
+    if (moved.exitCode !== 0) throw new Error(moved.stderr.trim() || `mv exited ${moved.exitCode}`)
+  } catch (error) {
+    isReportDirty = true
+    if (tmp !== '') await $.process.run(['rm', '-f', tmp]).catch(() => undefined)
+    $.ui.log(`ostrakon: report not saved: ${messageOf(error)}`, { to: 'debug' })
+  } finally {
+    isReportSaving = false
+  }
+}
+
+// A problem worth knowing about: a debug line, as before, and a line in the load report.
+const noteProblem = ($: EngineInterface, where: string, error: unknown) => {
+  $.ui.log(`ostrakon: ${where}: ${messageOf(error)}`, { to: 'debug' })
+  recordProblem($, where, messageOf(error))
+}
+
+// Only the report's line: for what the footer already shows, each poll.
+const recordProblem = ($: EngineInterface, where: string, message: string) => {
+  // The clock can refuse once the module is gone (a reload, the session's end); the line is lost then.
+  void $.clock.now().then(
+    now => {
+      report = withProblem(report, where, message, new Date(now).toISOString())
+      isReportDirty = true
+    },
+    () => undefined,
+  )
+}
+
 // The store's view of the engine. Built per call from $ ($ may only be passed within this file).
 const storeIO = async ($: EngineInterface): Promise<StoreIO> => ({
   env: { dir: await $.env.get('OSTRAKON_DIR'), home: await $.env.get('HOME') },
@@ -143,7 +198,7 @@ const storeIO = async ($: EngineInterface): Promise<StoreIO> => ({
     if (listed.exitCode === 1 && started === '' && listed.stderr.trim() === '') return { isRunning: false }
     return undefined
   },
-  warn: text => $.ui.log(`ostrakon: ${text}`, { to: 'debug' }),
+  warn: text => noteProblem($, 'storage', text),
   now: () => $.clock.now(),
   sleep: ms => $.clock.sleep(ms),
   shown: async () => ({ notes: await read($, notes), problems: await read($, problems) }),
@@ -163,7 +218,7 @@ const schedulePush = ($: EngineInterface) => {
   $.clock.after(PUSH_DEBOUNCE_MS, () => {
     isPushScheduled = false
     for (const syncing of syncs) {
-      syncing.sync.push(syncIO($, syncing)).catch(error => $.ui.log(`ostrakon: sync: ${messageOf(error)}`, { to: 'debug' }))
+      syncing.sync.push(syncIO($, syncing)).catch(error => noteProblem($, 'sync', error))
     }
   })
 }
@@ -198,9 +253,12 @@ const syncIO = ($: EngineInterface, syncing: Syncing): SyncIO => ({
     await $.process.run(['mv', '-f', tmp, path])
   },
   status: async status => {
+    // A refusal (a wrong token, a note the hub won't take) goes in the load report too; being
+    // offline is ordinary (a laptop away from home), so it stays in the footer only.
+    if (status.problem !== '' && status.problem !== 'offline') recordProblem($, syncing.name, status.problem)
     await setSyncState($, syncing, () => ({ isOn: true, ...status }))
   },
-  warn: text => $.ui.log(`ostrakon: sync: ${text}`, { to: 'debug' }),
+  warn: text => noteProblem($, 'sync', text),
 })
 
 // The footer's status while the hub or the mirror can't be reached; nothing while they can, or
@@ -221,7 +279,7 @@ const mirrorIO = async ($: EngineInterface, which: 'live' | 'archive'): Promise<
   ...(await storeIO($)),
   // OSTRAKON_DIR names the notes folder, never the mirror.
   env: { home: await $.env.get('HOME') },
-  warn: text => $.ui.log(`ostrakon: sync: ${text}`, { to: 'debug' }),
+  warn: text => noteProblem($, 'sync', text),
   shown: async () => mirrorViews[which],
   publish: async (merged, broken) => {
     mirrorViews[which] = { notes: merged, problems: broken }
@@ -268,7 +326,7 @@ const themeTone = async ($: EngineInterface) => {
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
-const reportStorage = ($: EngineInterface, error: unknown) => $.ui.log(`ostrakon: storage: ${messageOf(error)}`, { to: 'debug' })
+const reportStorage = ($: EngineInterface, error: unknown) => noteProblem($, 'storage', error)
 
 const toast = ($: EngineInterface, text: string) => {
   $.ui.toast(text)
@@ -382,6 +440,7 @@ const changeNote = async ($: EngineInterface, id: string, edit: (note: Note) => 
   try {
     return await store.change(await storeIO($), id, edit)
   } catch (error) {
+    noteProblem($, 'storage', error)
     toast($, TOAST.failed(error instanceof StorageError ? error.message : messageOf(error)))
     return undefined
   }
@@ -591,6 +650,8 @@ const openPane = async ($: EngineInterface, mode: 'browse' | 'capture') => {
   } catch (error) {
     why = messageOf(error)
   }
+  // The pane not opening is the kind of break a new Claude Code brings (SPEC §12, the load report).
+  if (why !== undefined) noteProblem($, 'pane not opened', why)
   await update($, isOpen, () => why === undefined)
   if (why !== undefined) {
     await afterClose($)
@@ -870,6 +931,7 @@ const searchSubmit = async ($: EngineInterface, value: string) => {
     // Something typed while it saved is a new search: leave it.
     await setPane($, state => (state.query === value ? { ...state, query: '', scope: state.scopeChosen ? state.scope : 'project' } : state))
   } catch (error) {
+    noteProblem($, 'storage', error)
     toast($, TOAST.failed(messageOf(error)))
     await setPane($, state => ({ ...state, query: redrawn(value) }))
   }
@@ -892,6 +954,7 @@ const captureSubmit = async ($: EngineInterface, value: string) => {
       capture: { ...state.capture, draft: state.capture.draft === value ? '' : state.capture.draft, error: null, saved: [...state.capture.saved, text].slice(-10) },
     }))
   } catch (error) {
+    noteProblem($, 'storage', error)
     await setPane($, state => ({
       ...state,
       capture: { ...state.capture, draft: state.capture.draft === value ? redrawn(value) : state.capture.draft, error: TOAST.failed(messageOf(error)) },
@@ -1143,9 +1206,12 @@ export const register: Register = (on, options) => {
     // generation; with no running turn known (a reload mid-turn loses it), the band's facts keep none.
     const started = sessionStarted(turnState)
     turnState = started.state
+    // A new report per load: which Claude Code this is, and (from here on) what goes wrong.
+    const claude = await $.session.version().then(v => v.version, () => 'unknown')
+    report = freshReport(new Date(await $.clock.now()).toISOString(), claude)
     await $.command.register({ name: 'jot', description: 'Save a note to ostrakon (alone: open the pane)', immediate: true, argumentHint: '<note>' })
     // The same whether harvest is on or off: the person can always ask Claude to jot something.
-    await $.tool.register({ name: JOT_TOOL, description: JOT_DESCRIPTION, inputSchema: JOT_SCHEMA, isDeferred: false }).catch(error => $.ui.log(`ostrakon: jot tool not registered: ${messageOf(error)}`, { to: 'debug' }))
+    await $.tool.register({ name: JOT_TOOL, description: JOT_DESCRIPTION, inputSchema: JOT_SCHEMA, isDeferred: false }).catch(error => noteProblem($, 'jot tool not registered', error))
     if (started.facts) await update($, turns, started.facts)
     // A reload keeps the atoms but not the module: later decisions order above what they hold, and
     // the latest prompt comes back, so a continuation after the reload still joins its harvest.
@@ -1162,13 +1228,16 @@ export const register: Register = (on, options) => {
     await store.loadAll(await storeIO($)).catch(error => reportStorage($, error))
     // Timers stop when the module reloads; a reload runs session.start again and re-arms this.
     $.clock.every(POLL_MS, () => {
+      if (isReportDirty) void saveReport($)
       storeIO($)
         .then(store.scan)
         .then(() => prunePicks($))
         .then(() => realign($))
         .catch(error => reportStorage($, error))
     })
-    void startSync($).catch(error => $.ui.log(`ostrakon: sync: ${messageOf(error)}`, { to: 'debug' }))
+    void startSync($).catch(error => noteProblem($, 'sync', error))
+    // Not awaited: a slow disk never holds the session up for a diagnostic (saveReport catches).
+    void saveReport($)
     return next(e)
   })
 
@@ -1225,6 +1294,7 @@ export const register: Register = (on, options) => {
         context: { ...(sessionId !== undefined ? { sessionId } : {}), ...(turnId !== undefined ? { turnId } : {}) },
       })
     } catch (error) {
+      noteProblem($, 'storage', error)
       return { deny: TOAST.failed(messageOf(error)) }
     }
     toast($, TOAST.jotted(text))
@@ -1246,6 +1316,7 @@ export const register: Register = (on, options) => {
       await showSaved($)
       return { text: '' }
     } catch (error) {
+      noteProblem($, 'storage', error)
       return { text: `ostrakon: ${TOAST.failed(messageOf(error))}` }
     }
   })
@@ -1334,7 +1405,7 @@ export const register: Register = (on, options) => {
     if (completed.turn === null) return done
     await collectHarvest($, completed.turn)
     if (completed.review) {
-      void reviewTurn($, completed.turn, e.answer).catch(error => $.ui.log(`ostrakon: harvest review failed: ${messageOf(error)}`, { to: 'debug' }))
+      void reviewTurn($, completed.turn, e.answer).catch(error => noteProblem($, 'harvest review failed', error))
     }
     return done
   })

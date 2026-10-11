@@ -66,6 +66,7 @@ export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '') =
   })
   on('session.repo', () => ({ value: { root: '/home/me/Work/cc', remote: 'git@github.com:me/cc.git', name: 'cc', internal: false } }))
   on('session.id', () => ({ value: 'sess-1' }))
+  on('session.version', () => ({ value: { version: '2.1.294', base: '2.1.294' } }))
   on('session.root', () => ({ value: '/home/me/Work/cc' }))
   on('prompt.read', () => ({ value: { text: world.box.text, cursor: world.box.text.length } }))
   on('prompt.fill', ($, e) => {

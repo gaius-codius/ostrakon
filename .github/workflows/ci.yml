@@ -49,7 +49,7 @@ jobs:
         with:
           persist-credentials: false
       # Errors only: the dev scripts are sourced helpers, so style warnings are noise.
-      - run: shellcheck -s bash -S error tools/*.sh tools/*/*.sh bin/ostrakon get.sh install.sh update.sh
+      - run: shellcheck -s bash -S error tools/*.sh tools/*/*.sh bin/ostrakon bin/doctor get.sh install.sh update.sh
 
   gitleaks:
     runs-on: ubuntu-latest

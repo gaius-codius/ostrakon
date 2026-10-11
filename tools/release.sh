@@ -5,7 +5,7 @@
 #                                    notes under 0.2.0. Push it and merge its PR.
 #   tools/release.sh tag             on main after the merge: tags v<plugin.json's version>. Pushing
 #                                    the tag makes the GitHub release (.github/workflows/release.yml).
-# It never pushes; it prints the commands that publish.
+# It never pushes; it prints the commands that publish. Go through docs/releasing.md first.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -27,6 +27,12 @@ case ${1:-} in
     [[ $v =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || die "usage: tools/release.sh prepare <x.y.z>"
     on_fresh_main
     [ -z "$(g tag -l "v$v")" ] || die "v$v is already tagged"
+    # The README's Requirements must name the versions doctor checks against (docs/releasing.md).
+    while IFS='=' read -r tool tested; do
+      case $tool in '' | '#'*) continue ;; esac
+      grep -qi "tested with $tested" "$ROOT/README.md" ||
+        die "the README's Requirements don't say \"tested with $tested\" ($tool, from bin/tested-with); update one or the other"
+    done < "$ROOT/bin/tested-with"
     previous=$(version_of)
     g switch --quiet -c "release-v$v"
     sed -i.bak "s/^\( *\"version\": *\"\)[^\"]*\"/\1$v\"/" "$MANIFEST" && rm -f "$MANIFEST.bak"

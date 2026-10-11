@@ -18,6 +18,7 @@ export const engineOver = (on: On, dir: MemDir) => {
   })
   on('fs.write', async ($, e) => {
     await dir.writeGate
+    await dir.holdWrite?.(e.path)
     if (dir.failWrites) return { deny: 'EROFS: read-only file system' }
     dir.put(e.path, e.text)
     return { value: undefined }
@@ -41,6 +42,7 @@ export const engineOver = (on: On, dir: MemDir) => {
     const last = args[args.length - 1] ?? ''
     switch (command) {
       case 'mv': {
+        if (dir.failMovesTo.has(last)) return ran(1, '', `mv: cannot move '${args[1]}' to '${last}': Read-only file system`)
         const moved = await io.move(args[1] ?? '', args[2] ?? '')
         return ran(moved.exitCode, '', moved.stderr)
       }

@@ -35,6 +35,8 @@ How it all works, and the Claude Code behaviour it relies on, is written up in [
 
 ## Releases
 
+Before each release, go through the checklist in [`docs/releasing.md`](docs/releasing.md): mods keep changing, so it re-tests against the current Claude Code and updates the requirements, `ostrakon doctor` and the docs.
+
 Versions follow [Semantic Versioning](https://semver.org/); before 1.0, a minor version may break things. There is one version for the whole repo (the mod, the hub and the `ostrakon` command), kept in `plugin/.claude-plugin/plugin.json`.
 
 1. On an up-to-date `main`, run `tools/release.sh prepare 0.2.0`. It makes a `release-v0.2.0` branch with one commit that sets the version and moves the Unreleased notes under 0.2.0.

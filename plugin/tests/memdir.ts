@@ -14,6 +14,8 @@ export class MemDir {
   warnings: string[] = []
   writeGate: Promise<void> | undefined // fs.write waits for it: a slow disk
   failWrites = false // fs.write refuses (a full disk, a read-only mount)
+  holdWrite: ((path: string) => Promise<void> | undefined) | undefined // fs.write waits for what it returns: one slow file
+  failMovesTo = new Set<string>() // mv onto these exits 1, leaving the source (a mount gone read-only)
   clock = 1_760_000_000_000
 
   tick() {
