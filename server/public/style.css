@@ -192,6 +192,7 @@ button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
   line-height: 1.45;
 }
 .card textarea:focus { outline: none; }
+input[type="search"] { -webkit-appearance: none; appearance: none; }
 input[type="search"]::-webkit-search-cancel-button, input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
 .card .foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.625rem; }
 /* Where the note goes: a pill outside capture, chips while typing. */
@@ -236,7 +237,6 @@ input[type="search"]::-webkit-search-cancel-button, input[type="search"]::-webki
 
 /* ---- the inbox: a group per project ---- */
 #inbox { margin-top: 1.625rem; }
-#filter { width: 100%; min-height: 2.75rem; padding: 0 0.875rem; border: 1px solid var(--line); border-radius: 0.75rem; background: var(--surface); }
 #list { display: flex; flex-direction: column; gap: 1.125rem; }
 .group h2 { position: sticky; top: 0; z-index: 2; margin: 0; background: var(--bg); font-size: 0.8125rem; font-weight: 600; }
 .group h2 button {
@@ -254,7 +254,7 @@ input[type="search"]::-webkit-search-cancel-button, input[type="search"]::-webki
 }
 .group .lead { flex: none; width: 0.875rem; display: flex; justify-content: center; }
 .group .name { min-width: 0; overflow-wrap: anywhere; }
-.group .folded { font-weight: 400; color: var(--faint); }
+.group .folded { font: 400 0.75rem var(--mono); color: var(--faint); }
 .group .count { margin-left: auto; padding-left: 0.5rem; font: 400 0.75rem var(--mono); color: var(--faint); }
 /* A project's dot, its colour set by the script from colourOf; unfiled is a ring. */
 .dot { flex: none; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--inactive); }
@@ -459,7 +459,7 @@ dialog.drawer .panel {
 .drawer .find { flex: none; margin-top: 0.5rem; min-height: 2.75rem; display: flex; align-items: center; gap: 0.625rem; padding: 0 0.875rem; border-radius: 0.75rem; background: var(--raised); color: var(--dim); }
 .drawer .find input { flex: 1; min-width: 0; min-height: 2.75rem; border: 0; background: none; color: var(--text); font-size: 1rem; }
 .drawer .find input:focus { outline: none; }
-.drawer .find:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.drawer .find:focus-within { box-shadow: 0 0 0 2px var(--accent); }
 .drawer .picks-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: max(1.25rem, env(safe-area-inset-bottom)); }
 .picks { list-style: none; margin: 0.875rem 0 0; padding: 0; }
 .picks li + li .pick { border-top: 1px solid var(--line); }
@@ -504,3 +504,33 @@ dialog.drawer .panel {
 #refused .btn.quiet { color: var(--dim); }
 #refused textarea { width: 100%; min-height: 5rem; padding: 0.625rem 0.75rem; border: 1px solid var(--accent); border-radius: 0.75rem; background: var(--surface); resize: vertical; }
 #refused textarea:focus { outline: none; }
+
+/* ---- search: the bar takes the header's place ---- */
+[data-mode="search"] .top { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.search-bar { display: flex; align-items: center; gap: 0.625rem; min-height: 2.75rem; }
+.search-bar .field {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0 0 0 0.875rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 0.75rem;
+  background: var(--surface);
+  color: var(--dim);
+}
+.search-bar .field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.search-bar input { flex: 1; min-width: 0; min-height: 2.625rem; border: 0; background: none; color: var(--text); font-size: 1rem; }
+.search-bar input:focus { outline: none; }
+.search-bar .icon-btn { margin: -1px 0; }
+.search-status { margin: 1.125rem 0 0; font: 0.75rem var(--mono); color: var(--dim); }
+.search-status:empty { display: none; }
+[data-mode="search"] #inbox { margin-top: 0.625rem; }
+[data-mode="search"] #refused { display: none; }
+mark { background: var(--fresh); color: var(--text); border-radius: 3px; padding: 0 2px; box-shadow: inset 0 -1.5px 0 var(--success-text); }
+.no-match { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.no-match p { margin: 0; font-size: 0.875rem; color: var(--dim); }
+.no-match .title { font-size: 0.9375rem; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+.top .icon-btn { margin-right: -0.625rem; }

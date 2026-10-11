@@ -16,13 +16,23 @@
 <link rel="preload" href="fonts/ibm-plex-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-mode="list">
 <div id="app" hidden>
   <header class="top">
     <h1 class="brand"><span class="pen" aria-hidden="true">✎</span>ostrakon</h1>
     <p id="status" class="status" role="status"></p>
     <button id="close-capture" type="button" class="link-btn" aria-label="Close; the draft is kept" hidden>Close</button>
+    <button id="open-search" type="button" class="icon-btn" aria-label="Filter notes"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5 20 20"></path></svg></button>
   </header>
+  <div id="search-bar" class="search-bar" role="search" hidden>
+    <div class="field">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5 20 20"></path></svg>
+      <label for="filter" class="sr-only">Filter notes</label>
+      <input id="filter" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+      <button id="clear-filter" type="button" class="icon-btn" aria-label="Clear filter" hidden><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+    </div>
+    <button id="cancel-search" type="button" class="link-btn">Cancel</button>
+  </div>
   <main id="main">
     <form id="capture" class="card" autocomplete="off">
       <label for="text" class="sr-only">Note</label>
@@ -42,9 +52,13 @@
       <h2 id="refused-title">Not accepted by the hub</h2>
       <ul id="refused-list"></ul>
     </section>
+    <p id="search-status" class="search-status" role="status"></p>
     <section id="inbox" aria-label="Open notes">
-      <input id="filter" type="search" placeholder="Filter notes" aria-label="Filter notes" autocomplete="off">
       <div id="list"></div>
+      <div id="no-match" class="no-match" hidden>
+        <p id="no-match-title" class="title"></p>
+        <p>Archived and sent notes aren't searched.</p>
+      </div>
       <p id="empty" class="empty" hidden>No open notes.</p>
     </section>
   </main>

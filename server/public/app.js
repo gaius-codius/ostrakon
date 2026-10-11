@@ -475,10 +475,12 @@ const renderList = () => {
     return
   }
   isStale = false
-  const words = $('filter').value.trim().toLowerCase()
+  // Filtering: what's typed in the search bar, while it's up.
+  const typed = mode === 'search' ? $('filter').value.trim() : ''
+  const words = typed.toLowerCase()
   const queued = new Set(outbox.map(note => note.id))
-  const shown = Object.values(current())
-    .filter(note => !note.deleted && note.status === 'open')
+  const open = Object.values(current()).filter(note => !note.deleted && note.status === 'open')
+  const shown = open
     .filter(note => words === '' || `${note.text} ${labelOf(note.project)}`.toLowerCase().includes(words))
     .sort((a, b) => Date.parse(b.updated) - Date.parse(a.updated) || (a.id < b.id ? 1 : -1))
   // Grouped as the pane's list view (SPEC §4.6): a heading per project, projects by their latest
@@ -491,8 +493,8 @@ const renderList = () => {
   }
   const order = [...groups.keys()].sort((a, b) => (a === '') - (b === ''))
   const sections = []
-  // Claude's proposals (harvest, SPEC §8) come first, to keep or dismiss; a filter shows open notes only.
-  const proposals = words === '' ? Object.values(current()).filter(note => !note.deleted && note.status === 'proposed').sort((a, b) => Date.parse(b.updated) - Date.parse(a.updated)) : []
+  // Claude's proposals (harvest, SPEC §8) come first, to keep or dismiss; a search looks at open notes only.
+  const proposals = mode === 'search' ? [] : Object.values(current()).filter(note => !note.deleted && note.status === 'proposed').sort((a, b) => Date.parse(b.updated) - Date.parse(a.updated))
   if (proposals.length > 0) {
     const isFolded = folded.has(PROPOSED)
     const rowsId = `rows-${++groupIds}`
@@ -508,14 +510,15 @@ const renderList = () => {
   for (const key of order) {
     const notes = groups.get(key)
     const project = notes[0].project
-    // While filtering every group shows its matches, folded or not.
-    const isFolded = words === '' && folded.has(key)
+    // A search shows every group's matches, folded or not, and says so on a folded one.
+    const isFolded = folded.has(key)
+    const isShut = isFolded && mode !== 'search'
     const rowsId = `rows-${++groupIds}`
-    const head = heading(key, dot(project), labelOf(project), notes.length, !isFolded, isFolded ? '▸' : '', rowsId)
+    const head = heading(key, dot(project), labelOf(project), notes.length, !isShut, isShut ? '▸' : isFolded ? 'folded · showing matches' : '', rowsId)
     const list = make('ul', 'rows')
     list.id = rowsId
-    list.hidden = isFolded
-    if (!isFolded) for (const note of notes) list.append(noteRow(note, queued.has(note.id)))
+    list.hidden = isShut
+    if (!isShut) for (const note of notes) list.append(noteRow(note, queued.has(note.id), words))
     const group = make('div', 'group', head, list)
     group.dataset.key = key
     sections.push(group)
@@ -524,10 +527,33 @@ const renderList = () => {
   const focused = $('list').contains(document.activeElement) ? document.activeElement.dataset.focus : undefined
   $('list').replaceChildren(...sections)
   if (focused) $('list').querySelector(`[data-focus="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true })
-  $('empty').hidden = shown.length + proposals.length > 0
-  $('empty').textContent = words === '' ? 'No open notes.' : 'No notes match.'
+  const isSearch = mode === 'search'
+  const count = `${shown.length} note${shown.length === 1 ? '' : 's'} in ${groups.size} project${groups.size === 1 ? '' : 's'}`
+  setText($('search-status'), isSearch && shown.length > 0 ? count : '')
+  $('no-match').hidden = !(isSearch && shown.length === 0 && words !== '')
+  setText($('no-match-title'), `No open notes match “${typed}”`)
+  $('empty').hidden = isSearch || shown.length + proposals.length > 0
+  $('open-search').hidden = mode !== 'list' || open.length === 0
 }
 
+// Sets an element's text only when it changes, so a live region isn't read out again for nothing.
+const setText = (node, text) => {
+  if (node.textContent !== text) node.textContent = text
+}
+
+// A note's text with each place it matches the filter marked.
+const marked = (text, words) => {
+  if (words === '') return [text]
+  const parts = []
+  const lower = text.toLowerCase()
+  let from = 0
+  for (let at = lower.indexOf(words); at >= 0; at = lower.indexOf(words, at + words.length)) {
+    parts.push(text.slice(from, at), make('mark', '', text.slice(at, at + words.length)))
+    from = at + words.length
+  }
+  parts.push(text.slice(from))
+  return parts
+}
 const PROPOSED = ':proposed' // the proposals group's fold key; a project key never starts with ':'
 
 // An inline SVG icon from path data, hidden from assistive tech (the button carries the name).
@@ -565,13 +591,13 @@ let textIds = 0
 
 // One open note: its marker (◆ from Claude, ▪ from the phone), the text, its age and a ⋯ button for
 // its actions, over the archive strip a swipe uncovers.
-const noteRow = (note, isQueued) => {
+const noteRow = (note, isQueued, words = '') => {
   const marker = make('span', `marker ${note.by}`, note.by === 'claude' ? '◆' : note.by === 'phone' ? '▪' : '')
   if (note.by === 'claude') {
     marker.setAttribute('role', 'img')
     marker.setAttribute('aria-label', 'From Claude')
   } else marker.setAttribute('aria-hidden', 'true')
-  const text = make('p', 'text', note.text)
+  const text = make('p', 'text', ...marked(note.text, words))
   text.id = `text-${++textIds}`
   // The note just saved says `now` rather than `queued`: the form already says it's waiting to sync.
   const isFresh = note.id === freshId
@@ -1045,11 +1071,50 @@ const setMode = next => {
   mode = next
   document.body.dataset.mode = next
   const isCapture = next === 'capture'
+  const isSearch = next === 'search'
   $('close-capture').hidden = !isCapture
   // While typing, the list beneath is dimmed and out of reach; a tap on it closes the form.
   for (const id of ['refused', 'inbox']) $(id).inert = isCapture
+  // Filtering: the search bar takes the header's place, and the form steps aside.
+  $('search-bar').hidden = !isSearch
+  $('capture').hidden = isSearch
+  if (!isSearch) $('filter').value = ''
+  $('clear-filter').hidden = $('filter').value === ''
   renderCapture()
+  renderList()
 }
+
+const startSearch = () => {
+  setMode('search')
+  $('filter').focus()
+}
+
+const endSearch = () => {
+  if (mode !== 'search') return
+  setMode('list')
+  $('open-search').focus({ preventScroll: true })
+}
+
+$('open-search').addEventListener('click', startSearch)
+$('cancel-search').addEventListener('click', endSearch)
+$('filter').addEventListener('input', () => {
+  $('clear-filter').hidden = $('filter').value === ''
+  renderList()
+})
+$('filter').addEventListener('keydown', event => {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    endSearch()
+  }
+  // Enter puts the keyboard away to read the matches.
+  if (event.key === 'Enter') $('filter').blur()
+})
+$('clear-filter').addEventListener('click', () => {
+  $('filter').value = ''
+  $('clear-filter').hidden = true
+  renderList()
+  $('filter').focus()
+})
 
 const startCapture = () => {
   // The next note starts unfiled; the pill showed where the last one went.
@@ -1214,8 +1279,6 @@ $('picker').addEventListener('cancel', event => {
   event.preventDefault()
   closePicker()
 })
-
-$('filter').addEventListener('input', renderList)
 
 $('toast-undo').addEventListener('click', () => {
   const undo = toastUndo
