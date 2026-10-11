@@ -98,21 +98,35 @@ const PUSH_DEBOUNCE_MS = 1000
 // then and, after a problem, on the next poll.
 let report = freshReport('', '')
 let isReportDirty = false
+let isReportSaving = false
 
 const reportPath = async ($: EngineInterface) => `${((await $.env.get('HOME')) ?? '').replace(/\/+$/, '')}/.cache/ostrakon/report.json`
 
-// Never in the way: a report that can't be written is only a debug line.
+// Never in the way: a report that can't be written is only a debug line, and tried again on the
+// next poll. One save at a time, so an older one never lands over a newer; a call while one runs,
+// or a problem noted after its snapshot, is saved on the next poll.
 const saveReport = async ($: EngineInterface) => {
+  if (isReportSaving) {
+    isReportDirty = true
+    return
+  }
+  isReportSaving = true
   isReportDirty = false
+  let tmp = ''
   try {
     const path = await reportPath($)
     report = { ...report, writtenAt: new Date(await $.clock.now()).toISOString() }
     await $.process.run(['mkdir', '-p', path.replace(/\/[^/]+$/, '')])
-    const tmp = `${path}.${Math.random().toString(36).slice(2)}.tmp`
+    tmp = `${path}.${Math.random().toString(36).slice(2)}.tmp`
     await $.fs.write(tmp, `${JSON.stringify(report, null, 2)}\n`)
-    await $.process.run(['mv', '-f', tmp, path])
+    const moved = await $.process.run(['mv', '-f', tmp, path])
+    if (moved.exitCode !== 0) throw new Error(moved.stderr.trim() || `mv exited ${moved.exitCode}`)
   } catch (error) {
+    isReportDirty = true
+    if (tmp !== '') await $.process.run(['rm', '-f', tmp]).catch(() => undefined)
     $.ui.log(`ostrakon: report not saved: ${messageOf(error)}`, { to: 'debug' })
+  } finally {
+    isReportSaving = false
   }
 }
 
