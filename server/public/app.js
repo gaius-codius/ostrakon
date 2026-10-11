@@ -369,11 +369,16 @@ const setRefused = next => {
   return true
 }
 
-// Sends a refused note again, with `text` when it was edited. It leaves the list once it's queued.
+// Sends a refused note again, with `text` when it was edited. It leaves the list once it's queued;
+// until then an edit stays open, with what was typed.
 const retry = (item, text = item.text) => {
   const note = refusedNote(item)
+  if (!queue({ ...note, text, updated: stamp(note.updated), origin: 'iphone' })) {
+    if (refusedEditing?.id === item.id) $('refused-list').querySelector(`li[data-id="${CSS.escape(item.id)}"] textarea`)?.focus()
+    return
+  }
   refusedEditing = null
-  if (queue({ ...note, text, updated: stamp(note.updated), origin: 'iphone' })) setRefused(refused.filter(other => other.id !== item.id))
+  setRefused(refused.filter(other => other.id !== item.id))
   renderRefused()
 }
 
