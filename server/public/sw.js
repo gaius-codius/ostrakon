@@ -1,7 +1,7 @@
 // Opens the app from its cache at once, even when the hub is down or hangs, and refreshes the
 // cache in the background (stale-while-revalidate): a new version shows on the next open.
 // /api is never cached, nor the manifest: it carries the token for the Home Screen app.
-const CACHE = 'ostrakon-shell-v10'
+const CACHE = 'ostrakon-shell-v11'
 const SHELL = ['/', '/app.js', '/style.css', '/icon.svg', '/icon-180.png']
 
 self.addEventListener('install', event => {
