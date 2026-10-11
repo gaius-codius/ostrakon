@@ -40,7 +40,10 @@ const cellsOf = (char: string) => (ZERO.test(char) ? 0 : WIDE.test(char) ? 2 : 1
 const segmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : undefined
 export const clustersOf = (text: string) => (segmenter ? Array.from(segmenter.segment(text), part => part.segment) : Array.from(text))
 // A cluster is as wide as its widest character: a joined emoji sequence is two cells, not six.
+// A narrow character drawn as emoji (❤️, 1️⃣: a VS16 or a keycap after it) is two as well.
+const EMOJI_STYLE = /[\uFE0F\u20E3]/u
 const clusterCells = (cluster: string) => {
+  if (cluster.length > 1 && EMOJI_STYLE.test(cluster)) return 2
   let widest = 0
   for (const char of cluster) widest = Math.max(widest, cellsOf(char))
   return widest

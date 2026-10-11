@@ -187,6 +187,8 @@ describe('model', () => {
     expect(wide).toEqual(['日本語', 'のテキ', 'スト'])
     for (const line of wrap('🎉🎉🎉 party time 日本語', 5)) expect(cells(line)).toBeLessThanOrEqual(5)
     expect(wrap('a\n\nb', 10)).toEqual(['a', '', 'b'])
+    // ❤️ is a narrow heart and VS16: two cells, so nine to a line of 18.
+    expect(wrap('❤️'.repeat(18), 18)).toEqual(['❤️'.repeat(9), '❤️'.repeat(9)])
   })
 
   test('footer statuses are cut to their room, the last ones first', () => {

@@ -184,6 +184,16 @@ describe('pocketOf', () => {
     expect(cells('ab')).toBe(2)
   })
 
+  test('a narrow character drawn as emoji, by VS16 or a keycap, is 2; with VS15 or alone it stays 1', () => {
+    expect(cells('❤️')).toBe(2)
+    expect(cells('☀️')).toBe(2)
+    expect(cells('1️⃣')).toBe(2)
+    expect(cells('#️⃣')).toBe(2)
+    expect(cells('❤')).toBe(1)
+    expect(cells('❤︎')).toBe(1)
+    expect(cells('a❤️b')).toBe(4)
+  })
+
   test('a cut never splits a ZWJ sequence, a flag or a character and its marks', () => {
     expect(cut('👩‍💻👩‍💻👩‍💻', 5)).toBe('👩‍💻👩‍💻…')
     expect(cut('🇦🇺🇦🇺🇦🇺', 5)).toBe('🇦🇺🇦🇺…')
