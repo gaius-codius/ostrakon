@@ -3,6 +3,7 @@ import type { Engine } from 'claude-code/testing'
 
 import { serializeNote } from '../src/frontmatter'
 import { MemDir } from './memdir'
+import { COLOUR, GLYPH } from '../src/ui/look'
 import { CC, INFRA, NOTE, PANE, mountPane, noteIn, put, run, startSession, texts } from './world'
 
 const fixture = () => {
@@ -325,6 +326,37 @@ test('the key sheet pages to fit the inline body, j and k turning the pages roun
   expect(await ui.find({ type: 'Text', text: /^ close keys$/ })).toBeUndefined()
   await ui.press({ key: 'key-i' })
   expect(await ui.find({ type: 'Text', text: /^ more 1\/3$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+const THEME_ROW = { key: 'theme', label: 'Theme', kind: 'choice', provider: { plugin: 'engine', tier: 'core' }, isLocked: false } as const
+
+test('project colours follow the theme: light, a 16-colour one, a custom theme by its base, and a change in /config', async ($, on) => {
+  const theme = { value: 'light' }
+  on('config.list', () => ({ value: [{ ...THEME_ROW, value: theme.value }] }))
+  on('config.set', (_, e) => ({ value: e.value }))
+  const dir = fixture()
+  dir.put('/home/me/.claude/themes/paper.json', JSON.stringify({ name: 'Paper', base: 'light-daltonized' }))
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.press({ key: 'key-app:toggleReplTab' })
+  // infra's dot in the list view; cc is this project, in the accent.
+  const infraDot = async () => {
+    await ui.redraw(PANE.props)
+    return (await ui.findAll({ type: 'Text', text: GLYPH.dot })).map(dot => dot.props.color).find(colour => colour !== COLOUR.accent)
+  }
+  expect(await infraDot()).toBe('#6f3fd1')
+  const set = async (value: string) => {
+    await $.config.set({ key: 'theme', value, previous: '', provider: THEME_ROW.provider, origin: { kind: 'composer' } })
+  }
+  await set('dark-ansi')
+  expect(await infraDot()).toBe('planMode')
+  await set('custom:paper')
+  expect(await infraDot()).toBe('#6f3fd1')
+  // A custom theme whose file is gone draws as dark.
+  await set('custom:gone')
+  expect(await infraDot()).toBe('#b08cf5')
   await ui.unmount()
 })
 

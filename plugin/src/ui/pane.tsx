@@ -4,6 +4,7 @@ import type { Note, NoteProblem, NoteProject, PaneState } from '../../types'
 import type { Action, Ctx, Focus, Key, Line, Page } from '../model'
 import { ageOf, cells, cut, fitOneLine, fitStatuses, footerPairs, fromField, groupLabel, labelOf, oneLine, toField, uniqueKeys, wrap } from '../model'
 import { CHORD, COLOUR, GLYPH, SHARD, TEXT, WIDTH, colourOf } from './look'
+import type { Tone } from './look'
 
 // The launcher pane's drawing (SPEC §4). Pure: it gets the elements, a computed view and the
 // handlers, and returns the tree. Everything that touches the engine lives in hooks/register.tsx.
@@ -47,6 +48,8 @@ export type PaneView = {
   bodyRows: number
   // `hub offline · 3 queued` while a configured hub can't be reached (SPEC §9.4); empty otherwise.
   syncStatus: string
+  // How the person's theme draws project colours.
+  tone: Tone
 }
 
 export const SEARCH_KEY = 'q'
@@ -104,7 +107,7 @@ const ProjectCell = ({ el, view, note, isHistory }: { el: E; view: PaneView; not
   return (
     <Text>
       {' '.repeat(Math.max(0, WIDTH.project - cells(name)))}
-      <Text color={isHistory ? COLOUR.history : colourOf(key, view.ctx.current.key)}>{key === null ? GLYPH.unfiledDot : GLYPH.dot} </Text>
+      <Text color={isHistory ? COLOUR.history : colourOf(key, view.ctx.current.key, view.tone)}>{key === null ? GLYPH.unfiledDot : GLYPH.dot} </Text>
       <Text color={isCurrent ? COLOUR.accent : undefined} dimColor={!isCurrent}>
         {name}
       </Text>
@@ -160,7 +163,7 @@ const GroupRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; l
   return (
     <Box key={`row-${slot}`} width={view.width} backgroundColor={isSelected ? COLOUR.band : undefined}>
       <Button key={slotKey(slot)} plain label=" " onPress={() => handlers.pressSlot(slot)} />
-      <Text color={isProposed ? COLOUR.accent : colourOf(line.project?.key ?? null, view.ctx.current.key)}>{mark} </Text>
+      <Text color={isProposed ? COLOUR.accent : colourOf(line.project?.key ?? null, view.ctx.current.key, view.tone)}>{mark} </Text>
       <Text color={isAccent ? COLOUR.accent : undefined} bold={isAccent} dimColor={!isAccent}>
         {cut(groupLabel(view.ctx, line), WIDTH.label)}
       </Text>

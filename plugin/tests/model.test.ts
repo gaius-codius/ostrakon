@@ -2,6 +2,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import type { Note, NoteProject } from '../types'
 import type { Ctx, Focus, Line } from '../src/model'
+import { COLOUR, colourOf, toneOf } from '../src/ui/look'
 import {
   ageOf,
   bundleText,
@@ -202,5 +203,34 @@ describe('model', () => {
     expect(bundleText(ctx, [here, there])).toBe('Please look at these notes from my ostrakon:\n\n- fix it\n- [infra] rotate keys')
     expect(fromField(toField('one\ntwo'))).toBe('one\ntwo')
     expect(canEditInline('has ↵ already')).toBe(false)
+  })
+})
+
+describe('project colours', () => {
+  test('a project keeps its colour, the current one takes the accent and unfiled is grey', () => {
+    for (const tone of ['dark', 'light', 'ansi'] as const) {
+      expect(colourOf(INFRA.key, CC.key, tone)).toBe(colourOf(INFRA.key, CC.key, tone))
+      expect(colourOf(CC.key, CC.key, tone)).toBe(COLOUR.accent)
+      expect(colourOf(null, CC.key, tone)).toBe(COLOUR.unfiled)
+    }
+  })
+
+  test('the theme picks the palette: hex for dark and light, theme keys for 16 colours', () => {
+    // The phone hashes the same way, so these hold there too.
+    expect(colourOf('github.com/me/infra', CC.key, 'dark')).toBe('#b08cf5')
+    expect(colourOf('github.com/me/infra', CC.key, 'light')).toBe('#6f3fd1')
+    expect(colourOf('github.com/me/infra', CC.key, 'ansi')).toBe('planMode')
+    const keys = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map(name => `github.com/me/${name}`)
+    expect(new Set(keys.map(key => colourOf(key, CC.key, 'dark'))).size).toBeGreaterThan(4)
+    for (const key of keys) expect(colourOf(key, CC.key, 'ansi')).not.toBe('suggestion')
+    expect(['dark', 'dark-daltonized', 'light', 'light-daltonized', 'dark-ansi', 'light-ansi', 'nonsense'].map(toneOf)).toEqual([
+      'dark',
+      'dark',
+      'light',
+      'light',
+      'ansi',
+      'ansi',
+      'dark',
+    ])
   })
 })

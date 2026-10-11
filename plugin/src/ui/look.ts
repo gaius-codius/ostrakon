@@ -31,8 +31,11 @@ export const GLYPH = {
 // The empty pane's ostrakon, drawn dim beside the ways in.
 export const SHARD = ['   ▁▁▁▁▁', '  ╱ ≡ ≈ ╲▁', ' ╱ ≈≡ ≈≡  ╲', ' ╲▁▁▁▁▁▁▁▁╱'] as const
 
-// Theme keys only: they follow light and dark. `permission` is left out because it matches
-// `suggestion` in the light theme; `warning` because a project shouldn't read as an alarm.
+// Theme keys follow light and dark. Projects take the palette instead, raw colours so the phone
+// draws the same ones: server/public/app.js names them in this order and style.css holds the values
+// (tools/check.sh fails when the three differ). Each reads at 4.5:1 on its theme's background. A
+// 16-colour theme can't draw hex: projects take theme keys there, never `suggestion`, which a
+// Button's hotkey digit is drawn in.
 export const COLOUR = {
   accent: 'claude',
   band: 'subtle',
@@ -41,7 +44,17 @@ export const COLOUR = {
   saved: 'success',
   problem: 'error',
   offline: 'warning',
-  palette: ['suggestion', 'success', 'merged', 'planMode', 'autoAccept'],
+  palette: [
+    { name: 'teal', dark: '#4cc2b4', light: '#00756d' },
+    { name: 'sky', dark: '#5aaeeb', light: '#1565a8' },
+    { name: 'violet', dark: '#b08cf5', light: '#6f3fd1' },
+    { name: 'magenta', dark: '#de7fe0', light: '#9b2ea6' },
+    { name: 'pink', dark: '#f283ac', light: '#b52f68' },
+    { name: 'gold', dark: '#e0bf4c', light: '#7f6400' },
+    { name: 'lime', dark: '#a9cc55', light: '#4f7410' },
+    { name: 'sand', dark: '#cfae86', light: '#7e5e38' },
+  ],
+  ansiPalette: ['success', 'merged', 'planMode', 'warning'],
 } as const
 
 export const WIDTH = {
@@ -156,11 +169,22 @@ export const CHORD = {
   new: { action: 'pane:next', keys: 'ctrl+n' },
 } as const
 
-// Deterministic colour for a project: the current one is the accent, unfiled is grey.
-export const colourOf = (key: string | null, current: string) => {
+// How the person's theme draws: `dark` and `light` take the palette's hex, `ansi` its theme keys.
+export type Tone = 'dark' | 'light' | 'ansi'
+
+// A theme's base as the engine names it; anything it doesn't know draws as dark, as there.
+export const toneOf = (base: string): Tone => {
+  if (base === 'dark-ansi' || base === 'light-ansi') return 'ansi'
+  return base === 'light' || base === 'light-daltonized' ? 'light' : 'dark'
+}
+
+// Deterministic colour for a project: the current one is the accent, unfiled is grey. The phone
+// hashes the same way.
+export const colourOf = (key: string | null, current: string, tone: Tone) => {
   if (key === null) return COLOUR.unfiled
   if (key === current) return COLOUR.accent
   let hash = 0
   for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
-  return COLOUR.palette[hash % COLOUR.palette.length] ?? COLOUR.palette[0]
+  if (tone === 'ansi') return COLOUR.ansiPalette[hash % COLOUR.ansiPalette.length] ?? COLOUR.ansiPalette[0]
+  return (COLOUR.palette[hash % COLOUR.palette.length] ?? COLOUR.palette[0])[tone]
 }

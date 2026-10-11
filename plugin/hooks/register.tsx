@@ -34,7 +34,8 @@ import { canReview, freshTurns, isHarvestShown, mergeHarvest, sessionEnded, sess
 import type { RunningTurn } from '../src/turns'
 import { HarvestRow, PocketRow, harvestOf, openerOf, pocketOf } from '../src/ui/band'
 import type { BandHandlers } from '../src/ui/band'
-import { HINT, MS, TEXT, TOAST } from '../src/ui/look'
+import { HINT, MS, TEXT, TOAST, toneOf } from '../src/ui/look'
+import type { Tone } from '../src/ui/look'
 import { CAPTURE_KEY, EDIT_KEY, MOVE_KEY, Pane, SEARCH_KEY, SEND_KEY, chromeRows, sheetPages, slotKey } from '../src/ui/pane'
 import type { Handlers, PaneView } from '../src/ui/pane'
 
@@ -72,6 +73,8 @@ const geometry = { bodyRows: 30, width: 70, isInline: false, isFocused: true }
 let project: NoteProject = { key: 'path:/', name: '/', path: '/' }
 // False until session start finds the project: harvest proposes nothing under the placeholder.
 let isProjectKnown = false
+// How the person's theme draws project colours: read at session start and when /config changes it.
+let tone: Tone = 'dark'
 // The element the ring was last on: Shift+Tab off the search field lands on the action layer,
 // and is sent to the last row instead of back.
 let lastElement: string | undefined
@@ -237,6 +240,31 @@ const currentProject = async ($: EngineInterface): Promise<NoteProject> => {
   return { key: `path:${root}`, name: basename(root), path: root }
 }
 
+// The theme's base as the engine resolves it. A custom theme's file names one; one that can't be
+// read draws as dark. `auto` follows the terminal's background, which the engine asks the terminal
+// for and a mod can't: COLORFGBG, the engine's own fallback, decides it when set, else dark.
+const toneOfTheme = async ($: EngineInterface, theme: string): Promise<Tone> => {
+  if (theme === 'auto') {
+    // As the engine reads it: the background's colour index, dark for 0–6 and 8.
+    const index = Number((await $.env.get('COLORFGBG'))?.split(';').at(-1) ?? '')
+    return Number.isInteger(index) && index > 6 && index !== 8 && index <= 15 ? 'light' : 'dark'
+  }
+  if (!theme.startsWith('custom:')) return toneOf(theme)
+  const dir = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${(await $.env.get('HOME')) ?? ''}/.claude`
+  const file = await $.fs.read(`${dir}/themes/${theme.slice('custom:'.length)}.json`).then(String, () => '')
+  try {
+    const { base } = JSON.parse(file) as { base?: unknown }
+    return toneOf(typeof base === 'string' ? base : 'dark')
+  } catch {
+    return 'dark'
+  }
+}
+
+const themeTone = async ($: EngineInterface) => {
+  const theme = (await $.config.list()).find(row => row.key === 'theme')?.value
+  return toneOfTheme($, typeof theme === 'string' ? theme : 'dark')
+}
+
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
 const reportStorage = ($: EngineInterface, error: unknown) => $.ui.log(`ostrakon: storage: ${messageOf(error)}`, { to: 'debug' })
@@ -329,6 +357,7 @@ const viewOf = async ($: EngineInterface): Promise<PaneView & { bundleRows: numb
     syncStatus: [syncStatusOf(await read($, syncState), 'hub offline'), syncStatusOf(await read($, mirrorState), 'mirror unavailable')]
       .filter(text => text !== '')
       .join(' · '),
+    tone,
   }
   const capacity = Math.max(1, geometry.bodyRows - chromeRows(partial))
   // The window follows the focused row, or the note being edited or moved.
@@ -1121,6 +1150,7 @@ export const register: Register = (on, options) => {
     project = await currentProject($)
       .then(found => ((isProjectKnown = true), found))
       .catch(() => project)
+    tone = await themeTone($).catch(() => 'dark')
     await store.loadAll(await storeIO($)).catch(error => reportStorage($, error))
     // Timers stop when the module reloads; a reload runs session.start again and re-arms this.
     $.clock.every(POLL_MS, () => {
@@ -1159,6 +1189,15 @@ export const register: Register = (on, options) => {
         .catch(error => reportStorage($, error))
     })
     return ended
+  })
+
+  // The theme changed: project colours follow it.
+  on('config.set', { key: 'theme' }, async ($, e, next) => {
+    const set = await next(e)
+    if (set.deny !== undefined) return set
+    tone = await toneOfTheme($, String(set.value)).catch(() => 'dark')
+    $.ui.invalidate('ui.render')
+    return set
   })
 
   // Claude's jot (SPEC §8): an open note in this project and a toast, as v1; harvest on or off.

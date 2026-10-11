@@ -64,7 +64,7 @@ What the mods interface does that shaped the design. Marked *unverified* where u
 
 ### 2.3 Drawing
 - **Elements** come from `$.ui.resolve(e)`: Box, Text, Button, Input, Select, Link, Code, Markdown and Client; Raster and Image are terminal-only; mobile has no Input or Select.
-- **Button** `plain` draws `k: label` with the hotkey in the accent colour; without `plain` the terminal shows `[ label ]` and no hotkey. A digit hotkey on a band Button also fires when the person types that digit alone into an empty prompt and pauses; that is what makes Pocket possible.
+- **Button** `plain` draws `k: label` with the hotkey in `suggestion`; without `plain` the terminal shows `[ label ]` and no hotkey. A digit hotkey on a band Button also fires when the person types that digit alone into an empty prompt and pauses; that is what makes Pocket possible.
 - **The band is shared:** compose other mods' bands with `await next(e)` inside your Box.
 - **`$.ui.status`** gets an orange `⚠ <plugin>:` prefix, so it reads like a warning. Avoid it for calm counts.
 - **Placement:** docked beside the transcript (`placement: 'dock'`, fullscreen and wide) or inline above the prompt. Size to `e.props.bodyColumns` and `scroll.bodyRows`.
@@ -114,7 +114,7 @@ What the mods interface does that shaped the design. Marked *unverified* where u
 `plugin/src/ui/look.ts` holds every visual constant (glyphs, theme keys, widths, rules, footer and toast wording, the chord table), so a change of look is a one-file edit. The mockup mod (`tools/mockups`, `/mock mix <view>`) draws every state. This text is the reference for keys, wording and behaviour; the renders are the reference for spacing and colour.
 
 ### 4.1 Visual language
-- Colour comes only from theme keys, never hex, so both themes work.
+- Colour comes from theme keys, so every theme works, except project colours: a fixed palette of eight in `look.ts`, a dark and a light value each, picked by the person's theme (`/config` `theme`; a custom theme by its file's `base`; `auto` by `COLORFGBG`, else dark). The phone uses the same palette and hash. A 16-colour (`*-ansi`) theme takes theme keys instead, never `suggestion`, the hotkey digit's colour.
 - The accent (`claude`) marks the current project, row numbers, picks, `◆` and search hits (bold, no underline). The selected row has a `subtle` background and a focus block in column 0. Metadata (age, preview meta, footer labels) is dim. Other projects get a deterministic colour from a hash of their key, drawn on a `●` before their dim name, never on the name; `unfiled` is a grey `○`. `warning` and `error` are kept for real problems.
 - No rules: one blank row separates the search row, the rows, the preview and the footer. Docked, capture is the one framed element (a `round` accent box).
 - Glyphs: `❯` search, `✎` capture, `⇢` bundle, `◆` from Claude, `▪` from the phone, `●`/`○` picked or not (and project dots), `↗` sent, `·` archived, `▸` group folded, `▎` quoted text, `↑`/`↓` more rows, `⚠` storage problem, `✓` saved, `⏎` Enter.
