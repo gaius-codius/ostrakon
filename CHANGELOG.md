@@ -14,6 +14,13 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 - `ostrakon doctor`: checks that the mod loads, your notes folder, the hub and its token, and the tools ostrakon needs, and says what to fix. It changes nothing and never prints the token.
 - A load report: each session start records which Claude Code version ran the mod, and what went wrong since, in `~/.cache/ostrakon/report.json`. `ostrakon doctor` shows it, so you can see the mod actually works in your version.
 
+### Changed
+
+- A quieter pane and band. The pane has no rules, a coloured dot per project, indented groups and a one-line footer that leads with the selected note's own actions; the band above the prompt gets an opener chip, cuts labels at word ends and marks the newest note. The capture cue and the "saved" confirmation sit on the prompt's hint line.
+- Each project keeps the same colour in the pane and on the phone, from a fixed 8-colour palette readable in dark and light themes.
+- The phone app, rebuilt: notes grouped under foldable projects, a `⋯` button on every note, Claude's proposals first with Keep and Dismiss, project chips when capturing, search, and swipe-to-archive that springs back unless you mean it. It works offline with its own fonts, follows the phone's light or dark setting, text size and Reduce Motion, and passes an accessibility audit in every state.
+- `docs/DESIGN.md` records what the pane and the phone agree on (colours, symbols, wording, motion), and a check keeps it and the code in step.
+
 ### Fixed
 
 - The hub no longer shows its internal error messages to callers. A request that isn't valid JSON now gets `invalid JSON body`, and any other failure gets a plain error, with the details in the hub's log.
