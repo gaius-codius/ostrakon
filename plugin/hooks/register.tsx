@@ -23,6 +23,7 @@ import {
 import { DEFAULT_HARVEST_MODE, JOT_DESCRIPTION, JOT_REPLY, JOT_SCHEMA, JOT_TOOL, harvestModeOf, jotText, lightRequest, parseReview, reviewPrompt } from '../src/harvest'
 import type { HarvestMode } from '../src/harvest'
 import { basename, normalizeRemote } from '../src/project'
+import { freshReport, withProblem } from '../src/report'
 import { StorageError, createStore } from '../src/store'
 import type { StoreIO } from '../src/store'
 import { createSync } from '../src/sync/core'
@@ -93,6 +94,42 @@ let isPushScheduled = false
 // How soon after a local change it goes out (SPEC §7.1).
 const PUSH_DEBOUNCE_MS = 1000
 
+// The load report for `ostrakon doctor` (src/report.ts): replaced at session start, and saved
+// then and, after a problem, on the next poll.
+let report = freshReport('', '')
+let isReportDirty = false
+
+const reportPath = async ($: EngineInterface) => `${((await $.env.get('HOME')) ?? '').replace(/\/+$/, '')}/.cache/ostrakon/report.json`
+
+// Never in the way: a report that can't be written is only a debug line.
+const saveReport = async ($: EngineInterface) => {
+  isReportDirty = false
+  try {
+    const path = await reportPath($)
+    report = { ...report, writtenAt: new Date(await $.clock.now()).toISOString() }
+    await $.process.run(['mkdir', '-p', path.replace(/\/[^/]+$/, '')])
+    const tmp = `${path}.${Math.random().toString(36).slice(2)}.tmp`
+    await $.fs.write(tmp, `${JSON.stringify(report, null, 2)}\n`)
+    await $.process.run(['mv', '-f', tmp, path])
+  } catch (error) {
+    $.ui.log(`ostrakon: report not saved: ${messageOf(error)}`, { to: 'debug' })
+  }
+}
+
+// A problem worth knowing about: a debug line, as before, and a line in the load report.
+const noteProblem = ($: EngineInterface, where: string, error: unknown) => {
+  const message = messageOf(error)
+  $.ui.log(`ostrakon: ${where}: ${message}`, { to: 'debug' })
+  // The clock can refuse once the module is gone (a reload, the session's end); the line is lost then.
+  void $.clock.now().then(
+    now => {
+      report = withProblem(report, where, message, new Date(now).toISOString())
+      isReportDirty = true
+    },
+    () => undefined,
+  )
+}
+
 // The store's view of the engine. Built per call from $ ($ may only be passed within this file).
 const storeIO = async ($: EngineInterface): Promise<StoreIO> => ({
   env: { dir: await $.env.get('OSTRAKON_DIR'), home: await $.env.get('HOME') },
@@ -130,7 +167,7 @@ const storeIO = async ($: EngineInterface): Promise<StoreIO> => ({
     if (listed.exitCode === 1 && started === '' && listed.stderr.trim() === '') return { isRunning: false }
     return undefined
   },
-  warn: text => $.ui.log(`ostrakon: ${text}`, { to: 'debug' }),
+  warn: text => noteProblem($, 'storage', text),
   now: () => $.clock.now(),
   sleep: ms => $.clock.sleep(ms),
   shown: async () => ({ notes: await read($, notes), problems: await read($, problems) }),
@@ -150,7 +187,7 @@ const schedulePush = ($: EngineInterface) => {
   $.clock.after(PUSH_DEBOUNCE_MS, () => {
     isPushScheduled = false
     for (const syncing of syncs) {
-      syncing.sync.push(syncIO($, syncing)).catch(error => $.ui.log(`ostrakon: sync: ${messageOf(error)}`, { to: 'debug' }))
+      syncing.sync.push(syncIO($, syncing)).catch(error => noteProblem($, 'sync', error))
     }
   })
 }
@@ -187,7 +224,7 @@ const syncIO = ($: EngineInterface, syncing: Syncing): SyncIO => ({
   status: async status => {
     await setSyncState($, syncing, () => ({ isOn: true, ...status }))
   },
-  warn: text => $.ui.log(`ostrakon: sync: ${text}`, { to: 'debug' }),
+  warn: text => noteProblem($, 'sync', text),
 })
 
 // The footer's status while the hub or the mirror can't be reached; nothing while they can, or
@@ -208,7 +245,7 @@ const mirrorIO = async ($: EngineInterface, which: 'live' | 'archive'): Promise<
   ...(await storeIO($)),
   // OSTRAKON_DIR names the notes folder, never the mirror.
   env: { home: await $.env.get('HOME') },
-  warn: text => $.ui.log(`ostrakon: sync: ${text}`, { to: 'debug' }),
+  warn: text => noteProblem($, 'sync', text),
   shown: async () => mirrorViews[which],
   publish: async (merged, broken) => {
     mirrorViews[which] = { notes: merged, problems: broken }
@@ -230,7 +267,7 @@ const currentProject = async ($: EngineInterface): Promise<NoteProject> => {
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
-const reportStorage = ($: EngineInterface, error: unknown) => $.ui.log(`ostrakon: storage: ${messageOf(error)}`, { to: 'debug' })
+const reportStorage = ($: EngineInterface, error: unknown) => noteProblem($, 'storage', error)
 
 const toast = ($: EngineInterface, text: string) => {
   $.ui.toast(text)
@@ -1054,9 +1091,12 @@ export const register: Register = (on, options) => {
     // generation; with no running turn known (a reload mid-turn loses it), the band's facts keep none.
     const started = sessionStarted(turnState)
     turnState = started.state
+    // A new report per load: which Claude Code this is, and (from here on) what goes wrong.
+    const claude = await $.session.version().then(v => v.version, () => 'unknown')
+    report = freshReport(new Date(await $.clock.now()).toISOString(), claude)
     await $.command.register({ name: 'jot', description: 'Save a note to ostrakon (alone: open the pane)', immediate: true, argumentHint: '<note>' })
     // The same whether harvest is on or off: the person can always ask Claude to jot something.
-    await $.tool.register({ name: JOT_TOOL, description: JOT_DESCRIPTION, inputSchema: JOT_SCHEMA, isDeferred: false }).catch(error => $.ui.log(`ostrakon: jot tool not registered: ${messageOf(error)}`, { to: 'debug' }))
+    await $.tool.register({ name: JOT_TOOL, description: JOT_DESCRIPTION, inputSchema: JOT_SCHEMA, isDeferred: false }).catch(error => noteProblem($, 'jot tool not registered', error))
     if (started.facts) await update($, turns, started.facts)
     // A reload keeps the atoms but not the module: later decisions order above what they hold, and
     // the latest prompt comes back, so a continuation after the reload still joins its harvest.
@@ -1069,13 +1109,15 @@ export const register: Register = (on, options) => {
     await store.loadAll(await storeIO($)).catch(error => reportStorage($, error))
     // Timers stop when the module reloads; a reload runs session.start again and re-arms this.
     $.clock.every(POLL_MS, () => {
+      if (isReportDirty) void saveReport($)
       storeIO($)
         .then(store.scan)
         .then(() => prunePicks($))
         .then(() => realign($))
         .catch(error => reportStorage($, error))
     })
-    void startSync($).catch(error => $.ui.log(`ostrakon: sync: ${messageOf(error)}`, { to: 'debug' }))
+    void startSync($).catch(error => noteProblem($, 'sync', error))
+    await saveReport($)
     return next(e)
   })
 
@@ -1211,7 +1253,7 @@ export const register: Register = (on, options) => {
     if (completed.turn === null) return done
     await collectHarvest($, completed.turn)
     if (completed.review) {
-      void reviewTurn($, completed.turn, e.answer).catch(error => $.ui.log(`ostrakon: harvest review failed: ${messageOf(error)}`, { to: 'debug' }))
+      void reviewTurn($, completed.turn, e.answer).catch(error => noteProblem($, 'harvest review failed', error))
     }
     return done
   })

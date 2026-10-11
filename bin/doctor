@@ -75,6 +75,47 @@ else
   esac
 fi
 
+# What the mod itself last saw (plugin/src/report.ts): proof it runs, not just that it validates.
+if has python3; then
+  echo "== the mod in a session"
+  python3 -I - "$HOME/.cache/ostrakon/report.json" "${cv:-}" <<'EOF' || problems=$((problems + 1))
+import json, os, sys
+from datetime import datetime, timezone
+path, installed = sys.argv[1], sys.argv[2]
+if not os.path.exists(path):
+    print('  --  no load report yet: start a Claude Code session, then run this again')
+    sys.exit(0)
+when = lambda text: datetime.fromisoformat(text.replace('Z', '+00:00'))
+try:
+    r = json.load(open(path))
+    loaded = when(r['loadedAt'])
+except (ValueError, KeyError):
+    print(f'  --  the load report ({path}) is unreadable; the next session writes a new one')
+    sys.exit(0)
+def ago(t):
+    s = int((datetime.now(timezone.utc) - t).total_seconds())
+    for size, unit in ((86400, 'day'), (3600, 'hour'), (60, 'minute')):
+        if s >= size:
+            n = s // size
+            return f'{n} {unit}{"s" if n != 1 else ""} ago'
+    return 'just now'
+claude = r.get('claude') or 'unknown'
+print(f'  ok  the mod last loaded {ago(loaded)}, in Claude Code {claude}')
+if installed and claude not in ('unknown', installed):
+    print(f'  --  you have {installed} now; start a session so the report covers it')
+failed = False
+for p in r.get('problems', [])[-5:]:
+    # Sync problems are usually just a hub out of reach; the hub checks say whether it is now.
+    mark = '--' if p['where'] == 'sync' else '!!'
+    failed = failed or mark == '!!'
+    times = f' ({p["count"]} times, last {ago(when(p["last"]))})' if p['count'] > 1 else ''
+    print(f'  {mark}  {p["where"]}: {p["message"]}{times}')
+if failed:
+    print('      for details: start claude with --debug-file /tmp/ostrakon-debug.log, then grep ostrakon in it')
+sys.exit(1 if failed else 0)
+EOF
+fi
+
 echo "== notes"
 dir=$(expand "${OSTRAKON_DIR:-${notesDir:-$HOME/.local/share/ostrakon}}")
 if [ -d "$dir" ] && [ -w "$dir" ]; then ok "notes folder $dir ($(find "$dir" -maxdepth 2 -name '*.md' | wc -l | tr -d ' ') notes)"

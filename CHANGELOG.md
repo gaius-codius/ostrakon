@@ -9,6 +9,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 ### Added
 
 - `ostrakon doctor`: checks that the mod loads, your notes folder, the hub and its token, and the tools ostrakon needs, and says what to fix. It changes nothing and never prints the token.
+- A load report: each session start records which Claude Code version ran the mod, and what went wrong since, in `~/.cache/ostrakon/report.json`. `ostrakon doctor` shows it, so you can see the mod actually works in your version.
 
 ### Fixed
 

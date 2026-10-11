@@ -12,7 +12,8 @@ time. The steps that actually cut the release are at the end, and in [`CONTRIBUT
 - Use it for real in a session: capture with `/jot` and `//`, open the pane with `ctrl+x s`,
   pull a note in from the pocket, and let harvest run once. The tests can't see everything the
   terminal draws.
-- Run `ostrakon doctor` and fix anything it marks.
+- Run `ostrakon doctor` and fix anything it marks. Its "the mod in a session" part should name the
+  Claude Code version you just used, with no problems listed.
 
 ## 2. Check what changed in mods
 
