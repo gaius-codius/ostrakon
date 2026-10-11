@@ -296,8 +296,8 @@ const loadProjects = async () => {
     const body = await api('/api/projects')
     projects = body.projects.map(({ key, name, path }) => ({ key, name, path }))
     store('sp.projects', projects)
-    renderPicker()
-    if (sheetView === 'move') renderSheet()
+    renderCapture()
+    renderPickerList()
   } catch {}
 }
 
@@ -380,15 +380,6 @@ const colourOf = project => {
   let hash = 0
   for (const char of project.key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
   return PALETTE[hash % PALETTE.length]
-}
-
-const renderPicker = () => {
-  const select = $('project')
-  const chosen = select.value
-  const options = [new Option('unfiled', '')]
-  for (const project of projects) options.push(new Option(labelOf(project), project.key))
-  select.replaceChildren(...options)
-  select.value = projects.some(project => project.key === chosen) ? chosen : ''
 }
 
 // The one place a project's colour is painted: a dot in the colour colourOf names (a CSS custom
@@ -553,6 +544,7 @@ const render = () => {
   renderRefused()
   renderList()
   if (sheetFor !== null) renderSheet()
+  renderPickerList()
 }
 
 // ---- inbox actions ----
@@ -852,22 +844,135 @@ const showLogin = notice => {
 const start = () => {
   $('login').hidden = true
   $('app').hidden = false
-  renderPicker()
+  // What was being typed when the app last closed.
+  $('text').value = load('sp.draft', '')
   render()
-  $('text').focus()
+  renderCapture()
   loadProjects()
   startPoll()
   flush()
 }
 
+// ---- capture ----
+
+// Where the next note goes: a project key, or null for unfiled (the default). After a save it names
+// where that note went, until the next note starts.
+let chosen = null
+let isJustSaved = false
+// The project of the last note filed under one: offered first among the chips.
+let lastProject = load('sp.lastProject', null)
+const CHIPS = 3
+
+const projectOf = key => projects.find(project => project.key === key) ?? null
+
+// The chips: the last-used project first, then the hub's most recently active; a project picked
+// from the full list takes the last place when it isn't already shown.
+const chipProjects = () => {
+  const ordered = [...projects].sort((a, b) => (b.key === lastProject) - (a.key === lastProject))
+  const shown = ordered.slice(0, CHIPS)
+  const picked = projectOf(chosen)
+  if (picked && !shown.includes(picked)) shown.splice(CHIPS - 1, 1, picked)
+  return shown
+}
+
+const renderCapture = () => {
+  const text = $('text')
+  $('save').disabled = text.value.trim() === ''
+  const picked = projectOf(chosen)
+  // The pill (outside capture): where the note goes, or went.
+  const pill = $('pill')
+  pill.replaceChildren(dot(picked), make('span', 'label', labelOf(picked)), icon(ICONS.chevron, { size: 12, stroke: 2.2 }))
+  pill.setAttribute('aria-label', `Project: ${labelOf(picked)}`)
+  // The chips (while typing), the picked one pressed; a tap on it again goes back to unfiled.
+  const shown = chipProjects()
+  const chips = shown.map((project, i) => {
+    const isOn = project.key === chosen
+    const chip = button('', () => pick(isOn ? null : project.key), `chip${isOn ? ' on' : ''}${i === 0 && !isOn && chosen === null ? ' first' : ''}`)
+    chip.append(dot(project), make('span', '', labelOf(project)))
+    chip.setAttribute('aria-pressed', String(isOn))
+    return chip
+  })
+  const rest = projects.length - shown.length
+  if (rest > 0) {
+    const more = button('', event => openPicker({ mode: 'file', trigger: event.currentTarget }), 'chip more-chip')
+    more.append(icon(ICONS.search, { size: 14, stroke: 2 }), make('span', '', `${rest} more`))
+    more.setAttribute('aria-label', `More projects, ${rest} others`)
+    more.setAttribute('aria-haspopup', 'dialog')
+    chips.push(more)
+  }
+  // A tap on a chip leaves the keyboard up.
+  for (const chip of chips) chip.addEventListener('mousedown', event => event.preventDefault())
+  $('chip-list').replaceChildren(...chips)
+  $('chips').hidden = mode !== 'capture' || chips.length === 0
+  const hint = $('hint')
+  hint.replaceChildren(dot(picked), picked ? `${labelOf(picked)} · tap again for unfiled` : 'unfiled · tap a project to file')
+  hint.hidden = mode !== 'capture'
+  pill.hidden = mode === 'capture'
+}
+
+const pick = key => {
+  chosen = key
+  renderCapture()
+  if (mode === 'capture') $('text').focus({ preventScroll: true })
+}
+
+// ---- modes: the list, typing a note (capture), filtering (search) ----
+
+let mode = 'list'
+
+const setMode = next => {
+  if (next === mode) return
+  mode = next
+  document.body.dataset.mode = next
+  const isCapture = next === 'capture'
+  $('close-capture').hidden = !isCapture
+  // While typing, the list beneath is dimmed and out of reach; a tap on it closes the form.
+  for (const id of ['refused', 'inbox']) $(id).inert = isCapture
+  renderCapture()
+}
+
+const startCapture = () => {
+  // The next note starts unfiled; the pill showed where the last one went.
+  if (isJustSaved) {
+    isJustSaved = false
+    chosen = null
+  }
+  setMode('capture')
+}
+
+// Leaves the form; whatever was typed stays, here and in storage, for next time.
+const closeCapture = () => {
+  if (mode !== 'capture') return
+  const wasInForm = $('capture').contains(document.activeElement) || document.activeElement === $('close-capture')
+  setMode('list')
+  if (wasInForm) $('pill').focus({ preventScroll: true })
+}
+
+$('text').addEventListener('focus', startCapture)
+$('text').addEventListener('input', () => {
+  store('sp.draft', $('text').value)
+  $('save').disabled = $('text').value.trim() === ''
+})
+$('pill').addEventListener('click', () => $('text').focus())
+$('close-capture').addEventListener('click', closeCapture)
+$('save').addEventListener('mousedown', event => event.preventDefault())
+$('capture').addEventListener('keydown', event => {
+  if (event.key === 'Escape') closeCapture()
+  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) $('capture').requestSubmit()
+})
+// A tap outside the form (on the dimmed list) closes it.
+document.addEventListener('pointerdown', event => {
+  if (mode !== 'capture' || $('picker').open) return
+  if ($('capture').contains(event.target) || document.querySelector('.top').contains(event.target)) return
+  closeCapture()
+})
+
 $('capture').addEventListener('submit', event => {
   event.preventDefault()
   const field = $('text')
   const text = field.value.trim()
-  field.focus()
   if (text === '') return
-  const key = $('project').value
-  const picked = projects.find(project => project.key === key)
+  const picked = projectOf(chosen)
   const now = new Date().toISOString()
   const isQueued = queue({
     id: ulid(),
@@ -884,11 +989,94 @@ $('capture').addEventListener('submit', event => {
     extra: [],
   })
   // Not queued (the phone can't store it): the text stays in the field.
-  if (isQueued) field.value = ''
+  if (!isQueued) return
+  field.value = ''
+  store('sp.draft', '')
+  if (picked) {
+    lastProject = picked.key
+    store('sp.lastProject', lastProject)
+  }
+  isJustSaved = true
+  field.blur()
+  setMode('list')
 })
 
-$('text').addEventListener('keydown', event => {
-  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) $('capture').requestSubmit()
+// ---- the project picker (File under, Move to) ----
+
+// `mode`: 'file' picks where the next note goes; 'move' moves note `id`. `trigger` gets focus back.
+let picking = null
+
+const openPicker = ({ mode: pickMode, id = null, trigger = null }) => {
+  picking = { mode: pickMode, id, trigger }
+  $('picker-title').textContent = pickMode === 'move' ? 'Move to' : 'File under'
+  $('picker-search').value = ''
+  renderPickerList()
+  $('picker').showModal()
+  ;($('picker').querySelector('[aria-pressed="true"]') ?? $('picker-search')).focus({ preventScroll: true })
+}
+
+// `picked`: true when something was chosen (focus then goes back to the note field).
+const closePicker = (picked = false) => {
+  if (!picking) return
+  const { trigger, mode: pickMode } = picking
+  picking = null
+  $('picker').close()
+  if (picked && pickMode === 'file') return $('text').focus({ preventScroll: true })
+  if (trigger?.isConnected) trigger.focus({ preventScroll: true })
+}
+
+// The current choice: the project the note is under (move), or the next note's (file).
+const pickedKey = () => (picking?.mode === 'move' ? current()[picking.id]?.project?.key ?? null : chosen)
+
+const renderPickerList = () => {
+  if (!picking) return
+  const words = $('picker-search').value.trim().toLowerCase()
+  const counts = new Map()
+  for (const note of Object.values(current())) if (!note.deleted && note.status === 'open' && note.project) counts.set(note.project.key, (counts.get(note.project.key) ?? 0) + 1)
+  const here = pickedKey()
+  const items = projects
+    .filter(project => words === '' || labelOf(project).toLowerCase().includes(words))
+    .map(project => {
+      const label = labelOf(project)
+      const at = words === '' ? -1 : label.toLowerCase().indexOf(words)
+      const name = at < 0 ? make('span', 'label', label) : make('span', 'label', label.slice(0, at), make('b', '', label.slice(at, at + words.length)), label.slice(at + words.length))
+      const count = counts.get(project.key) ?? 0
+      const item = button('', () => choose(project.key), 'pick')
+      item.append(dot(project), name, make('span', 'aside count', count === 0 ? '—' : `${count} open`))
+      if (count === 0) item.lastChild.setAttribute('aria-label', 'none open')
+      const isHere = project.key === here
+      item.setAttribute('aria-pressed', String(isHere))
+      if (isHere) item.append(icon(ICONS.check, { stroke: 2.2 }))
+      return make('li', '', item)
+    })
+  $('picker-list').replaceChildren(...items)
+  $('picker-none').hidden = items.length > 0
+  const unfiled = $('picker-unfiled')
+  unfiled.setAttribute('aria-pressed', String(here === null))
+  const aside = unfiled.querySelector('.aside')
+  aside.replaceChildren(...(picking.mode === 'file' ? ['the default'] : []), ...(here === null ? [icon(ICONS.check, { stroke: 2.2 })] : []))
+}
+
+const choose = key => {
+  if (!picking) return
+  if (picking.mode === 'move') {
+    const { id } = picking
+    closePicker(true)
+    if ((current()[id]?.project?.key ?? null) !== key) moveTo(id, projectOf(key))
+    return
+  }
+  chosen = key
+  renderCapture()
+  closePicker(true)
+}
+
+$('picker-search').addEventListener('input', renderPickerList)
+$('picker-unfiled').addEventListener('click', () => choose(null))
+$('picker-done').addEventListener('click', () => closePicker())
+$('picker').querySelector('[data-close]').addEventListener('click', () => closePicker())
+$('picker').addEventListener('cancel', event => {
+  event.preventDefault()
+  closePicker()
 })
 
 $('filter').addEventListener('input', renderList)

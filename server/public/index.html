@@ -21,14 +21,20 @@
   <header class="top">
     <h1 class="brand"><span class="pen" aria-hidden="true">✎</span>ostrakon</h1>
     <p id="status" class="status" role="status"></p>
+    <button id="close-capture" type="button" class="link-btn" aria-label="Close; the draft is kept" hidden>Close</button>
   </header>
   <main id="main">
     <form id="capture" class="card" autocomplete="off">
       <label for="text" class="sr-only">Note</label>
       <textarea id="text" rows="3" placeholder="A note…" enterkeyhint="enter"></textarea>
+      <fieldset id="chips" class="chips" hidden>
+        <legend class="sr-only">Project</legend>
+        <div id="chip-list" class="chip-list"></div>
+      </fieldset>
       <div class="foot">
-        <select id="project" aria-label="Project"><option value="">unfiled</option></select>
-        <button id="save" type="submit" class="primary">Save</button>
+        <button id="pill" type="button" class="pill"></button>
+        <p id="hint" class="hint" hidden></p>
+        <button id="save" type="submit" class="primary" disabled>Save</button>
       </div>
     </form>
     <section id="refused" aria-labelledby="refused-title" hidden>
@@ -61,6 +67,27 @@
     <button id="sheet-cancel" type="button" class="cancel">Cancel</button>
   </div>
 </div>
+<dialog id="picker" class="drawer" aria-labelledby="picker-title">
+  <div class="scrim" data-close></div>
+  <div class="panel">
+    <div class="grabber" aria-hidden="true"></div>
+    <div class="bar">
+      <h2 id="picker-title">File under</h2>
+      <button id="picker-done" type="button" class="link-btn">Done</button>
+    </div>
+    <label class="find">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5 20 20"></path></svg>
+      <span class="sr-only">Search projects</span>
+      <input id="picker-search" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+    </label>
+    <div class="picks-scroll">
+      <ul id="picker-list" class="picks"></ul>
+      <p id="picker-none" class="none" hidden>No project matches</p>
+      <h3 class="always">always</h3>
+      <button id="picker-unfiled" type="button" class="pick" aria-pressed="false"><span class="dot ring" aria-hidden="true"></span><span class="label">unfiled</span><span class="aside"></span></button>
+    </div>
+  </div>
+</dialog>
 <div id="toast" class="toast" hidden><span id="toast-text"></span><button id="toast-undo" type="button">Undo</button></div>
 <script src="app.js"></script>
 </body>
