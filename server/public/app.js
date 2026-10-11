@@ -1270,7 +1270,11 @@ const renderCapture = () => {
   $('chips').hidden = mode !== 'capture' || chips.length === 0
   const hint = $('hint')
   hint.replaceChildren(dot(picked), picked ? `${labelOf(picked)} · tap again for unfiled` : 'unfiled · tap a project to file')
-  hint.hidden = mode !== 'capture'
+  // The header's line is hidden while typing: a note the phone can't keep says so here, beside Save.
+  const error = mode === 'capture' && storageError !== '' ? "Can't save on this phone (storage full or blocked)" : ''
+  if ($('save-error').textContent !== error) $('save-error').textContent = error
+  $('save-error').hidden = error === ''
+  hint.hidden = mode !== 'capture' || error !== ''
   pill.hidden = mode === 'capture'
 }
 
@@ -1417,9 +1421,10 @@ $('capture').addEventListener('submit', event => {
     text,
     extra: [],
   })
-  // Not queued (the phone can't store it): the text stays in the field.
+  // Not queued (the phone can't store it): the text stays in the field, and the form says why.
   if (!isQueued) {
     freshId = wasFresh
+    renderCapture()
     return
   }
   savedId = id
