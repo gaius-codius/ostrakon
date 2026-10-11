@@ -148,6 +148,15 @@ Not using Tailscale? Any HTTPS reverse proxy, tunnel or VPN works too; see [Open
 
 The service runs `~/.local/bin/ostrakon hub`, so it doesn't matter where the repo lives. Phone setup, the Home Screen app and the iOS Shortcut are covered in [`docs/phone.md`](docs/phone.md). Read [`SECURITY.md`](SECURITY.md) before making the hub reachable from other devices.
 
+## Known limitations
+
+These come from Claude Code's mods interface, which is still new, and should go away as it matures.
+
+- **Long notes in the pane's text field.** When a note is longer than the capture or edit field, the text doesn't scroll with you: it disappears past the end of the field, while the cursor keeps moving and can even drop to an empty "second" line. What you type is all there, though, and the whole note shows in full just below the field as you write. It needs a text field that wraps or scrolls, which mods don't have yet.
+- **Claude Code updates can break things.** Mods change between versions. If something stops working after an update, run `ostrakon doctor` and mention your Claude Code version when you report it.
+
+More, including a couple of folder-sync edge cases, in [`ROADMAP.md`](ROADMAP.md#known-limitations).
+
 ## Development
 
 - How it's designed, and notes on the platform it builds on: [`docs/SPEC.md`](docs/SPEC.md). How it looks: [`docs/DESIGN.md`](docs/DESIGN.md). Ideas for what's next: [`ROADMAP.md`](ROADMAP.md).
