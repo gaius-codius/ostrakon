@@ -392,7 +392,8 @@ export type Focus =
   | { kind: 'edit' }
   | { kind: 'bundle' }
   | { kind: 'move' }
-  | { kind: 'sheet'; page: number; pages: number }
+  // `lead`: the hotkeys of the row the sheet was opened on, its own actions; none off a row.
+  | { kind: 'sheet'; page: number; pages: number; lead: string[] }
   | { kind: 'empty' }
 
 // The keys answered in a focus, footer order. The hidden action layer mounts exactly these, so a
@@ -476,6 +477,25 @@ export const uniqueKeys = (keys: Key[]) => {
 }
 
 export const footerPairs = (keys: Key[]) => uniqueKeys(keys).flatMap(key => (key.shown ? [key.shown] : []))
+
+// The keys a row's footer leads with, its own actions, up to the first of the pane's own.
+const PANE_ACTIONS: Action[] = ['list', 'search', 'fold', 'history', 'keys']
+export const ownKeys = (keys: Key[]) => {
+  const own: string[] = []
+  for (const key of uniqueKeys(keys)) {
+    if (key.shown === undefined || key.hotkey === undefined) continue
+    if (PANE_ACTIONS.includes(key.action)) break
+    own.push(key.hotkey)
+  }
+  return own
+}
+
+// The key sheet's lines with the row's own keys first, in its footer's order, then the rest as
+// they are. A line is a row's when one of its keys (`d / u`) is.
+export const sheetLines = (lines: [string, string][], lead: string[]) => {
+  const own = [...new Set(lead.flatMap(hotkey => lines.filter(([keys]) => keys.split(' / ').includes(hotkey))))]
+  return [...own, ...lines.filter(line => !own.includes(line))]
+}
 
 // Footer statuses ([text, colour]) within `room` cells, two between them: cut, never wrapped, and
 // the last ones go first.

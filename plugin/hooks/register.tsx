@@ -15,6 +15,7 @@ import {
   labelOf,
   labelsOf,
   linesOf,
+  ownKeys,
   pageOf,
   parseQuery,
   toField,
@@ -306,7 +307,10 @@ const focusOf = (state: PaneState, lines: Line[], problemCount: number): Focus =
   if (!geometry.isFocused) return { kind: 'unfocused' }
   if (state.mode === 'sheet') {
     const pages = sheetPages(geometry.bodyRows, geometry.isInline, problemCount)
-    return { kind: 'sheet', page: Math.min(Math.max(0, state.sheetPage ?? 0), pages - 1), pages }
+    // Opened on a row, the sheet leads with that row's own keys, as its footer does.
+    const row = state.focus === 'line' ? lines.find(candidate => candidate.key === state.cursor) : undefined
+    const lead = row ? ownKeys(keysFor({ kind: 'line', line: row, view: state.view, picks: state.picks.length })) : []
+    return { kind: 'sheet', page: Math.min(Math.max(0, state.sheetPage ?? 0), pages - 1), pages, lead }
   }
   if (state.mode === 'capture' || state.mode === 'edit' || state.mode === 'bundle' || state.mode === 'move') return { kind: state.mode }
   const line = state.focus === 'line' ? lines.find(candidate => candidate.key === state.cursor) : undefined
@@ -360,8 +364,9 @@ const viewOf = async ($: EngineInterface): Promise<PaneView & { bundleRows: numb
     tone,
   }
   const capacity = Math.max(1, geometry.bodyRows - chromeRows(partial))
-  // The window follows the focused row, or the note being edited or moved.
-  const anchor = state.mode === 'edit' ? (state.edit?.id ?? null) : state.mode === 'move' ? state.moving : focus.kind === 'line' ? state.cursor : null
+  // The window follows the focused row (under the key sheet too), or the note being edited or moved.
+  const isOnLine = focus.kind === 'line' || (focus.kind === 'sheet' && state.focus === 'line')
+  const anchor = state.mode === 'edit' ? (state.edit?.id ?? null) : state.mode === 'move' ? state.moving : isOnLine ? state.cursor : null
   const page = pageOf(lines, state.offset, anchor, capacity)
   return { ...partial, page, bundleRows: Math.max(1, geometry.bodyRows - 11) }
 }

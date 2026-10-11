@@ -2,7 +2,7 @@ import type { Elements } from 'claude-code'
 
 import type { Note, NoteProblem, NoteProject, PaneState } from '../../types'
 import type { Action, Ctx, Focus, Key, Line, Page } from '../model'
-import { ageOf, cells, cut, fitOneLine, fitStatuses, footerPairs, fromField, groupLabel, labelOf, oneLine, toField, uniqueKeys, wrap } from '../model'
+import { ageOf, cells, cut, fitOneLine, fitStatuses, footerPairs, fromField, groupLabel, labelOf, oneLine, sheetLines, toField, uniqueKeys, wrap } from '../model'
 import { CHORD, COLOUR, GLYPH, SHARD, TEXT, WIDTH, colourOf } from './look'
 import type { Tone } from './look'
 
@@ -611,7 +611,8 @@ const KeySheet = ({ el, view }: { el: E; view: PaneView }) => {
   const keyWidth = Math.min(WIDTH.sheetKey, Math.floor(inner / 2))
   const room = sheetRoom(view.bodyRows, view.isInline)
   const page = view.focus.kind === 'sheet' ? view.focus.page : 0
-  const entries = [...view.problems.map(problem => ({ problem: `${problem.file}: ${problem.reason}`, key: '', label: '' })), ...TEXT.keySheet.map(([key, label]) => ({ problem: '', key, label }))]
+  const lines = sheetLines(TEXT.keySheet, view.focus.kind === 'sheet' ? view.focus.lead : [])
+  const entries = [...view.problems.map(problem => ({ problem: `${problem.file}: ${problem.reason}`, key: '', label: '' })), ...lines.map(([key, label]) => ({ problem: '', key, label }))]
   return (
     <Box position="absolute" top={sheetTop(view.isInline)} left={Math.max(0, view.width - width)} width={width} borderStyle="round" borderColor={COLOUR.accent} flexDirection="column" paddingX={1} backgroundColor={COLOUR.band}>
       {entries.slice(page * room, (page + 1) * room).map(({ problem, key, label }) =>
@@ -650,17 +651,30 @@ export const Pane = ({ el, view, handlers, hasHub, hasHarvest, bundleRows }: { e
     return <Rows el={el} view={view} handlers={handlers} />
   }
   const showPreview = !view.isInline && (pane.mode === 'browse' || pane.mode === 'sheet' || pane.mode === 'move' || pane.mode === 'edit') && hasNotes
+  const middle = [
+    body(),
+    pane.mode === 'move' && <Move el={el} view={view} handlers={handlers} />,
+    showPreview && (view.preview ? <Preview el={el} view={view} note={view.preview} /> : <Box height={PREVIEW_ROWS} />),
+  ]
   // With the key sheet up the pane takes the whole body and the footer its last row, so the sheet,
-  // paged to the rows between, never covers the footer or runs past a short inline pane.
+  // paged to the rows between, never covers the footer or runs past a short inline pane. What it
+  // sits over is cut at those rows: in a short body the rows and the preview run taller than the
+  // room, and squeezed the footer out.
   const isSheet = pane.mode === 'sheet'
+  const footerRows = view.isInline ? FOOTER_ROWS : 1 + FOOTER_ROWS
   return (
     <Box flexDirection="column" width={view.width} height={isSheet ? view.bodyRows : undefined}>
       {pane.mode === 'bundle' ? null : pane.mode === 'capture' ? <CaptureRow el={el} view={view} handlers={handlers} /> : <SearchRow el={el} view={view} handlers={handlers} />}
       {pane.mode !== 'bundle' && !view.isInline && <Box height={1} />}
-      {body()}
-      {pane.mode === 'move' && <Move el={el} view={view} handlers={handlers} />}
-      {showPreview && (view.preview ? <Preview el={el} view={view} note={view.preview} /> : <Box height={PREVIEW_ROWS} />)}
-      {isSheet && <Box flexGrow={1} />}
+      {isSheet ? (
+        <Box flexDirection="column" flexShrink={0} height={Math.max(0, view.bodyRows - sheetTop(view.isInline) - footerRows)} overflow="hidden">
+          <Box flexDirection="column" flexShrink={0}>
+            {middle}
+          </Box>
+        </Box>
+      ) : (
+        middle
+      )}
       <Footer el={el} view={view} />
       {isSheet && <KeySheet el={el} view={view} />}
       <ActionLayer el={el} view={view} handlers={handlers} />

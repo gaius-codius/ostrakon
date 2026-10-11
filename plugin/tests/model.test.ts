@@ -2,7 +2,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import type { Note, NoteProject } from '../types'
 import type { Ctx, Focus, Line } from '../src/model'
-import { COLOUR, colourOf, toneOf } from '../src/ui/look'
+import { COLOUR, TEXT, colourOf, toneOf } from '../src/ui/look'
 import {
   ageOf,
   bundleText,
@@ -18,8 +18,10 @@ import {
   labelsOf,
   linesOf,
   matchOf,
+  ownKeys,
   pageOf,
   parseQuery,
+  sheetLines,
   toField,
   uniqueKeys,
   wrap,
@@ -157,11 +159,26 @@ describe('model', () => {
     // Nothing picked, the note's own actions take the four footer places, archive among them.
     const row = footerPairs(keysFor(focuses[2] as Focus)).map(([key]) => key)
     expect(row.slice(0, 4)).toEqual(['t', 's', 'e', 'd'])
-    expect(footerPairs(keysFor({ kind: 'sheet', page: 0, pages: 1 })).map(([key]) => key)).toEqual(['i'])
-    expect(footerPairs(keysFor({ kind: 'sheet', page: 1, pages: 3 }))).toEqual([
+    expect(footerPairs(keysFor({ kind: 'sheet', page: 0, pages: 1, lead: [] })).map(([key]) => key)).toEqual(['i'])
+    expect(footerPairs(keysFor({ kind: 'sheet', page: 1, pages: 3, lead: [] }))).toEqual([
       ['i', 'close keys'],
       ['j', 'more 2/3'],
     ])
+  })
+
+  test("the key sheet leads with a row's own keys, in its footer's order", () => {
+    const open = note('n', CC, 1)
+    const row: Focus = { kind: 'line', line: { kind: 'note', key: open.id, note: open, hits: [] }, view: 'search', picks: 0 }
+    const picked: Focus = { kind: 'line', line: { kind: 'note', key: open.id, note: open, group: CC.key, hits: [] }, view: 'list', picks: 2 }
+    const group: Focus = { kind: 'line', line: { kind: 'group', key: 'group:x', group: 'x', project: CC, isFolded: false, count: 0 }, view: 'list', picks: 0 }
+    expect(ownKeys(keysFor(row))).toEqual(['t', 's', 'e', 'd', 'v'])
+    expect(ownKeys(keysFor(picked))).toEqual(['b', 'v', 'x', 't'])
+    expect(ownKeys(keysFor(group))).toEqual([])
+    const sheet = sheetLines(TEXT.keySheet, ownKeys(keysFor(row)))
+    expect(sheet.slice(0, 6).map(([key]) => key)).toEqual(['⏎ / t', 's', 'e', 'd / u', 'v / x', '↑ ↓ j k'])
+    expect(sheet).toHaveLength(TEXT.keySheet.length)
+    expect(new Set(sheet).size).toBe(TEXT.keySheet.length)
+    expect(sheetLines(TEXT.keySheet, [])).toEqual(TEXT.keySheet)
   })
 
   test('wrapping counts terminal cells: wide characters take two and are never split', () => {

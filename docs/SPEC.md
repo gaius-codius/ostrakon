@@ -190,7 +190,7 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 | `f` / `ctrl+f` | focus search |
 | `n` / `ctrl+n` | new note |
 | `ctrl+s` | scope (search, list) or target project (capture) |
-| `i` | key sheet on/off: a framed list of every key (storage problems first) between the search row and the footer; while it is up the pane takes the whole body and the footer its last row. It is at most 46 columns and never wider than the pane. When it's longer than the rows between, it pages: the footer shows `j more 2/3`, `j` turns to the next page and `k` back, both going round |
+| `i` | key sheet on/off: a framed list of every key (storage problems first; opened on a row, that row's own keys next, in its footer's order) between the search row and the footer; while it is up the pane takes the whole body and the footer its last row. It is at most 46 columns and never wider than the pane. When it's longer than the rows between, it pages: the footer shows `j more 2/3`, `j` turns to the next page and `k` back, both going round |
 | Esc | **back** one step: edit → the row (draft kept), move / key sheet / bundle → the list, capture → search, a row → the search field, a query → empty, list view → search view; at the top it closes |
 | `q` / `ctrl+q` / `ctrl+x s` | close the pane from anywhere; drafts are kept |
 

@@ -329,6 +329,19 @@ test('the key sheet pages to fit the inline body, j and k turning the pages roun
   await ui.unmount()
 })
 
+test("opened on a row, the key sheet leads with the row's own keys and the row stays put", async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-i' })
+  const keys = (await texts(ui)).map(text => text.trim()).filter(text => ['⏎ / t', 's', 'e', 'd / u', 'v / x', '↑ ↓ j k'].includes(text))
+  expect(keys).toEqual(['⏎ / t', 's', 'e', 'd / u', 'v / x', '↑ ↓ j k'])
+  expect(await ui.find({ type: 'Text', text: /check why the cache test is flaky/ })).toBeDefined()
+  await ui.unmount()
+})
+
 const THEME_ROW = { key: 'theme', label: 'Theme', kind: 'choice', provider: { plugin: 'engine', tier: 'core' }, isLocked: false } as const
 
 test('project colours follow the theme: light, a 16-colour one, a custom theme by its base, and a change in /config', async ($, on) => {
