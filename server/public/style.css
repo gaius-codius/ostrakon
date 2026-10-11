@@ -526,6 +526,7 @@ dialog.drawer .panel {
 .saved { margin: 0 0 0 0.125rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font: 0.8125rem var(--mono); color: var(--success-text); }
 .saved:empty { display: none; }
 .saved .then { color: var(--dim); }
+.saved .then.refused { color: var(--error-text); }
 .note.fresh .face { margin: 0 0.625rem; padding: 0.5rem 0.625rem; border-radius: 0.75rem; }
 .note.fresh .marker, .note.fresh .age { color: var(--success-text); }
 .note.fresh .face { background: linear-gradient(var(--fresh), var(--fresh)), var(--bg); }

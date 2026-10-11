@@ -1232,8 +1232,11 @@ const renderSaved = () => {
   else {
     const tick = make('span', '', '✓')
     tick.setAttribute('aria-hidden', 'true')
-    const isSent = !outbox.some(note => note.id === savedId)
-    saved.replaceChildren(tick, 'saved', make('span', 'then', isSent ? '· synced' : '· waiting to sync'))
+    // Out of the outbox is synced only when the hub took it: a refused note leaves it too.
+    const isRefused = refused.some(item => item.id === savedId) || [...held.keys()].some(note => note.id === savedId)
+    const isQueued = outbox.some(note => note.id === savedId)
+    const then = isRefused ? make('span', 'then refused', "· the hub wouldn't take it") : make('span', 'then', isQueued ? '· waiting to sync' : '· synced')
+    saved.replaceChildren(tick, 'saved', then)
   }
   $('text').placeholder = online === false ? 'A note… will sync when back online' : savedId !== null && mode !== 'capture' ? 'Another…' : 'A note…'
 }
