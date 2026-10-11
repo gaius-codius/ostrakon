@@ -4,7 +4,7 @@
 // The page asks for its scripts, styles and fonts under /v<release>/, the number here: a page always
 // runs with its own release's files, even one fetched fresh while an older worker still answers.
 // A release that changes the shell bumps it here and in index.html together (server/hub.test.ts).
-const RELEASE = 14
+const RELEASE = 15
 const CACHE = `ostrakon-shell-v${RELEASE}`
 const SHELL = [
   '/',

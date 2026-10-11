@@ -1,4 +1,9 @@
-# ostrakon
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/lockup-dark.svg">
+    <img src="brand/lockup-light.svg" alt="ostrakon" width="300">
+  </picture>
+</h1>
 
 A scratchpad for Claude Code: capture thoughts and follow-ups from within claude code without breaking your flow, triage them across projects and machines, and turn them into prompts. An optional small hub keeps your notes in sync between machines and serves a phone app for capturing and triaging on the go.
 

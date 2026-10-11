@@ -130,7 +130,7 @@ Light is `:root`, dark is `@media (prefers-color-scheme: dark)`. `—` means dar
 | `--dim` | `--raised` | 5.0:1 | 5.1:1 | the pill, the picker's search |
 | `--faint` | `--bg` | 4.7:1 | 5.1:1 | counts, `folded` |
 | `--faint` | `--surface` | 5.2:1 | 4.7:1 | counts in the picker |
-| `--accent` | `--bg` | 4.5:1 | 5.9:1 | the pen, Keep, the empty page's keys |
+| `--accent` | `--bg` | 4.5:1 | 5.9:1 | the mark, Keep, the empty page's keys |
 | `--accent-text` | `--surface` | 5.7:1 | 7.2:1 | Archive in the sheet |
 | `--on-accent` | `--accent` | 4.9:1 | 5.9:1 | Save |
 | `--success-text` | `--bg` | 5.7:1 | 7.5:1 | `✓ saved` |
@@ -149,7 +149,7 @@ The terminal column names `look.ts` `GLYPH` keys; the phone column names `app.js
 | Glyph | Meaning | Terminal | Phone |
 |---|---|---|---|
 | `❯` | search field | `search` | — |
-| `✎` | capture: the capture row, the band's opener, the phone's name | `capture` | index.html |
+| `✎` | capture: the capture row, the band's opener | `capture` | — |
 | `⇢` | bundle | `bundle` | — |
 | `▌` | the selected row's bar | `bar` | — |
 | `◆` | from Claude; Claude's proposals | `claude` | `claude`, index.html |
@@ -173,7 +173,7 @@ The terminal column names `look.ts` `GLYPH` keys; the phone column names `app.js
 | `▎` | quoted text | `quote` | `quote`, index.html |
 | `›` | opens more (Move to project, the Shortcut link, a fold) | — | `next`, index.html, style.css |
 
-The phone draws its dots and rings in CSS (`.dot`, `.dot.ring`), and `⋯` (Note actions) and the sheet's action icons as SVG. `↑` is the one mark with two meanings; a word always stands beside it.
+The phone draws its dots and rings in CSS (`.dot`, `.dot.ring`), and `⋯` (Note actions), the sheet's action icons and the mark beside its name (from `brand/mark-small.svg`, in `--accent`) as SVG. `↑` is the one mark with two meanings; a word always stands beside it.
 
 ## 6. Copy
 
