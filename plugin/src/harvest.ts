@@ -1,8 +1,11 @@
-import { clustersOf } from './model'
+import type { Note, NoteProject } from '../types'
+import { ageOf, clustersOf, freshPane, labelOf, visibleNotes } from './model'
+import type { Ctx } from './model'
 
-// The `jot` tool Claude can call, and harvest's review of a finished turn (SPEC §8). Owner's rule:
-// harvest must not change how Claude works. The tool is the same whether harvest is on or off, and
-// the review runs after the turn, outside the conversation, so Claude's requests are identical.
+// The tools Claude can call (`jot`, `notes`, `archive`), and harvest's review of a finished turn
+// (SPEC §8). Owner's rule: harvest must not change how Claude works. The tools are the same whether
+// harvest is on or off, and the review runs after the turn, outside the conversation, so Claude's
+// requests are identical.
 
 export const JOT_TOOL = 'jot'
 
@@ -14,15 +17,104 @@ export const JOT_DESCRIPTION =
 
 export const JOT_SCHEMA = {
   type: 'object',
-  properties: { note: { type: 'string', description: 'The note, one short self-contained line' } },
+  properties: {
+    note: { type: 'string', description: 'The note, one short self-contained line' },
+    project: { type: 'string', description: "Another project's name, as notes shows it (default: this project)" },
+  },
   required: ['note'],
 } as const
 
 // What the model is told back.
 export const JOT_REPLY = {
-  saved: 'Saved to ostrakon.',
+  saved: (id: string) => `Saved to ostrakon as ${id}.`,
+  already: (id: string) => `Already in ostrakon as ${id}; not saved again.`,
   empty: 'jot needs a non-empty note.',
 } as const
+
+export const NOTES_TOOL = 'notes'
+
+export const NOTES_DESCRIPTION =
+  "List the notes waiting in the user's ostrakon, newest first, each with its id. " +
+  'Use it when the user asks what is noted or pending, or to check whether work at hand is already noted. ' +
+  'This project by default; project "all" lists every project.'
+
+export const NOTES_SCHEMA = {
+  type: 'object',
+  properties: {
+    query: { type: 'string', description: 'Words to search for (optional)' },
+    project: { type: 'string', description: 'A project name, or "all" (default: this project)' },
+  },
+} as const
+
+export const ARCHIVE_TOOL = 'archive'
+
+export const ARCHIVE_DESCRIPTION =
+  "Archive a note in the user's ostrakon, by its id from notes or jot, once what it describes is done or no longer applies. " + 'The user can restore it.'
+
+export const ARCHIVE_SCHEMA = {
+  type: 'object',
+  properties: { id: { type: 'string', description: "The note's id" } },
+  required: ['id'],
+} as const
+
+export const ARCHIVE_REPLY = {
+  archived: (id: string) => `Archived ${id}.`,
+  missing: (id: string) => `No note ${id} in ostrakon.`,
+  notOpen: (id: string, status: string) => `${id} is ${status}, not waiting; nothing changed.`,
+  failed: "Couldn't archive it.",
+} as const
+
+// The most notes one notes call lists.
+export const NOTES_MAX = 50
+
+// A project the model named: by its label, its key or its name, case aside. "all" is every project
+// (null); undefined when nothing matches.
+export const projectNamed = (ctx: Ctx, projects: NoteProject[], name: string): NoteProject | null | undefined => {
+  const wanted = name.trim().toLowerCase()
+  if (wanted === 'all') return null
+  const by = (of: (project: NoteProject) => string) => projects.filter(project => of(project).toLowerCase() === wanted)
+  // The first way that matches decides: two matches there are ambiguous, never settled by a later way.
+  const found = [by(project => labelOf(ctx, project)), by(project => project.key), by(project => project.name)].find(hits => hits.length > 0)
+  return found?.length === 1 ? found[0] : undefined
+}
+
+// Refused names get the known projects back, each by its label, or by its key where two share a label.
+export const unknownProject = (ctx: Ctx, projects: NoteProject[], name: string) => {
+  const labels = projects.map(project => labelOf(ctx, project))
+  const known = projects.map((project, at) => (labels.indexOf(labels[at] ?? '') === labels.lastIndexOf(labels[at] ?? '') ? labels[at] : project.key))
+  return `No single project named "${name.trim()}". Known: ${known.join(', ')}.`
+}
+
+// A waiting note in the same project with the same text (case and spacing aside), if any.
+const sameText = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase()
+export const duplicateOf = (notes: Note[], text: string, project: NoteProject | null) =>
+  notes.find(
+    note =>
+      !note.deleted &&
+      (note.status === 'open' || note.status === 'proposed') &&
+      (note.project?.key ?? null) === (project?.key ?? null) &&
+      sameText(note.text) === sameText(text),
+  )
+
+// What notes answers: the waiting notes (open and proposed) in `project`, or every project for
+// null, matching `query`, one per line with its id.
+export const notesReply = (ctx: Ctx, notes: Note[], project: NoteProject | null, query: string) => {
+  const scope = project === null ? 'any project' : labelOf(ctx, project)
+  const pane = { ...freshPane(), view: 'list' as const, scope: 'all' as const, query }
+  // Only waiting notes go in, so a status in the query (is:archived) can't list history.
+  const waiting = notes.filter(note => note.status === 'open' || note.status === 'proposed')
+  const shown = visibleNotes({ ...ctx, current: project ?? ctx.current }, pane, waiting).filter(
+    ({ note }) => project === null || note.project?.key === project.key,
+  )
+  if (shown.length === 0) return query.trim() === '' ? `No notes waiting in ${scope}.` : `No waiting notes in ${scope} match "${query.trim()}".`
+  const lines = shown.slice(0, NOTES_MAX).map(({ note }) => {
+    const tags = [ageOf(note.updated, ctx.now), `by ${note.by}`, ...(note.status === 'proposed' ? ['proposed'] : [])]
+    const where = project === null && note.project?.key !== ctx.current.key ? `[${labelOf(ctx, note.project)}] ` : ''
+    return `- ${note.id} (${tags.join(', ')}): ${where}${note.text}`
+  })
+  const more = shown.length > NOTES_MAX ? [`… and ${shown.length - NOTES_MAX} more; narrow with query.`] : []
+  return [`${shown.length} waiting in ${scope}:`, ...lines, ...more].join('\n')
+}
 
 // The longest note Claude's jot or harvest keeps.
 export const NOTE_MAX = 300
@@ -32,11 +124,12 @@ const capped = (text: string) => (text.length > NOTE_MAX ? `${text.slice(0, NOTE
 // empty when there's nothing to keep.
 export const jotText = (input: unknown) => (typeof input === 'string' ? capped(input.replace(/\s+/g, ' ').trim()) : '')
 
-// Harvest's review of a turn (owner, 2026-10-10: loosen to whatever works). Neither the spec's
-// system-prompt text (a user plugin's prompt.compose is skipped by the engine's security default)
-// nor tool wording got Claude to jot on its own in live turns, so once a turn ends the mod asks one
-// tool-less question over the session's own transcript ($.model.fork, served from the prompt cache)
-// and proposes what comes back. The question and its answer never enter the conversation.
+// Harvest's review of a turn (owner, 2026-10-10: loosen to whatever works). The spec's
+// system-prompt text can't reach the model (a user plugin's prompt.compose is skipped by the
+// engine's security default), and Claude's own jots miss what it only mentions in passing, so once
+// a turn ends the mod asks one tool-less question over the session's own transcript ($.model.fork,
+// served from the prompt cache) and proposes what comes back. The question and its answer never
+// enter the conversation.
 
 // Turns shorter than this (a quick reply) aren't reviewed.
 export const REVIEW_MIN_MS = 5000

@@ -13,7 +13,7 @@ A scratchpad for Claude Code: capture thoughts and follow-ups from within claude
 ## What it does
 
 - **Capture** a note in under two seconds, even while Claude is working, without losing your prompt draft: `/jot text`, or `//` typed into an empty prompt.
-- **Gives Claude a `jot` tool**: Claude jots notes it thinks are important or wants to pass on to you, marked `◆`. You can also ask it to add one: "jot that down".
+- **Gives Claude a `jot` tool**: Claude jots notes it thinks are important or wants to pass on to you, marked `◆`. You can also ask it to add one: "jot that down". Claude can also list your notes ("what's on my list?") and archive one once it's done.
 - **Triage** open notes for this project or across all of them in a searchable pane: edit, move, archive, bundle several into one prompt.
 - **Dispatch** a note into the prompt. This project's open notes sit in a row of numbered chips above the prompt (the "pocket"); press a note's number in an empty prompt to pull it in.
 - **Harvest** (opt-in): after each turn, an extra review looks for side issues that came up and offers them as notes, which you keep or dismiss. It doesn't change what Claude is doing.

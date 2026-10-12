@@ -156,6 +156,7 @@ export const TOAST = {
   kept: (n: number) => (n === 1 ? 'Kept' : `Kept ${n} notes`),
   // Claude's jot, harvest on or off (as v1).
   jotted: (text: string) => `${GLYPH.claude} Claude jotted: ${text.length > 60 ? `${text.slice(0, 59)}…` : text}`,
+  claudeArchived: (text: string) => `${GLYPH.claude} Claude archived: ${text.length > 60 ? `${text.slice(0, 59)}…` : text}`,
 } as const
 
 // Borrowed engine actions (SPEC §2.2); the person binds the chords in their keybindings.

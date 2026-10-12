@@ -22,22 +22,33 @@ import {
   visibleNotes,
 } from '../src/model'
 import {
+  ARCHIVE_DESCRIPTION,
+  ARCHIVE_REPLY,
+  ARCHIVE_SCHEMA,
+  ARCHIVE_TOOL,
   DEFAULT_HARVEST_MODE,
   JOT_DESCRIPTION,
   JOT_REPLY,
   JOT_SCHEMA,
   JOT_TOOL,
+  NOTES_DESCRIPTION,
+  NOTES_SCHEMA,
+  NOTES_TOOL,
+  duplicateOf,
   harvestModeOf,
   jotText,
   lightRequest,
+  notesReply,
   parseReview,
+  projectNamed,
   reviewPrompt,
+  unknownProject,
 } from '../src/harvest'
 import type { HarvestMode } from '../src/harvest'
 import { basename, normalizeRemote } from '../src/project'
 import { freshReport, withProblem } from '../src/report'
 import { StorageError, createStore } from '../src/store'
-import type { StoreIO } from '../src/store'
+import type { NewNote, StoreIO } from '../src/store'
 import { createSync } from '../src/sync/core'
 import type { Sync, SyncIO } from '../src/sync/core'
 import { ARCHIVE_FOLDER, folderAdapter } from '../src/sync/folder'
@@ -386,6 +397,38 @@ const projectsOf = (all: Note[]) => {
   return [...byKey.values()]
 }
 
+const isWaiting = (note: Note) => note.status === 'open' || note.status === 'proposed'
+
+// Claude's new notes (jot and harvest) are saved one at a time, each checked against the notes
+// waiting as read just before it, so two at once can't both save the same text. The view can lag
+// a save, so the notes saved here count too until the view has them. Resolves the waiting note it
+// repeats, or the note saved.
+let claudeSaves: Promise<unknown> = Promise.resolve()
+let justSaved: Note[] = []
+const saveUnlessWaiting = ($: EngineInterface, fields: NewNote) => {
+  const run = claudeSaves.then(async (): Promise<{ same: Note } | { saved: Note }> => {
+    const io = await storeIO($)
+    await store.scan(io).catch(() => false)
+    const shown = await read($, notes)
+    justSaved = justSaved.filter(note => shown[note.id] === undefined)
+    const same = duplicateOf([...Object.values(shown), ...justSaved], fields.text, fields.project)
+    if (same) return { same }
+    const saved = await store.create(io, fields)
+    justSaved = [...justSaved, saved]
+    return { saved }
+  })
+  claudeSaves = run.catch(() => undefined)
+  return run
+}
+
+// What Claude's tools read: every note and the projects they name, labelled as the pane labels them.
+const toolView = async ($: EngineInterface) => {
+  const all = Object.values(await read($, notes))
+  const projects = projectsOf(all)
+  const ctx: Ctx = { now: await $.clock.now(), current: project, labels: labelsOf(projects) }
+  return { ctx, all, projects }
+}
+
 const focusOf = (state: PaneState, lines: Line[], problemCount: number): Focus => {
   if (!geometry.isFocused) return { kind: 'unfocused' }
   if (state.mode === 'sheet') {
@@ -471,10 +514,12 @@ const changeNote = async ($: EngineInterface, id: string, edit: (note: Note) => 
   }
 }
 
-const setStatus = async ($: EngineInterface, id: string, status: NoteStatus, isUndoable = true) => {
+// `isAllowed`, when given, is asked of the note as read fresh under its lock: false leaves it as it is.
+const setStatus = async ($: EngineInterface, id: string, status: NoteStatus, isUndoable = true, isAllowed?: (note: Note) => boolean) => {
   let before: NoteStatus | undefined
   const stamp = new Date(await $.clock.now()).toISOString()
   const changed = await changeNote($, id, note => {
+    if (isAllowed && !isAllowed(note)) return undefined
     before = note.status
     return { ...note, status, sentAt: status === 'sent' ? stamp : note.sentAt }
   })
@@ -1160,16 +1205,18 @@ const reviewTurn = async ($: EngineInterface, turn: RunningTurn, answer: string)
     $.ui.log(`ostrakon: harvest review skipped: ${reply.reason}`, { to: 'debug' })
     return
   }
-  // A reply that repeats a jot it was told about doesn't propose it again.
+  // A reply that repeats a jot it was told about, a note already waiting in this project or itself
+  // doesn't propose it again.
   const same = (text: string) => text.toLowerCase().replace(/\s+/g, ' ').trim()
   const saved = new Set(jotted.map(same))
+  const waiting = Object.values(await read($, notes))
   const found = parseReview(reply.text)
-    .filter(text => !saved.has(same(text)))
+    .filter(text => !saved.has(same(text)) && duplicateOf(waiting, text, project) === undefined)
+    .filter((text, at, all) => all.findIndex(other => same(other) === same(text)) === at)
     .slice(0, room)
   if (found.length === 0) return
-  const io = await storeIO($)
   for (const text of found) {
-    await store.create(io, {
+    await saveUnlessWaiting($, {
       text,
       by: 'claude',
       status: 'proposed',
@@ -1270,9 +1317,13 @@ export const register: Register = (on, options) => {
     report = freshReport(new Date(await $.clock.now()).toISOString(), claude)
     await $.command.register({ name: 'jot', description: 'Save a note to ostrakon (alone: open the pane)', immediate: true, argumentHint: '<note>' })
     // The same whether harvest is on or off: the person can always ask Claude to jot something.
-    await $.tool
-      .register({ name: JOT_TOOL, description: JOT_DESCRIPTION, inputSchema: JOT_SCHEMA, isDeferred: false })
-      .catch(error => noteProblem($, 'jot tool not registered', error))
+    for (const [name, description, inputSchema] of [
+      [JOT_TOOL, JOT_DESCRIPTION, JOT_SCHEMA],
+      [NOTES_TOOL, NOTES_DESCRIPTION, NOTES_SCHEMA],
+      [ARCHIVE_TOOL, ARCHIVE_DESCRIPTION, ARCHIVE_SCHEMA],
+    ] as const) {
+      await $.tool.register({ name, description, inputSchema, isDeferred: false }).catch(error => noteProblem($, `${name} tool not registered`, error))
+    }
     if (started.facts) await update($, turns, started.facts)
     // A reload keeps the atoms but not the module: later decisions order above what they hold, and
     // the latest prompt comes back, so a continuation after the reload still joins its harvest.
@@ -1345,24 +1396,62 @@ export const register: Register = (on, options) => {
   // Matched by pattern: the engine's tool-name type lists only the tools it knew when the types
   // were written.
   on('tool.call', { tool: /^mcp__ostrakon__jot$/ }, async ($, e) => {
-    const text = jotText((e as { note?: unknown }).note)
+    const input = e as { note?: unknown; project?: unknown }
+    const text = jotText(input.note)
     if (text === '') return { deny: JOT_REPLY.empty }
+    const { ctx, projects } = await toolView($)
+    let into: NoteProject | null = project
+    if (typeof input.project === 'string' && input.project.trim() !== '') {
+      const named = projectNamed(ctx, projects, input.project)
+      if (!named) return { deny: unknownProject(ctx, projects, input.project) }
+      into = named
+    }
     // A subagent's jot may come while a later main turn runs: it's tied to the session only.
     const turnId = e.agentId === undefined ? turnState.running?.turnId : undefined
     const sessionId = await $.session.id().catch(() => undefined)
+    let outcome: Awaited<ReturnType<typeof saveUnlessWaiting>>
     try {
-      await store.create(await storeIO($), {
+      outcome = await saveUnlessWaiting($, {
         text,
         by: 'claude',
-        project,
+        project: into,
         context: { ...(sessionId !== undefined ? { sessionId } : {}), ...(turnId !== undefined ? { turnId } : {}) },
       })
     } catch (error) {
       noteProblem($, 'storage', error)
       return { deny: TOAST.failed(messageOf(error)) }
     }
+    if ('same' in outcome) return { result: JOT_REPLY.already(outcome.same.id) }
     toast($, TOAST.jotted(text))
-    return { result: JOT_REPLY.saved }
+    return { result: JOT_REPLY.saved(outcome.saved.id) }
+  })
+
+  // Claude's look at the notes waiting (SPEC §8): this project's, another's or all of them.
+  on('tool.call', { tool: /^mcp__ostrakon__notes$/ }, async ($, e) => {
+    const input = e as { query?: unknown; project?: unknown }
+    const { ctx, all, projects } = await toolView($)
+    let scope: NoteProject | null = project
+    if (typeof input.project === 'string' && input.project.trim() !== '') {
+      const named = projectNamed(ctx, projects, input.project)
+      if (named === undefined) return { deny: unknownProject(ctx, projects, input.project) }
+      scope = named
+    }
+    return { result: notesReply(ctx, all, scope, typeof input.query === 'string' ? input.query : '') }
+  })
+
+  // Claude archives a note whose work is done (SPEC §8); the pane's u undoes it, as the person's own.
+  on('tool.call', { tool: /^mcp__ostrakon__archive$/ }, async ($, e) => {
+    const id = String((e as { id?: unknown }).id ?? '').trim()
+    const note = (await read($, notes))[id]
+    if (!note || note.deleted) return { deny: ARCHIVE_REPLY.missing(id) }
+    // Decided again on the note as read under its lock: another session may have sent or archived it.
+    let isAllowed = false
+    const changed = await setStatus($, id, 'archived', true, fresh => (isAllowed = !fresh.deleted && isWaiting(fresh)))
+    if (!changed) return { deny: ARCHIVE_REPLY.failed }
+    if (changed.deleted) return { deny: ARCHIVE_REPLY.missing(id) }
+    if (!isAllowed) return { deny: ARCHIVE_REPLY.notOpen(id, changed.status) }
+    toast($, TOAST.claudeArchived(changed.text))
+    return { result: ARCHIVE_REPLY.archived(id) }
   })
 
   // `/jot text` saves at once, even mid-turn; `/jot` alone opens the pane (on search, where typing
