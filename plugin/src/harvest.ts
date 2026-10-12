@@ -73,12 +73,17 @@ export const projectNamed = (ctx: Ctx, projects: NoteProject[], name: string): N
   const wanted = name.trim().toLowerCase()
   if (wanted === 'all') return null
   const by = (of: (project: NoteProject) => string) => projects.filter(project => of(project).toLowerCase() === wanted)
-  const found = [by(project => labelOf(ctx, project)), by(project => project.key), by(project => project.name)].find(hits => hits.length === 1)
-  return found?.[0]
+  // The first way that matches decides: two matches there are ambiguous, never settled by a later way.
+  const found = [by(project => labelOf(ctx, project)), by(project => project.key), by(project => project.name)].find(hits => hits.length > 0)
+  return found?.length === 1 ? found[0] : undefined
 }
 
-export const unknownProject = (ctx: Ctx, projects: NoteProject[], name: string) =>
-  `No project named "${name.trim()}". Known: ${projects.map(project => labelOf(ctx, project)).join(', ')}.`
+// Refused names get the known projects back, each by its label, or by its key where two share a label.
+export const unknownProject = (ctx: Ctx, projects: NoteProject[], name: string) => {
+  const labels = projects.map(project => labelOf(ctx, project))
+  const known = projects.map((project, at) => (labels.indexOf(labels[at] ?? '') === labels.lastIndexOf(labels[at] ?? '') ? labels[at] : project.key))
+  return `No single project named "${name.trim()}". Known: ${known.join(', ')}.`
+}
 
 // A waiting note in the same project with the same text (case and spacing aside), if any.
 const sameText = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase()
@@ -96,7 +101,9 @@ export const duplicateOf = (notes: Note[], text: string, project: NoteProject | 
 export const notesReply = (ctx: Ctx, notes: Note[], project: NoteProject | null, query: string) => {
   const scope = project === null ? 'any project' : labelOf(ctx, project)
   const pane = { ...freshPane(), view: 'list' as const, scope: 'all' as const, query }
-  const shown = visibleNotes({ ...ctx, current: project ?? ctx.current }, pane, notes).filter(
+  // Only waiting notes go in, so a status in the query (is:archived) can't list history.
+  const waiting = notes.filter(note => note.status === 'open' || note.status === 'proposed')
+  const shown = visibleNotes({ ...ctx, current: project ?? ctx.current }, pane, waiting).filter(
     ({ note }) => project === null || note.project?.key === project.key,
   )
   if (shown.length === 0) return query.trim() === '' ? `No notes waiting in ${scope}.` : `No waiting notes in ${scope} match "${query.trim()}".`

@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
-import { parseNote } from '../src/frontmatter'
+import { parseNote, serializeNote } from '../src/frontmatter'
 import {
   ARCHIVE_DESCRIPTION,
   ARCHIVE_REPLY,
@@ -10,6 +10,7 @@ import {
   JOT_REPLY,
   NOTES_DESCRIPTION,
   NOTES_MAX,
+  projectNamed,
   LIGHT_ANSWER_MAX,
   LIGHT_PROMPT_MAX,
   harvestModeOf,
@@ -783,7 +784,7 @@ test('notes takes a query, another project or all, and refuses a project it does
   expect(all).toStartWith('3 waiting in any project:')
   expect(all).toContain('): [infra] rotate the staging certs')
   expect(all).toContain('): Pin the bun version in CI')
-  expect(await call($, world, 'notes', { project: 'nope' })).toEqual({ deny: 'No project named "nope". Known: cc, infra.' })
+  expect(await call($, world, 'notes', { project: 'nope' })).toEqual({ deny: 'No single project named "nope". Known: cc, infra.' })
 })
 
 test('notes marks a proposal', { options: ON }, async ($, on) => {
@@ -843,7 +844,7 @@ test('a jot can go to another project by name, and a name it does not know is re
   const { world } = await startSession($, on, dir)
   await call($, world, 'jot', { note: 'the staging cert expires Friday', project: 'Infra' })
   expect(claudes(dir)[0]).toMatchObject({ text: 'the staging cert expires Friday', project: { key: INFRA.key } })
-  expect(await call($, world, 'jot', { note: 'x', project: 'nope' })).toEqual({ deny: 'No project named "nope". Known: cc, infra.' })
+  expect(await call($, world, 'jot', { note: 'x', project: 'nope' })).toEqual({ deny: 'No single project named "nope". Known: cc, infra.' })
   expect(claudes(dir)).toHaveLength(1)
 })
 
@@ -856,4 +857,49 @@ test("harvest on: a review doesn't propose a note already waiting in this projec
   await until(() => proposed(dir).length === 1, 'one proposal')
   await settle()
   expect(proposed(dir).map(note => note.text)).toEqual(['the cache key misses the locale'])
+})
+
+test('archive decides on the note as it is now: one another session sent meanwhile stays sent', async ($, on) => {
+  const dir = projects()
+  const { world } = await startSession($, on, dir)
+  const id = '01JA7K2M3Q9X4ZB6C8D0EFGH03'
+  // Sent on disk by another session; this session's view still has it open.
+  dir.put(`/data/notes/${id}.md`, serializeNote({ ...noteIn(dir, id), status: 'sent', updated: '2026-10-09T11:59:00.000Z' }))
+  expect(await call($, world, 'archive', { id })).toEqual({ deny: ARCHIVE_REPLY.notOpen(id, 'sent') })
+  expect(noteIn(dir, id).status).toBe('sent')
+  expect(world.toasts.filter(text => text.includes('archived'))).toEqual([])
+})
+
+test('two jots of the same text at once save it once', async ($, on) => {
+  const dir = fixture()
+  const { world } = await startSession($, on, dir)
+  const replies = await Promise.all([jot($, world, 'retry ignores Retry-After'), jot($, world, 'Retry ignores  Retry-After')])
+  expect(claudes(dir)).toHaveLength(1)
+  const id = claudes(dir)[0]?.id ?? ''
+  expect(replies).toEqual([{ result: JOT_REPLY.saved(id) }, { result: JOT_REPLY.already(id) }])
+})
+
+test("notes lists only waiting notes, whatever the query's status says", async ($, on) => {
+  const dir = projects()
+  const { world } = await startSession($, on, dir)
+  await call($, world, 'archive', { id: '01JA7K2M3Q9X4ZB6C8D0EFGH03' })
+  expect(textOf(await call($, world, 'notes', { query: 'is:archived' }))).toBe('No waiting notes in cc match "is:archived".')
+})
+
+test('a project name that fits two projects the same way is refused, not settled by a weaker match', () => {
+  const A = { key: 'github.com/me/app', name: 'app', path: '/a' }
+  const B = { key: 'github.com/other/app', name: 'app', path: '/b' }
+  const C = { key: 'path:/c', name: 'me/app', path: '/c' }
+  const ctx = {
+    now: 0,
+    current: A,
+    labels: new Map([
+      [A.key, 'me/app'],
+      [B.key, 'other/app'],
+      [C.key, 'me/app'],
+    ]),
+  }
+  expect(projectNamed(ctx, [A, B, C], 'me/app')).toBeUndefined()
+  expect(projectNamed(ctx, [A, B, C], 'github.com/me/app')).toBe(A)
+  expect(projectNamed(ctx, [A, B, C], 'other/app')).toBe(B)
 })
