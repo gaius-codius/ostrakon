@@ -5,7 +5,6 @@ Ideas for what might come next, roughly in order within each section. Nothing he
 ## Planned
 
 - **Sync through git.** Like folder sync, but ostrakon also commits, pulls and pushes, so notes can sync through any git remote (GitHub, a server, anything). One lock per machine keeps two sessions from running git at once (SPEC §7.2).
-- **Install from a marketplace.** Add a `.claude-plugin/marketplace.json` at the repo root, so the mod installs with `/plugin install` instead of from a cloned folder (SPEC §11).
 - **Notion, one way first.** Export notes to a Notion database. Two-way Notion sync would take real upkeep (Notion has its own data model and API), so it waits until people show they want the export (SPEC §7.3).
 
 ## Under consideration
