@@ -37,7 +37,6 @@ export type NoteProblem = { file: string; reason: string }
 
 // The launcher pane's state (SPEC §4). Note ids, project keys and line keys only; the notes
 // themselves live in `notes`.
-export type PaneView = 'search' | 'list'
 export type PaneMode = 'browse' | 'capture' | 'edit' | 'bundle' | 'move' | 'sheet'
 
 export type Undo =
@@ -47,7 +46,6 @@ export type Undo =
   | { kind: 'picks'; before: string[] }
 
 export type PaneState = {
-  view: PaneView
   mode: PaneMode
   query: string
   // 'project' or 'all'; `scopeChosen` once ctrl+s picked one, until the pane closes.

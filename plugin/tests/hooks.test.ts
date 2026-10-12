@@ -22,7 +22,7 @@ test('the pane opens on this project, searches everywhere once typing, and Enter
   expect(await ui.find({ type: 'Text', text: /this project · 2 open/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /rename the store helpers/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /add a cache invalidation metric/ })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /^ctrl\+l$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ctrl\+s$/ })).toBeDefined()
 
   await ui.input({ key: 'q', text: 'cache', kind: 'change' })
   expect(await ui.find({ type: 'Text', text: /all · 2 of 3/ })).toBeDefined()
@@ -87,7 +87,7 @@ test('digits jump, v picks across projects, b previews and send submits the bund
   await ui.unmount()
 })
 
-test('d archives with an undo, and the list view groups by project with history on h', async ($, on) => {
+test('d archives with an undo, and the pane groups by project with history on h', async ($, on) => {
   const dir = fixture()
   const { world } = await startSession($, on, dir)
   await run($, 'jot', '')
@@ -100,12 +100,19 @@ test('d archives with an undo, and the list view groups by project with history 
   await ui.press({ key: 'key-u' })
   expect(noteIn(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH01').status).toBe('open')
 
-  await ui.press({ key: 'key-l' })
-  expect(await ui.find({ type: 'Text', text: /list · all · 3 open/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^infra$/ })).toBeUndefined()
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  expect(await ui.find({ type: 'Text', text: /all · 3 open/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^infra$/ })).toBeDefined()
   await ui.press({ key: 'key-app:toggleDiffPreSession' })
-  expect(await ui.find({ type: 'Text', text: /list · this project · 2 open/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /this project · 2 open/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^infra$/ })).toBeUndefined()
+  await ui.press({ key: 'key-h' })
+  expect(await ui.find({ type: 'Text', text: /this project · 2 open \+ history/ })).toBeDefined()
+  // With history on, a search counts from open and history notes alike.
+  await ui.press({ key: 'key-d' })
+  await ui.input({ key: 'q', text: 'e', kind: 'change' })
+  expect(await ui.find({ type: 'Text', text: /this project · 2 of 2/ })).toBeDefined()
   await ui.unmount()
 })
 
@@ -397,8 +404,8 @@ test('project colours follow the theme: light, a 16-colour one, a custom theme b
   await startSession($, on, dir)
   await run($, 'jot', '')
   const ui = await mountPane($)
-  await ui.press({ key: 'key-app:toggleReplTab' })
-  // infra's dot in the list view; cc is this project, in the accent.
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  // infra's dot on its heading, scope all; cc is this project, in the accent.
   const infraDot = async () => {
     await ui.redraw(PANE.props)
     return (await ui.findAll({ type: 'Text', text: GLYPH.dot })).map(dot => dot.props.color).find(colour => colour !== COLOUR.accent)

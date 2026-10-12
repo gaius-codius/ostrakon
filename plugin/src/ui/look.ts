@@ -108,7 +108,6 @@ export const TEXT = {
     ['d / u', 'archive / undo, restore'],
     ['m', 'move to a project'],
     ['y', 'copy'],
-    ['l / ctrl+l', 'list view'],
     ['h / z', 'history / fold'],
     ['f / ctrl+f', 'search'],
     ['n / ctrl+n', 'new note'],
@@ -166,7 +165,6 @@ export const CHORD = {
   scope: { action: 'app:toggleDiffPreSession', keys: 'ctrl+s' },
   // Not the engine's pane:close: that close looks like Esc's to the mod, which makes Esc "back".
   close: { action: 'pane:previous', keys: 'ctrl+q' },
-  list: { action: 'app:toggleReplTab', keys: 'ctrl+l' },
   new: { action: 'pane:next', keys: 'ctrl+n' },
 } as const
 

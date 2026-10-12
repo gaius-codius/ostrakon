@@ -115,14 +115,14 @@ A mod can't add keyboard shortcuts of its own, so ostrakon borrows some existing
       "context": "Pane",
       "bindings": {
         "ctrl+x s": "app:cycleDiffBase", "ctrl+q": "pane:previous", "ctrl+f": "app:toggleDiffNoiseFilter",
-        "ctrl+s": "app:toggleDiffPreSession", "ctrl+n": "pane:next", "ctrl+l": "app:toggleReplTab"
+        "ctrl+s": "app:toggleDiffPreSession", "ctrl+n": "pane:next"
       }
     },
     {
       "context": "PaneField",
       "bindings": {
         "ctrl+x s": "app:cycleDiffBase", "ctrl+q": "pane:previous", "ctrl+f": "app:toggleDiffNoiseFilter",
-        "ctrl+s": "app:toggleDiffPreSession", "ctrl+n": "pane:next", "ctrl+l": "app:toggleReplTab"
+        "ctrl+s": "app:toggleDiffPreSession", "ctrl+n": "pane:next"
       }
     }
   ]

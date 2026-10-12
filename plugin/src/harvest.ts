@@ -100,7 +100,7 @@ export const duplicateOf = (notes: Note[], text: string, project: NoteProject | 
 // null, matching `query`, one per line with its id.
 export const notesReply = (ctx: Ctx, notes: Note[], project: NoteProject | null, query: string) => {
   const scope = project === null ? 'any project' : labelOf(ctx, project)
-  const pane = { ...freshPane(), view: 'list' as const, scope: 'all' as const, query }
+  const pane = { ...freshPane(), scope: 'all' as const, query }
   // Only waiting notes go in, so a status in the query (is:archived) can't list history.
   const waiting = notes.filter(note => note.status === 'open' || note.status === 'proposed')
   const shown = visibleNotes({ ...ctx, current: project ?? ctx.current }, pane, waiting).filter(

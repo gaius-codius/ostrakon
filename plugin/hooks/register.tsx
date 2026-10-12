@@ -435,12 +435,12 @@ const focusOf = (state: PaneState, lines: Line[], problemCount: number): Focus =
     const pages = sheetPages(geometry.bodyRows, geometry.isInline, problemCount)
     // Opened on a row, the sheet leads with that row's own keys, as its footer does.
     const row = state.focus === 'line' ? lines.find(candidate => candidate.key === state.cursor) : undefined
-    const lead = row ? ownKeys(keysFor({ kind: 'line', line: row, view: state.view, picks: state.picks.length })) : []
+    const lead = row ? ownKeys(keysFor({ kind: 'line', line: row, picks: state.picks.length })) : []
     return { kind: 'sheet', page: Math.min(Math.max(0, state.sheetPage ?? 0), pages - 1), pages, lead }
   }
   if (state.mode === 'capture' || state.mode === 'edit' || state.mode === 'bundle' || state.mode === 'move') return { kind: state.mode }
   const line = state.focus === 'line' ? lines.find(candidate => candidate.key === state.cursor) : undefined
-  if (line) return { kind: 'line', line, view: state.view, picks: state.picks.length }
+  if (line) return { kind: 'line', line, picks: state.picks.length }
   if (lines.length === 0 && state.query.trim() === '') return { kind: 'empty' }
   return { kind: 'search', hasResults: lines.some(candidate => candidate.kind === 'note'), hasQuery: state.query.trim() !== '' }
 }
@@ -462,7 +462,10 @@ const viewOf = async ($: EngineInterface): Promise<PaneView & { bundleRows: numb
   const noteLines = lines.filter((line): line is Extract<Line, { kind: 'note' }> => line.kind === 'note')
   const cursorNote = noteLines.find(line => line.key === state.cursor)?.note
   const preview = focus.kind === 'line' || state.mode !== 'browse' ? cursorNote : noteLines[0]?.note
-  const total = visibleNotes(ctx, { ...state, query: '' }, all).filter(({ note }) => note.status === 'open').length
+  const unfiltered = visibleNotes(ctx, { ...state, query: '' }, all)
+  const total = unfiltered.filter(({ note }) => note.status === 'open').length
+  // What a search picks from: history too while it's on, never proposed.
+  const searched = unfiltered.filter(({ note }) => note.status !== 'proposed').length
   const byId = new Map(all.map(note => [note.id, note]))
   const shownIds = new Set(noteLines.map(line => line.key))
   const target = state.capture.target
@@ -478,7 +481,7 @@ const viewOf = async ($: EngineInterface): Promise<PaneView & { bundleRows: numb
     preview,
     keys,
     problems: broken,
-    counts: { shown: noteLines.length, total },
+    counts: { shown: noteLines.length, total, searched },
     picksHidden: state.picks.filter(id => !shownIds.has(id)).length,
     bundle: state.picks.map(id => byId.get(id)).filter((note): note is Note => note !== undefined),
     projects,
@@ -499,10 +502,8 @@ const viewOf = async ($: EngineInterface): Promise<PaneView & { bundleRows: numb
 
 // ---- actions ----
 
-// The scope when the person hasn't chosen one: the list shows every project; search shows this
-// project until something is typed (SPEC §4.2).
-const autoScope = (state: PaneState, view: PaneState['view']): PaneState['scope'] =>
-  state.scopeChosen ? state.scope : view === 'list' || state.query.trim() !== '' ? 'all' : 'project'
+// The scope when the person hasn't chosen one: this project until something is typed (SPEC §4.2).
+const autoScope = (state: PaneState): PaneState['scope'] => (state.scopeChosen ? state.scope : state.query.trim() !== '' ? 'all' : 'project')
 
 const changeNote = async ($: EngineInterface, id: string, edit: (note: Note) => Note | undefined) => {
   try {
@@ -541,8 +542,8 @@ const markSent = async ($: EngineInterface, ids: string[]) => {
   }
 }
 
-// One step back, for Esc: a mode to the list, a row to the search field, a query to empty, the
-// list view to search. False at the top: the pane closes.
+// One step back, for Esc: a mode to the list, a row to the search field, a query to empty. False
+// at the top: the pane closes.
 const goBack = async ($: EngineInterface) => {
   const state = await read($, pane)
   if (state.mode === 'edit') {
@@ -570,11 +571,6 @@ const goBack = async ($: EngineInterface) => {
   }
   if (state.query.trim() !== '') {
     await setPane($, current => ({ ...current, query: redrawn(''), offset: 0, cursor: null, scope: current.scopeChosen ? current.scope : 'project' }))
-    focusKey($, SEARCH_KEY)
-    return true
-  }
-  if (state.view === 'list') {
-    await setPane($, current => ({ ...current, view: 'search', offset: 0, scope: autoScope(current, 'search') }))
     focusKey($, SEARCH_KEY)
     return true
   }
@@ -707,7 +703,6 @@ const openPane = async ($: EngineInterface, mode: 'browse' | 'capture') => {
     scope: editsOther || isAllSaved ? 'all' : state.scope,
     scopeChosen: state.scopeChosen || isAllSaved,
     mode: resumesEdit ? 'edit' : mode,
-    view: resumesEdit ? state.view : 'search',
     focus: mode === 'capture' || resumesEdit ? 'control' : 'search',
     cursor: resumesEdit ? (state.edit?.id ?? state.cursor) : state.cursor,
     stash: joined(orphan, state.stash, taken),
@@ -901,21 +896,8 @@ const act = async ($: EngineInterface, action: Action) => {
       await $.ui.copy({ text: note.text }).catch(() => undefined)
       toast($, TOAST.copied)
       return
-    case 'list':
-      await setPane($, current => {
-        const view = current.view === 'list' ? 'search' : 'list'
-        return { ...current, view, mode: 'browse', offset: 0, scope: autoScope(current, view) }
-      })
-      {
-        // Into the list (or back), focus goes to the selected row, or the first one.
-        const after = await viewOf($)
-        const keep = state.focus === 'line' && after.lines.some(item => item.key === state.cursor) ? state.cursor : null
-        const first = after.lines.find(item => item.kind === 'note')?.key ?? after.lines[0]?.key ?? null
-        await focusLine($, keep ?? first)
-      }
-      return
     case 'history':
-      await setPane($, current => ({ ...current, history: !current.history, view: 'list', scope: autoScope(current, 'list') }))
+      await setPane($, current => ({ ...current, history: !current.history }))
       return
     case 'fold': {
       const group = line?.kind === 'group' ? line.group : line?.kind === 'note' ? line.group : undefined
@@ -982,7 +964,7 @@ const searchInput = async ($: EngineInterface, value: string) => {
   await setPane($, state => ({
     ...state,
     query: value,
-    scope: autoScope({ ...state, query: value }, state.view),
+    scope: autoScope({ ...state, query: value }),
     offset: 0,
     cursor: null,
     focus: 'search',
