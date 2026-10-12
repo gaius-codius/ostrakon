@@ -5,7 +5,6 @@ import { CHORD, GLYPH } from './ui/look'
 // all of it is unit-tested (tests/model.test.ts).
 
 export const freshPane = (): PaneState => ({
-  view: 'search',
   mode: 'browse',
   query: '',
   scope: 'project',
@@ -235,7 +234,7 @@ export const scoreOf = (ctx: Ctx, note: Note, query: string) => {
 export type Line =
   | { kind: 'problem'; key: 'problem'; count: number }
   | { kind: 'group'; key: string; group: string; project: NoteProject | null; isFolded: boolean; count: number }
-  | { kind: 'note'; key: string; note: Note; group?: string; hits: number[] }
+  | { kind: 'note'; key: string; note: Note; group: string; hits: number[] }
 
 export const groupKeyOf = (note: Note) => (note.status === 'proposed' ? PROPOSED : (note.project?.key ?? UNFILED))
 
@@ -254,9 +253,7 @@ export const visibleNotes = (ctx: Ctx, pane: PaneState, notes: Note[]) => {
     if (query.by !== undefined && note.by !== query.by) continue
     if (query.status !== undefined) {
       if (note.status !== query.status) continue
-    } else if (pane.view === 'list') {
-      if (!(note.status === 'open' || note.status === 'proposed' || (pane.history && isHistory(note)))) continue
-    } else if (note.status !== 'open') continue
+    } else if (!(note.status === 'open' || note.status === 'proposed' || (pane.history && isHistory(note)))) continue
     const score = scoreOf(ctx, note, query.words)
     if (score === undefined) continue
     shown.push({ note, score, hits: matchOf(oneLine(note.text), query.words) ?? [] })
@@ -268,11 +265,10 @@ export const visibleNotes = (ctx: Ctx, pane: PaneState, notes: Note[]) => {
 
 export const linesOf = (ctx: Ctx, pane: PaneState, notes: Note[], problems: NoteProblem[]): Line[] => {
   const lines: Line[] = problems.length > 0 ? [{ kind: 'problem', key: 'problem', count: problems.length }] : []
-  const shown = visibleNotes(ctx, pane, notes)
-  if (pane.view === 'search') {
-    for (const { note, hits } of shown) lines.push({ kind: 'note', key: note.id, note, hits })
-    return lines
-  }
+  // Grouped with or without a query: a query only filters, and a group with no match isn't drawn.
+  // Proposed notes wait under their heading while the query is empty; a search leaves them out.
+  const isSearching = pane.query.trim() !== ''
+  const shown = visibleNotes(ctx, pane, notes).filter(({ note }) => !(isSearching && note.status === 'proposed'))
   const groups = new Map<string, typeof shown>()
   for (const item of shown) {
     const key = groupKeyOf(item.note)
@@ -285,7 +281,8 @@ export const linesOf = (ctx: Ctx, pane: PaneState, notes: Note[], problems: Note
   })
   for (const group of order) {
     const items = groups.get(group) ?? []
-    const isFolded = pane.folded.includes(group)
+    // A search shows its matches in a folded group too, so Enter never saves a note that's there.
+    const isFolded = !isSearching && pane.folded.includes(group)
     const project = group === PROPOSED || group === UNFILED ? null : (items[0]?.note.project ?? null)
     // Open (and proposed) first, then history; each newest first. With a query, by rank.
     const live = items.filter(item => !isHistory(item.note))
@@ -355,7 +352,6 @@ export type Action =
   | 'restore'
   | 'move'
   | 'copy'
-  | 'list'
   | 'history'
   | 'fold'
   | 'search'
@@ -384,7 +380,6 @@ const chord = (action: Action, which: keyof typeof CHORD, label: string, isShown
 
 // Answered everywhere in the pane (chords work with an Input focused too).
 const CHORDS = (isShown: boolean): Key[] => [
-  chord('list', 'list', 'list view', isShown),
   chord('scope', 'scope', 'scope', isShown),
   chord('new', 'new', 'new', isShown),
   chord('search', 'search', 'search', false),
@@ -394,7 +389,7 @@ const CHORDS = (isShown: boolean): Key[] => [
 export type Focus =
   | { kind: 'unfocused' }
   | { kind: 'search'; hasResults: boolean; hasQuery: boolean }
-  | { kind: 'line'; line: Line; view: 'search' | 'list'; picks: number }
+  | { kind: 'line'; line: Line; picks: number }
   | { kind: 'capture' }
   | { kind: 'edit' }
   | { kind: 'bundle' }
@@ -416,13 +411,12 @@ export const keysFor = (focus: Focus): Key[] => {
           { action: 'new', shown: ['⏎', 'save as note'] },
           chord('scope', 'scope', 'scope'),
           chord('close', 'close', 'close'),
-          chord('list', 'list', '', false),
           chord('new', 'new', '', false),
         ]
       }
-      return [chord('list', 'list', 'list view'), chord('scope', 'scope', 'scope'), chord('new', 'new', 'new'), chord('close', 'close', 'close')]
+      return [chord('scope', 'scope', 'scope'), chord('new', 'new', 'new'), chord('close', 'close', 'close')]
     case 'empty':
-      return [chord('new', 'new', 'new'), chord('scope', 'scope', 'scope'), chord('close', 'close', 'close'), chord('list', 'list', '', false)]
+      return [chord('new', 'new', 'new'), chord('scope', 'scope', 'scope'), chord('close', 'close', 'close')]
     case 'capture':
       return [
         { action: 'new', shown: ['⏎', 'save'] },
@@ -470,37 +464,26 @@ export const keysFor = (focus: Focus): Key[] => {
           k('history', 'h', 'history'),
           k('search', 'f', 'search'),
           k('keys', 'i', 'keys'),
-          k('list', 'l', 'list', false),
           ...nav,
+          k('close', 'q', 'close', false),
+          k('new', 'n', 'new', false),
           ...CHORDS(false),
         ]
       }
       const { note } = line
-      const inList = focus.view === 'list'
-      const listKeys = inList ? [k('fold', 'z', 'fold', false), k('history', 'h', 'history', false)] : []
+      const groupKeys = [k('fold', 'z', 'fold', false), k('history', 'h', 'history', false)]
       if (note.status === 'sent' || note.status === 'archived') {
-        return inList
-          ? [
-              k('restore', 'u', 'restore'),
-              k('history', 'h', 'hide history'),
-              k('fold', 'z', 'fold'),
-              k('search', 'f', 'search'),
-              k('keys', 'i', 'keys', false),
-              k('list', 'l', 'list', false),
-              ...always,
-            ]
-          : [k('restore', 'u', 'restore'), k('search', 'f', 'search'), k('keys', 'i', 'keys'), k('list', 'l', 'list', false), ...always]
-      }
-      if (note.status === 'proposed') {
         return [
-          k('keep', 'a', 'keep'),
-          k('dismiss', 'r', 'dismiss'),
-          k('toPrompt', 't', 'to prompt'),
-          k('keys', 'i', 'keys'),
-          k('list', 'l', 'list', false),
-          ...listKeys,
+          k('restore', 'u', 'restore'),
+          k('history', 'h', 'hide history'),
+          k('fold', 'z', 'fold'),
+          k('search', 'f', 'search'),
+          k('keys', 'i', 'keys', false),
           ...always,
         ]
+      }
+      if (note.status === 'proposed') {
+        return [k('keep', 'a', 'keep'), k('dismiss', 'r', 'dismiss'), k('toPrompt', 't', 'to prompt'), k('keys', 'i', 'keys'), ...groupKeys, ...always]
       }
       const rest = [
         k('send', 's', 'send', false),
@@ -508,8 +491,7 @@ export const keysFor = (focus: Focus): Key[] => {
         k('archive', 'd', 'archive', false),
         k('undo', 'u', 'undo', false),
         k('move', 'm', 'move', false),
-        k('list', 'l', 'list', false),
-        ...listKeys,
+        ...groupKeys,
         ...always,
       ]
       if (focus.picks > 0) {
@@ -523,27 +505,16 @@ export const keysFor = (focus: Focus): Key[] => {
         ]
       }
       // Nothing picked: the note's own actions lead, so they are the four the footer has room for.
-      const shown = inList
-        ? [
-            k('toPrompt', 't', 'to prompt'),
-            k('send', 's', 'send'),
-            k('edit', 'e', 'edit'),
-            k('archive', 'd', 'archive'),
-            k('pick', 'v', 'pick'),
-            k('fold', 'z', 'fold'),
-            k('history', 'h', 'history'),
-            k('keys', 'i', 'keys'),
-          ]
-        : [
-            k('toPrompt', 't', 'to prompt'),
-            k('send', 's', 'send'),
-            k('edit', 'e', 'edit'),
-            k('archive', 'd', 'archive'),
-            k('pick', 'v', 'pick'),
-            k('list', 'l', 'list'),
-            k('search', 'f', 'search'),
-            k('keys', 'i', 'keys'),
-          ]
+      const shown = [
+        k('toPrompt', 't', 'to prompt'),
+        k('send', 's', 'send'),
+        k('edit', 'e', 'edit'),
+        k('archive', 'd', 'archive'),
+        k('pick', 'v', 'pick'),
+        k('fold', 'z', 'fold'),
+        k('history', 'h', 'history'),
+        k('keys', 'i', 'keys'),
+      ]
       return [...shown, k('bundle', 'b', 'bundle', false), ...rest]
     }
   }
@@ -564,7 +535,7 @@ export const uniqueKeys = (keys: Key[]) => {
 export const footerPairs = (keys: Key[]) => uniqueKeys(keys).flatMap(key => (key.shown ? [key.shown] : []))
 
 // The keys a row's footer leads with, its own actions, up to the first of the pane's own.
-const PANE_ACTIONS: Action[] = ['list', 'search', 'fold', 'history', 'keys']
+const PANE_ACTIONS: Action[] = ['search', 'fold', 'history', 'keys']
 export const ownKeys = (keys: Key[]) => {
   const own: string[] = []
   for (const key of uniqueKeys(keys)) {

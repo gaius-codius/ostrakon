@@ -74,12 +74,13 @@ describe('model', () => {
     expect(matchOf('the cachetest', 'cht')).toBeDefined()
   })
 
-  test('search shows this project when empty and every project once typing switches the scope', () => {
-    const notes = [note('flaky cache test', CC, 10), note('cache metric', INFRA, 20), note('rename helpers', CC, 5)]
-    const empty = linesOf(ctxOf(), freshPane(), notes, [])
-    expect(empty.map(line => (line.kind === 'note' ? line.note.text : line.key))).toEqual(['rename helpers', 'flaky cache test'])
-    const typing = linesOf(ctxOf(), { ...freshPane(), query: 'cache', scope: 'all' }, notes, [])
-    expect(typing.map(line => (line.kind === 'note' ? line.note.text : line.key))).toEqual(['flaky cache test', 'cache metric'])
+  test('the pane shows this project when empty, and typing keeps the groups, hiding those with no match', () => {
+    const notes = [note('flaky cache test', CC, 10), note('cache metric', INFRA, 20), note('rename helpers', CC, 5), note('api docs', API_A, 1)]
+    const keys = (lines: Line[]) => lines.map(line => (line.kind === 'note' ? line.note.text : line.key))
+    const ctx = ctxOf([CC, INFRA, API_A])
+    expect(keys(linesOf(ctx, freshPane(), notes, []))).toEqual([`group:${CC.key}`, 'rename helpers', 'flaky cache test'])
+    const typing = linesOf(ctx, { ...freshPane(), query: 'cache', scope: 'all' }, notes, [])
+    expect(keys(typing)).toEqual([`group:${CC.key}`, 'flaky cache test', `group:${INFRA.key}`, 'cache metric'])
   })
 
   test('the list groups proposed, this project, others by activity, then unfiled; empty and folded groups', () => {
@@ -92,7 +93,7 @@ describe('model', () => {
       note('sent one', CC, 3, { status: 'sent' }),
     ]
     const ctx = ctxOf([CC, INFRA, API_A])
-    const pane = { ...freshPane(), view: 'list' as const, scope: 'all' as const }
+    const pane = { ...freshPane(), scope: 'all' as const }
     const keys = (lines: Line[]) => lines.map(line => (line.kind === 'note' ? line.note.text : line.key))
     expect(keys(linesOf(ctx, pane, notes, []))).toEqual([
       'group:proposed',
@@ -113,10 +114,14 @@ describe('model', () => {
     expect(keys(folded)).toContain(`group:${INFRA.key}`)
     const filtered = linesOf(ctx, { ...pane, query: 'api' }, notes, [])
     expect(keys(filtered)).toEqual([`group:${API_A.key}`, 'api thing'])
+    // A search shows the matches of a folded group.
+    expect(keys(linesOf(ctx, { ...pane, query: 'old', folded: [INFRA.key] }, notes, []))).toEqual([`group:${INFRA.key}`, 'old infra'])
+    // A search leaves proposed notes out, even ones that match.
+    expect(keys(linesOf(ctx, { ...pane, query: 'claude' }, notes, []))).toEqual([])
   })
 
   test('paging keeps the cursor in the window and numbers at most nine rows', () => {
-    const lines = Array.from({ length: 30 }, (_, i): Line => ({ kind: 'note', key: `k${i}`, note: note(`n${i}`, CC, i), hits: [] }))
+    const lines = Array.from({ length: 30 }, (_, i): Line => ({ kind: 'note', key: `k${i}`, note: note(`n${i}`, CC, i), group: CC.key, hits: [] }))
     const top = pageOf(lines, 0, null, 12)
     expect(top.lines.length).toBe(11)
     expect(top.below).toBe(19)
@@ -135,10 +140,10 @@ describe('model', () => {
     const focuses: Focus[] = [
       { kind: 'search', hasResults: true, hasQuery: false },
       { kind: 'search', hasResults: false, hasQuery: true },
-      { kind: 'line', line: { kind: 'note', key: open.id, note: open, hits: [] }, view: 'search', picks: 0 },
-      { kind: 'line', line: { kind: 'note', key: open.id, note: open, group: CC.key, hits: [] }, view: 'list', picks: 2 },
-      { kind: 'line', line: { kind: 'note', key: 'h', note: { ...open, status: 'archived' }, hits: [] }, view: 'search', picks: 0 },
-      { kind: 'line', line: { kind: 'group', key: 'group:x', group: 'x', project: CC, isFolded: false, count: 0 }, view: 'list', picks: 0 },
+      { kind: 'line', line: { kind: 'note', key: open.id, note: open, group: CC.key, hits: [] }, picks: 0 },
+      { kind: 'line', line: { kind: 'note', key: open.id, note: open, group: CC.key, hits: [] }, picks: 2 },
+      { kind: 'line', line: { kind: 'note', key: 'h', note: { ...open, status: 'archived' }, group: CC.key, hits: [] }, picks: 0 },
+      { kind: 'line', line: { kind: 'group', key: 'group:x', group: 'x', project: CC, isFolded: false, count: 0 }, picks: 0 },
       { kind: 'capture' },
       { kind: 'edit' },
       { kind: 'bundle' },
@@ -152,8 +157,8 @@ describe('model', () => {
       }
       if (focus.kind === 'search') expect(keys.some(key => key.hotkey !== undefined)).toBe(false)
     }
-    const searchHistory = footerPairs(keysFor(focuses[4] as Focus)).map(([key]) => key)
-    expect(searchHistory).toEqual(['u', 'f', 'i'])
+    const history = footerPairs(keysFor(focuses[4] as Focus)).map(([key]) => key)
+    expect(history).toEqual(['u', 'h', 'z', 'f'])
     const picked = footerPairs(keysFor(focuses[3] as Focus)).map(([key]) => key)
     expect(picked.slice(0, 3)).toEqual(['b', 'v', 'x'])
     // Nothing picked, the note's own actions take the four footer places, archive among them.
@@ -168,9 +173,9 @@ describe('model', () => {
 
   test("the key sheet leads with a row's own keys, in its footer's order", () => {
     const open = note('n', CC, 1)
-    const row: Focus = { kind: 'line', line: { kind: 'note', key: open.id, note: open, hits: [] }, view: 'search', picks: 0 }
-    const picked: Focus = { kind: 'line', line: { kind: 'note', key: open.id, note: open, group: CC.key, hits: [] }, view: 'list', picks: 2 }
-    const group: Focus = { kind: 'line', line: { kind: 'group', key: 'group:x', group: 'x', project: CC, isFolded: false, count: 0 }, view: 'list', picks: 0 }
+    const row: Focus = { kind: 'line', line: { kind: 'note', key: open.id, note: open, group: CC.key, hits: [] }, picks: 0 }
+    const picked: Focus = { kind: 'line', line: { kind: 'note', key: open.id, note: open, group: CC.key, hits: [] }, picks: 2 }
+    const group: Focus = { kind: 'line', line: { kind: 'group', key: 'group:x', group: 'x', project: CC, isFolded: false, count: 0 }, picks: 0 }
     expect(ownKeys(keysFor(row))).toEqual(['t', 's', 'e', 'd', 'v'])
     expect(ownKeys(keysFor(picked))).toEqual(['b', 'v', 'x', 't'])
     expect(ownKeys(keysFor(group))).toEqual([])

@@ -6,6 +6,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Changed
+
+- The pane has one view instead of two: notes are always grouped by project, and typing filters within the groups, hiding projects with no match. Proposed notes show only while the search is empty. `l` and `ctrl+l` (list view) are gone, so you can drop the `ctrl+l` binding; `h` (history) and `z` (fold) work everywhere.
+
 ## [0.3.0] - 2026-10-12
 
 ### Added

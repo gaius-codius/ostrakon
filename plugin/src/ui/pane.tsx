@@ -38,7 +38,7 @@ export type PaneView = {
   keys: Key[]
   problems: NoteProblem[]
   // Notes counted for the header: open in scope, and the total the query looked through.
-  counts: { shown: number; total: number }
+  counts: { shown: number; total: number; searched: number }
   picksHidden: number
   bundle: Note[]
   projects: NoteProject[]
@@ -97,24 +97,6 @@ const Hits = ({ el, text, hits, isDim }: { el: E; text: string; hits: number[]; 
   )
 }
 
-// A note's project on the right of a row: the colour goes on the dot, the name stays dim, and only
-// the current project's name takes the accent.
-const ProjectCell = ({ el, view, note, isHistory }: { el: E; view: PaneView; note: Note; isHistory: boolean }) => {
-  const { Text } = el
-  const key = note.project?.key ?? null
-  const isCurrent = key === view.ctx.current.key && !isHistory
-  const name = cut(labelOf(view.ctx, note.project), WIDTH.project)
-  return (
-    <Text>
-      {' '.repeat(Math.max(0, WIDTH.project - cells(name)))}
-      <Text color={isHistory ? COLOUR.history : colourOf(key, view.ctx.current.key, view.tone)}>{key === null ? GLYPH.unfiledDot : GLYPH.dot} </Text>
-      <Text color={isCurrent ? COLOUR.accent : undefined} dimColor={!isCurrent}>
-        {name}
-      </Text>
-    </Text>
-  )
-}
-
 const NoteRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; line: Extract<Line, { kind: 'note' }>; slot: number; handlers: Handlers }) => {
   const { Box, Text, Button } = el
   const { note } = line
@@ -123,16 +105,15 @@ const NoteRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; li
   const number = view.page.numbers.get(note.id)
   const isHistory = note.status === 'sent' || note.status === 'archived'
   const [marker, markerColour] = markerOf(note, pane)
-  const isGrouped = line.group !== undefined
-  // Grouped, a note sits indented under its heading; ungrouped, its project shows on the right.
-  const indent = isGrouped ? 2 : 0
-  const right = isGrouped ? 1 + WIDTH.age : 1 + 2 + WIDTH.project + 1 + WIDTH.age
+  // A note sits indented under its heading, which names its project.
+  const indent = 2
+  const right = 1 + WIDTH.age
   const textWidth = view.width - WIDTH.lead - indent - right
   const text = cut(oneLine(note.text), textWidth)
   return (
     <Box key={`row-${slot}`} width={view.width} backgroundColor={isSelected ? COLOUR.band : undefined}>
       <Button key={slotKey(slot)} plain label=' ' onPress={() => handlers.pressSlot(slot)} />
-      {isGrouped && <Text>{' '.repeat(indent)}</Text>}
+      <Text>{' '.repeat(indent)}</Text>
       {number !== undefined ? (
         <Text color={isSelected ? undefined : COLOUR.accent} bold>
           {String(number)}
@@ -145,8 +126,6 @@ const NoteRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; li
         <Hits el={el} text={text} hits={line.hits.filter(at => at < text.length)} isDim={isHistory} />
       </Box>
       <Text> </Text>
-      {!isGrouped && <ProjectCell el={el} view={view} note={note} isHistory={isHistory} />}
-      {!isGrouped && <Text> </Text>}
       <Text dimColor>{ageOf(note.updated, ctx.now).padStart(WIDTH.age)}</Text>
     </Box>
   )
@@ -218,11 +197,7 @@ const rightText = (view: PaneView, room: number) => {
   const { pane, counts } = view
   const scope = pane.scope === 'project' ? 'this project' : 'all'
   const counted =
-    pane.view === 'list'
-      ? `list · ${scope} · ${counts.total} open${pane.history ? ' + history' : ''}`
-      : pane.query.trim() === ''
-        ? `${scope} · ${counts.total} open`
-        : `${scope} · ${counts.shown} of ${counts.total}`
+    pane.query.trim() === '' ? `${scope} · ${counts.total} open${pane.history ? ' + history' : ''}` : `${scope} · ${counts.shown} of ${counts.searched}`
   if (!(view.isInline && view.focus.kind === 'line' && view.preview)) return cut(counted, room)
   const { who, path, branch, age } = metaParts(view, view.preview)
   const mark = who === 'you' ? undefined : who

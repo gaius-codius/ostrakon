@@ -27,7 +27,7 @@ Throughout, it should be keyboard-first, quick, and calm when you aren't using i
 
 ### Shape
 - **Pane = Launcher**: search-first, fzf-style, with multi-pick and bundle.
-- **List view** inside the pane: a grouped browse view reached by a hotkey. No tab bar.
+- **One view** inside the pane: notes grouped by project, filtered by the search field. No tab bar.
 - **Resting state = Pocket**: numbered note chips above the prompt. A digit in an empty prompt pulls that note in (§10).
 - **Harvest** (opt-in): after a turn, side issues worth keeping are proposed above the prompt, with **no change to how Claude works** (§8).
 - **Sync**: pluggable adapters. A hub (usually reached over Tailscale) that also serves a phone capture form, and a folder adapter for Dropbox, Syncthing and Obsidian (§7).
@@ -126,34 +126,35 @@ Claude Code's mods interface has rules and limits that aren't obvious from its A
 - Draw to `bodyColumns - 1`: a tree exactly `bodyColumns` wide overflowed by a column.
 - Project labels are the repo basename; two projects with one basename get parent segments until they differ.
 
-### 4.2 Search view
+### 4.2 Search and groups
 Focus starts in the search field; no row is selected and the top result is previewed.
 ```
 ❯ cache▏ ⏎ to list                                  all · 3 of 12   ← search row
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- 1   check why the cache test is flaky on CI. started…      cc  12m   ← rows
- 2   add a cache invalidation metric to the hub dash…    infra   1h
- 3   document the cache-key format in the api readme        api   2d
+● cc                                                              1   ← group header
+   1   check why the cache test is flaky on CI. started after…  12m   ← rows
+● infra                                                           1
+   2   add a cache invalidation metric to the hub dashboard      1h
+● api                                                             1
+   3   document the cache-key format in the api readme           2d
 ──────────────────────────────────────────────────────────────────────
 check why the cache test is flaky on CI. started after the redis     ← preview
 bump, only on the arm runners
 you · ~/Work/cc · main · 12m ago                                      ← meta
 ──────────────────────────────────────────────────────────────────────
-ctrl+l list view  ctrl+s scope  ctrl+n new  ctrl+q close             ← footer
+ctrl+s scope  ctrl+n new  ctrl+q close                               ← footer
 ```
-- **Rows** are one line: selection bar, the row's number in the window (1–9, then `·`), a marker (`◆`, `▪`, `●`/`○`, `↗`), the text with search hits highlighted, then the project (`● name`) and age (`now`, `12m`, `3h`, `2d`, `5w`, `1y`).
+- **Rows** are one line under their group header, indented two columns: selection bar, the row's number in the window (1–9, then `·`), a marker (`◆`, `▪`, `●`/`○`, `↗`), the text with search hits highlighted, then the age (`now`, `12m`, `3h`, `2d`, `5w`, `1y`).
 - **Preview** (docked only): the selected note's text, capped at 6 lines, then a meta line `who · path · branch · age ago`, all behind a dim `▎` bar.
-- **Ordering:** search results by rank, everything else newest `updated` first, ties by id. Ranking is a fuzzy subsequence score with bonuses for word starts, the current project and recency. Query tokens: `@infra`, `is:sent`, `is:archived`, `by:claude`.
+- **Ordering:** groups as in §4.3, with or without a query. Within a group: by rank with a query, otherwise newest `updated` first, ties by id. Ranking is a fuzzy subsequence score with bonuses for word starts, the current project and recency. Query tokens: `@infra`, `is:sent`, `is:archived`, `by:claude`.
 - **Scope** is explicit state, shown at the right of the search row. The pane opens on this project; the first typed character switches to all, and clearing the query switches back, unless the person chose a scope with `ctrl+s`. Choosing all is remembered across sessions (`$.store`).
 - **No match:** `No notes match “kubernetes” in cc.` and, dim, `⏎ saves “kubernetes” as a new note in cc`. Enter saves the query as a note.
 
-### 4.3 List view
-Reached with `l` on a row or `ctrl+l`; it keeps the query and scope.
-- **Groups** have a header at the left edge: the project's dot and its label, dim, with the group's open count dim on the right and `▸` when folded. `proposed` (with `◆`) and the current project are bold accent. The notes under a header are indented two columns, so note text is the brightest thing in the list. Order: `proposed` first when harvest has any, then the current project, then others by latest activity, then `unfiled`. Within a group: open notes newest first, then history when shown.
+### 4.3 Groups, history and picks
+- **Groups** have a header at the left edge: the project's dot and its label, dim, with the group's open count dim on the right and `▸` when folded. `proposed` (with `◆`) and the current project are bold accent. The notes under a header are indented two columns, so note text is the brightest thing in the list. Order: `proposed` first when harvest has any, then the current project, then others by latest activity, then `unfiled`. Within a group: open notes first, then history when shown. A query filters the notes and leaves `proposed` out; a group with none left isn't drawn, and a folded group shows its matches while the query lasts.
 - **Headers are focusable;** `z` folds or unfolds a group.
 - **History:** `h` adds `sent` and `archived` notes (dimmed); `u` on one restores it.
 - **Picking:** `v` picks or unpicks an open or proposed note. Once one is picked every row shows `●`/`○` and the footer leads with `3 picked`. Picks live in `$.state` until sent, cleared (`x`) or the session ends; a picked note that stops being open drops out with a toast. Bundles keep pick order.
-- Search and list are one model with two renderers: a query filters the list too.
 
 ### 4.4 Capture, `//` and the draft stash
 - **In the pane:** `n` on a row or `ctrl+n` turns the search row into the capture row (`✎ new note`, the text, the target project at the right). Enter saves and stays in capture; Enter on an empty line returns to search; `ctrl+s` cycles the target project. The draft shows whole underneath, wrapped. A failed save keeps the text and shows `Couldn't save: <reason>`.
@@ -189,14 +190,13 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 | `u` | on a history row: restore to open. Otherwise undo this session's last mutation (archive, edit, restore, pick-clear, move). A send can't be undone |
 | `m` | move to a project (or `unfiled`) |
 | `y` | copy the full text |
-| `l` / `ctrl+l` | list view on/off |
-| `h` | history on/off (list view) |
-| `z` | fold or unfold the group (list view) |
+| `h` | history on/off |
+| `z` | fold or unfold the group |
 | `f` / `ctrl+f` | focus search |
 | `n` / `ctrl+n` | new note |
 | `ctrl+s` | scope (search, list) or target project (capture) |
 | `i` | key sheet on/off: a framed list of every key (unframed when the body is too short for a line inside the frame) (storage problems first; opened on a row, that row's own keys next, in its footer's order) between the search row and the footer; while it is up the pane takes the whole body and the footer its last row. It is at most 46 columns and never wider than the pane. When it's longer than the rows between, it pages: the footer shows `j more 2/3`, `j` turns to the next page and `k` back, both going round |
-| Esc | **back** one step: edit → the row (draft kept), move / key sheet / bundle → the list, capture → search, a row → the search field, a query → empty, list view → search view; at the top it closes |
+| Esc | **back** one step: edit → the row (draft kept), move / key sheet / bundle → the list, capture → search, a row → the search field, a query → empty; at the top it closes |
 | `q` / `ctrl+q` / `ctrl+x s` | close the pane from anywhere; drafts are kept |
 
 **Borrowed chords** (the person binds them in their keybindings; the table lives in `look.ts`):
@@ -204,13 +204,12 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 - `ctrl+f` → `app:toggleDiffNoiseFilter`
 - `ctrl+s` → `app:toggleDiffPreSession`
 - `ctrl+q` → `pane:previous` (not the engine's `pane:close`, which the mod reads as Esc)
-- `ctrl+l` → `app:toggleReplTab`
 - `ctrl+n` → `pane:next`
 
 ### 4.6 Contextual footer
 One blank row, then one line: at most four key/label pairs for the focus (key bold, label dim, two spaces between) and `i keys` on the right; pairs drop from the right until the line fits. On a row with nothing picked, the note's own actions take the four places (`t to prompt  s send  e edit  d archive`); `v` pick is answered and listed in the key sheet. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning); a status too long for the line is cut with `…`, leaving room for `i keys`. The legend `◆ from Claude` trails while a `◆` row is drawn.
 
-**The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, search row, list row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`.
+**The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`.
 
 **Storage problems** also draw a focusable problem row above the first result, in `error` (`⚠ 2 unreadable files · ⏎ details`); ⏎ opens a card listing each file and reason.
 
@@ -378,7 +377,7 @@ A machine that stays on, with Bun installed, systemd (for the unit in `server/`)
 - **Capture first:** a card with the note field and a pill naming where the note goes (default `unfiled`). Focusing the field opens capture: the card takes an accent border, the header shows **Close** (the draft is kept, here and in `localStorage`), the list beneath dims and is out of reach (a tap on it, Escape, or Tab past the last control closes the form), and project chips wrap under the field: the last-used project first, then the hub's most recently active, three in all, and `N more` for the rest. A tap on a chip files the note there, a second tap goes back to unfiled; the hint under the chips says which (`unfiled · tap a project to file`). Save is off until there's text.
 - **Project picker (`File under`):** a drawer with a search field, every project with its dot and open count (matches in bold), and `unfiled` under `always`, ticked and marked `the default` when it's the choice. Picking closes it and puts focus back in the note field; **Done** or the scrim closes it unchanged. The same drawer, titled `Move to`, moves a note from the action sheet.
 - **Saved:** the form closes, says `✓ saved · waiting to sync` (then `· synced` once the hub has it), the placeholder becomes `Another…`, and the pill shows where the note went; the next note starts unfiled again. The new row is tinted for a few seconds and says `now`.
-- **Inbox below:** open notes grouped as the pane's list view: a heading per project (a dot in the colour `colourOf` gives it, the name, the count), projects by latest note, unfiled last (a ring for a dot), newest first within each. Each heading is an `h2` with a fold button (`aria-expanded`); it sticks while its group scrolls, and folds are kept on the phone (`▸` after a folded name).
+- **Inbox below:** open notes grouped as the pane groups them: a heading per project (a dot in the colour `colourOf` gives it, the name, the count), projects by latest note, unfiled last (a ring for a dot), newest first within each. Each heading is an `h2` with a fold button (`aria-expanded`); it sticks while its group scrolls, and folds are kept on the phone (`▸` after a folded name).
 - **Proposals:** Claude's `proposed` notes (harvest, §8) come first under `◆ Proposed by Claude`, each with `for ● <project> · <age>` and **Keep** (makes it open) and **Dismiss** (status `dismissed`), each with Undo.
 - **Rows:** the pane's markers (`◆` from Claude, read as "From Claude"; `▪` from the phone), the text, the age (or `↑ queued`), and a `⋯` **Note actions** button. A tap on the text edits in place; holding still about half a second, or `⋯`, opens the action sheet; a swipe left archives.
 - **Action sheet:** the note quoted with its project, origin and age, then **Edit**, **Copy text**, **Move to project** (current project on the right), **Mark sent** (`used elsewhere; leaves open notes`) and **Archive**, then **Cancel**. A modal dialog: focus stays inside, Escape closes it, and focus goes back to the row's `⋯` (or the next row's when the note left the list). Move, Mark sent and Archive come with Undo in a toast (`Archived · <note>`).
@@ -449,7 +448,7 @@ ostrakon/
 - **Static checks:** `tools/check.sh` runs `claude plugin validate plugin/`, the type-check, `claude plugin test plugin/`, the hub's `bun test` and `tools/check-design.ts` (DESIGN.md against the code, §11 of it for the changelog rules). Type-checking needs `plugin/.claude-plugin/types/`, which the engine writes when it loads the mod.
 - **Live:** drive a real session in tmux (`tmux new-session -d -s t -x 160 -y 42 'claude …'`, `send-keys`, `capture-pane -p`), with `--debug-file` to read `ui.open`, `ui.focus` and refusal lines.
 - **Screenshots:** `tools/screens/lib.sh` (`start <fixture> <cols> <rows>`, `keys …`, `lit "text"`, `shot <name> "<caption>"`) renders `tmux capture-pane -e -N` to HTML (`ansi2html.py`) and then to PNG with headless `chromium`. Fixtures are `empty`, `few`, `long` and `many` (`fixture.py`); point a session at one with `OSTRAKON_DIR`. Wait about 2 s after opening before a shot.
-- **States worth a screenshot:** search (empty, typing, no match), list view (grouped, folded, history), picked plus bundle, capture, edit, Pocket (0, 3, 9+ notes), the harvest band, a narrow terminal (100 columns, inline), and the light theme.
+- **States worth a screenshot:** search (empty, typing, no match), groups (folded, history), picked plus bundle, capture, edit, Pocket (0, 3, 9+ notes), the harvest band, a narrow terminal (100 columns, inline), and the light theme.
 - **The load report** (`plugin/src/report.ts`): each session start writes `~/.cache/ostrakon/report.json` with the Claude Code version that loaded the mod (`$.session.version()`), and the problems its sessions hit afterwards (storage, sync, the jot tool, harvest reviews; a hub or mirror that refuses, such as a wrong token, but not one that is only out of reach, which stays in the footer): the 10 latest distinct ones, each counted, saved on the next poll after it happens. Concurrent sessions share the file, so it is the latest writer's view. `ostrakon doctor` (`bin/doctor`) reads it, since validation and the tests can't show that the mod actually runs in someone's Claude Code version.
 
 ## 13. Targets (keystrokes, from a closed pane)
