@@ -6,6 +6,8 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-12
+
 ### Added
 
 - A logo: a pottery shard. The mark, lockups and icons are in `brand/`, the README opens with it, and the phone app uses it for its icons, its tab and beside its name.
@@ -51,6 +53,7 @@ The first public release.
 - `ostrakon pair`: a QR code with a one-time code (5 minutes, works once) pairs a phone with the hub; `--token` prints the long-lived link instead.
 - The `ostrakon` command (`pair`, `hub`, `update`, `version`), `install.sh` and `update.sh`.
 
-[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/gaius-codius/ostrakon/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/gaius-codius/ostrakon/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/gaius-codius/ostrakon/releases/tag/v0.1.0
