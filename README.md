@@ -5,7 +5,7 @@
   </picture>
 </h1>
 
-A scratchpad for Claude Code: capture thoughts and follow-ups from within claude code without breaking your flow, triage them across projects and machines, and turn them into prompts. An optional small hub keeps your notes in sync between machines and serves a phone app for capturing and triaging on the go.
+A scratchpad for Claude Code: capture thoughts and follow-ups from within Claude Code without breaking your flow, triage and sync them across projects and machines, and turn them into prompts. An optional small hub keeps your notes in sync between machines and serves a phone app for capturing and triaging on the go.
 
 
 ![The ostrakon pane docked beside a Claude Code session, listing open notes across projects, with this project's notes as numbered chips above the prompt](docs/images/pane.png)
@@ -13,11 +13,11 @@ A scratchpad for Claude Code: capture thoughts and follow-ups from within claude
 ## What it does
 
 - **Capture** a note in under two seconds, even while Claude is working, without losing your prompt draft: `/jot text`, or `//` typed into an empty prompt.
-- **Gives Claude a `jot` tool**: Claude jots notes it thinks are important or wants to pass on to you, marked `◆`. You can also ask it to add one: "jot that down". Claude can also list your notes ("what's on my list?") and archive one once it's done.
-- **Triage** open notes for this project or across all of them in a searchable pane: edit, move, archive, bundle several into one prompt.
+- **Gives Claude a `jot` tool**: Claude jots notes it thinks are important or wants to pass on to you. You can also ask it to add one: "jot that down". Claude can also list your notes and archive one once it's done.
+- **Triage** open notes across all your projects in a searchable pane: edit, move, archive, bundle several into one prompt.
 - **Dispatch** a note into the prompt. This project's open notes sit in a row of numbered chips above the prompt (the "pocket"); press a note's number in an empty prompt to pull it in.
 - **Harvest** (opt-in): after each turn, an extra review looks for side issues that came up and offers them as notes, which you keep or dismiss. It doesn't change what Claude is doing.
-- **Sync** notes both ways between machines, through a small hub, a plain folder, or both ([Sync](#sync)).
+- **Sync**: two-way sync enabled by multiple methods. Through a small hub, a plain folder, Obsidian or a combination of methods ([Sync](#sync)).
 - **Phone**: capture and triage from your phone with the hub's web app, installed to the Home Screen, or send a note from the share sheet or Siri with an iOS Shortcut.
 
 Notes are plain Markdown files with some YAML. One per note, in `~/.local/share/ostrakon/` by default, so they are yours to read, grep and back up.
