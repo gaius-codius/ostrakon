@@ -33,6 +33,11 @@ const logged = (doc: string, version: string, lines: string[]) => {
 
 const doc = real(FILES.doc)
 const css = real(FILES.css)
+// The doc's version now, and versions just above it.
+const NOW = /^Version: (\S+)$/m.exec(doc)?.[1] ?? ''
+const [major = 0, minor = 0, patch = 0] = NOW.split('.').map(Number)
+const PATCH = `${major}.${minor}.${patch + 1}`
+const MINOR = `${major}.${minor + 1}.0`
 
 // Teal's dark value one step bluer, everywhere it's held: drift-free, but a new design.
 const tealChanged = () => {
@@ -86,34 +91,34 @@ describe('check-design', () => {
     const { look, files, fingerprint } = tealChanged()
     const unlogged = checkDesign({ look, read: withFiles(files) }).problems
     expect(unlogged).toEqual([
-      `Design values changed: the fingerprint is ${fingerprint}, the newest changelog entry (1.0.0) says ${checkDesign().fingerprint}. ` +
+      `Design values changed: the fingerprint is ${fingerprint}, the newest changelog entry (${NOW}) says ${checkDesign().fingerprint}. ` +
         `Bump \`Version:\`, add a changelog entry with \`- Change:\` and \`- Why:\` lines, and set its \`Fingerprint:\` to ${fingerprint}.`,
     ])
     const entry = ['- Change: Teal is a step bluer in the dark theme.', '- Why: It sat too close to lime.', `Fingerprint: ${fingerprint}`]
-    expect(checkDesign({ look, read: withFiles({ ...files, [FILES.doc]: logged(files[FILES.doc], '1.0.1', entry) }) }).problems).toEqual([])
+    expect(checkDesign({ look, read: withFiles({ ...files, [FILES.doc]: logged(files[FILES.doc], PATCH, entry) }) }).problems).toEqual([])
   })
 
   test('an entry without a reason fails', () => {
     const { look, files, fingerprint } = tealChanged()
-    const read = withFiles({ ...files, [FILES.doc]: logged(files[FILES.doc], '1.0.1', ['- Change: Teal is a step bluer.', `Fingerprint: ${fingerprint}`]) })
+    const read = withFiles({ ...files, [FILES.doc]: logged(files[FILES.doc], PATCH, ['- Change: Teal is a step bluer.', `Fingerprint: ${fingerprint}`]) })
     expect(checkDesign({ look, read }).problems).toEqual([
-      `changelog 1.0.1 (line ${files[FILES.doc].split('\n').findIndex(line => line.startsWith('### 1.0.0')) + 1}): no \`- Why:\` line giving the reason`,
+      `changelog ${PATCH} (line ${files[FILES.doc].split('\n').findIndex(line => line.startsWith(`### ${NOW}`)) + 1}): no \`- Why:\` line giving the reason`,
     ])
     const empty = withFiles({
       ...files,
-      [FILES.doc]: logged(files[FILES.doc], '1.0.1', ['- Change: Teal is a step bluer.', '- Why:', `Fingerprint: ${fingerprint}`]),
+      [FILES.doc]: logged(files[FILES.doc], PATCH, ['- Change: Teal is a step bluer.', '- Why:', `Fingerprint: ${fingerprint}`]),
     })
     expect(checkDesign({ look, read: empty }).problems.join('\n')).toContain('no `- Why:` line giving the reason')
   })
 
   test('versions must match and go down the list', () => {
-    const header = checkDesign({ read: withFiles({ [FILES.doc]: replaced(doc, 'Version: 1.0.0', 'Version: 1.0.1') }) }).problems
-    expect(header).toContain('Version: says 1.0.1, but the newest changelog entry is 1.0.0')
+    const header = checkDesign({ read: withFiles({ [FILES.doc]: replaced(doc, `Version: ${NOW}`, `Version: ${PATCH}`) }) }).problems
+    expect(header).toContain(`Version: says ${PATCH}, but the newest changelog entry is ${NOW}`)
     const { look, files, fingerprint } = tealChanged()
     const entry = ['- Change: Teal is a step bluer.', '- Why: It sat too close to lime.', `Fingerprint: ${fingerprint}`]
-    for (const version of ['1.0.0', '0.9.0']) {
+    for (const version of [NOW, '0.9.0']) {
       const problems = checkDesign({ look, read: withFiles({ ...files, [FILES.doc]: logged(files[FILES.doc], version, entry) }) }).problems
-      expect(problems.join('\n')).toContain(`${version} isn't above 1.0.0`)
+      expect(problems.join('\n')).toContain(`${version} isn't above ${NOW}`)
     }
     const bad = checkDesign({ look, read: withFiles({ ...files, [FILES.doc]: logged(files[FILES.doc], '1.1', entry) }) }).problems
     expect(bad.join('\n')).toContain("1.1 isn't a version")
@@ -121,14 +126,14 @@ describe('check-design', () => {
 
   test('against a base, a changed design needs a version above the base, and keeps its entries', () => {
     const { look, files, fingerprint } = tealChanged()
-    // The 1.0.0 entry's fingerprint edited in place instead of a new entry.
+    // The newest entry's fingerprint edited in place instead of a new entry.
     const inPlace = files[FILES.doc].replace(/^Fingerprint: \w+$/m, `Fingerprint: ${fingerprint}`)
     expect(checkDesign({ look, read: withFiles({ ...files, [FILES.doc]: inPlace }) }).problems).toEqual([])
     expect(checkDesign({ look, read: withFiles({ ...files, [FILES.doc]: inPlace }), baseDoc: doc }).problems.join('\n')).toContain(
-      "Design values differ from the base's (1.0.0), so they need a new version above 1.0.0",
+      `Design values differ from the base's (${NOW}), so they need a new version above ${NOW}`,
     )
     const entry = ['- Change: Teal is a step bluer.', '- Why: It sat too close to lime.', `Fingerprint: ${fingerprint}`]
-    const logged110 = logged(files[FILES.doc], '1.1.0', entry)
+    const logged110 = logged(files[FILES.doc], MINOR, entry)
     expect(checkDesign({ look, read: withFiles({ ...files, [FILES.doc]: logged110 }), baseDoc: doc }).problems).toEqual([])
     const dropped = logged110.slice(0, logged110.indexOf('### 0.1.0'))
     expect(checkDesign({ look, read: withFiles({ ...files, [FILES.doc]: dropped }), baseDoc: doc }).problems).toContain(

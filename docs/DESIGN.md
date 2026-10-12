@@ -1,6 +1,6 @@
 # Ostrakon design system
 
-Version: 1.0.0
+Version: 1.0.1
 
 What the terminal mod (the pane, the band and the prompt hint, in `plugin/`) and the phone (`server/public/`) must agree on: colour roles, the project palette, the phone's tokens, symbols, fixed copy, motion and the accessibility bar. [`SPEC.md`](SPEC.md) describes behaviour and points here for these values instead of repeating them. The code holds the values: `plugin/src/ui/look.ts` for the terminal, `style.css`, `app.js` and `index.html` for the phone.
 
@@ -222,6 +222,7 @@ Strings the surfaces or the docs depend on, each checked word for word in every 
 Things that move: the phone's swipe, sheets and drawers (rise on a spring over a fading scrim), the toast, and the change between list, capture and search (a View Transition where the browser has `document.startViewTransition`; entering search fades instead, so the field can take focus for the keyboard). Nothing else moves; the terminal never animates.
 
 - **Swipe to archive:** the row follows the finger by `transform` only, once a frame. Letting go archives only while the finger is still heading left past the threshold, or on a quick flick left; a finger that turned back right, or a short slow drag, springs the row home. An archived row slides out, then its height closes up, then Undo shows. Why: under the first rule, a row dragged past the threshold archived even after the finger turned back, so changing your mind still archived.
+- **Sheets and drawers rise from below and stop:** the panel starts below the screen before the first frame (set in the page, since Motion applies its first keyframe a frame late) and never goes above where it rests by more than the spring's bounce. The dialog that holds it is `overflow: clip`, never `hidden`: a hidden overflow can still be scrolled, and iOS scrolls it to show the focused action while the panel is still below the screen, so the panel rode up the screen and then snapped back. `tools/phone/run.sh` checks both in WebKit.
 - **Reduced motion** (`prefers-reduced-motion: reduce`): nothing moves; things appear and go at once, or fade. A swipe still archives, without the slide.
 - Springs come from Motion, vendored unchanged in `server/public/vendor/motion.js` (MIT) and cached for offline use.
 
@@ -281,6 +282,11 @@ Keys, layout and behaviour are in [`SPEC.md`](SPEC.md). The terminal's spacing i
 
 Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one or more `- Change:` lines and one or more `- Why:` lines. The newest entry ends with `Fingerprint: <hash>` of the design values in the code (`bun tools/check-design.ts --fingerprint` prints it). Versions: major when a meaning changes or something goes (a glyph means something else, a colour role moves); minor when something is added; patch for a value tweak or a doc fix. Entries are never removed.
 
+### 1.0.1 — 2026-10-13
+- Change: Sheets and drawers start below the screen before their first frame, and their dialog clips its overflow instead of hiding it (§7).
+- Why: Opening the note menu showed it in place for a frame, then it dropped and rose; and on iOS the dialog scrolled to show the focused action, so the menu rode up the screen and snapped back.
+Fingerprint: c63743944f39
+
 ### 1.0.0 — 2026-10-11
 - Change: First version of this file, recording the look after the quiet terminal redesign and the phone redesign, with `tools/check-design.ts` holding it to the code in `tools/check.sh` and CI.
 - Why: The pane, the band and the phone are written in separate files and languages, and they had already drifted: the pane hashed projects over five theme keys and the phone over six, so a project could take a different colour on each.
@@ -296,7 +302,6 @@ Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one
 - Why: Under the old rule, letting go anywhere past 80px archived, even after the finger turned back, so changing your mind still archived.
 - Change: The accessibility bar (§8): 44px targets, a button for every gesture, modal sheets, live regions, 200% text at 390px, axe clean.
 - Why: The phone is used one-handed and with large text, and a gesture-only action shuts out anyone who can't make it.
-Fingerprint: c63743944f39
 
 ### 0.1.0 — 2026-10-11
 - Change: The look as first released (ostrakon v0.1.0): theme keys only, project colours from six theme keys hashed from the project key, heavy and light rules between parts, and the phone on system fonts with its own small token set.

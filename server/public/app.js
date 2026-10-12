@@ -887,6 +887,10 @@ const enter = dialog => {
     return
   }
   dialog.style.opacity = ''
+  // Below the screen before the first frame: Motion applies its first keyframe a frame late, and
+  // the panel would show in place for that frame, then drop and rise.
+  scrim.style.opacity = '0'
+  panel.style.transform = 'translateY(100%)'
   run(scrim, { opacity: [0, 1] }, { duration: 0.2 })
   run(panel, { transform: ['translateY(100%)', 'translateY(0%)'] }, SPRING)
 }

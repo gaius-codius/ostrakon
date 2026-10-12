@@ -6,6 +6,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Fixed
+
+- On the phone, the note menu (⋯ or a long press) and the project picker no longer jump up the screen before settling.
+
 ## [0.4.0] - 2026-10-12
 
 ### Changed

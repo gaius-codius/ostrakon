@@ -877,7 +877,9 @@ dialog.sheet {
   border: 0;
   background: transparent;
   color: var(--text);
-  overflow: hidden;
+  /* Clip, not hidden: a hidden overflow can still be scrolled, and iOS scrolls it to show the
+     focused action while the panel is still below the screen, rising in. */
+  overflow: clip;
 }
 dialog.sheet::backdrop {
   background: transparent;
@@ -1046,7 +1048,7 @@ dialog.drawer {
   border: 0;
   background: transparent;
   color: var(--text);
-  overflow: hidden;
+  overflow: clip;
 }
 dialog.drawer::backdrop {
   background: transparent;
