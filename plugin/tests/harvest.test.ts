@@ -3,9 +3,13 @@ import type { Engine } from 'claude-code/testing'
 
 import { parseNote } from '../src/frontmatter'
 import {
+  ARCHIVE_DESCRIPTION,
+  ARCHIVE_REPLY,
   DEFAULT_HARVEST_MODE,
   JOT_DESCRIPTION,
   JOT_REPLY,
+  NOTES_DESCRIPTION,
+  NOTES_MAX,
   LIGHT_ANSWER_MAX,
   LIGHT_PROMPT_MAX,
   harvestModeOf,
@@ -14,7 +18,7 @@ import {
   reviewPrompt,
 } from '../src/harvest'
 import { MemDir } from './memdir'
-import { CC, put, startSession } from './world'
+import { CC, INFRA, mountPane, noteIn, put, run, startSession } from './world'
 import type { World } from './world'
 
 type On = Parameters<typeof startSession>[1]
@@ -51,6 +55,17 @@ const jotName = (world: World) => {
   return name
 }
 const jot = ($: Engine, world: World, note: unknown) => $.tool.call({ tool: jotName(world), note } as never)
+const toolName = (world: World, name: string) => {
+  const found = world.tools.find(tool => tool.name === name)?.registeredAs
+  if (found === undefined) throw new Error(`the ${name} tool was not registered`)
+  return found
+}
+const call = ($: Engine, world: World, name: string, input: Record<string, unknown>) => $.tool.call({ tool: toolName(world, name), ...input } as never)
+const TOOLS = [
+  expect.objectContaining({ name: 'jot', isDeferred: false, description: JOT_DESCRIPTION }),
+  expect.objectContaining({ name: 'notes', isDeferred: false, description: NOTES_DESCRIPTION }),
+  expect.objectContaining({ name: 'archive', isDeferred: false, description: ARCHIVE_DESCRIPTION }),
+]
 
 // The model's answer to the review, beneath the mod (registered before the session starts); the
 // questions it was asked are kept. `gate`, when given, holds the answer until it resolves.
@@ -117,16 +132,16 @@ const settle = async () => {
 }
 const proposed = (dir: MemDir) => claudes(dir).filter(note => note.status === 'proposed')
 
-test('the jot tool is registered at session start, in the prompt, the same with harvest off and on', async ($, on) => {
+test('the tools are registered at session start, in the prompt, the same with harvest off and on', async ($, on) => {
   const { world } = await startSession($, on, fixture())
-  expect(world.tools).toEqual([expect.objectContaining({ name: 'jot', isDeferred: false, description: JOT_DESCRIPTION })])
+  expect(world.tools).toEqual(TOOLS)
   // The owner's rule: the tool never offers ostrakon as a place to defer work to.
   expect(JOT_DESCRIPTION).toContain("doesn't replace doing or saying what you normally would")
 })
 
-test('harvest on: the jot tool is registered exactly as with harvest off', { options: ON }, async ($, on) => {
+test('harvest on: the tools are registered exactly as with harvest off', { options: ON }, async ($, on) => {
   const { world } = await startSession($, on, fixture())
-  expect(world.tools).toEqual([expect.objectContaining({ name: 'jot', isDeferred: false, description: JOT_DESCRIPTION })])
+  expect(world.tools).toEqual(TOOLS)
 })
 
 test("a jot is an open note of Claude's in this project, with a toast, harvest on or off", { options: ON }, async ($, on) => {
@@ -134,10 +149,11 @@ test("a jot is an open note of Claude's in this project, with a toast, harvest o
   reviewer(on, '```json\n[]\n```')
   const { world } = await startSession($, on, dir)
   const done = await turn($)
-  expect(await jot($, world, '  retry ignores Retry-After  ')).toEqual({ result: JOT_REPLY.saved })
+  const reply = await jot($, world, '  retry ignores Retry-After  ')
   await done()
   await settle()
   const [note] = claudes(dir)
+  expect(reply).toEqual({ result: JOT_REPLY.saved(note?.id ?? '') })
   expect(note).toMatchObject({
     text: 'retry ignores Retry-After',
     status: 'open',
@@ -732,4 +748,112 @@ test('harvest fork: a newer turn starting while the review waits for the clock l
   await settle()
   expect(asked).toEqual([])
   expect(proposed(dir)).toEqual([])
+})
+
+// Claude's notes, archive, a repeated jot and a jot to another project.
+
+const projects = () => {
+  const dir = fixture()
+  put(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH02', 'rotate the staging certs', INFRA, 30)
+  put(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH03', 'Pin the bun version in CI', CC, 5)
+  return dir
+}
+const textOf = (reply: unknown) => String((reply as { result?: unknown }).result)
+
+test("notes lists this project's waiting notes, newest first, each with its id", async ($, on) => {
+  const { world } = await startSession($, on, projects())
+  expect(textOf(await call($, world, 'notes', {}))).toBe(
+    [
+      '2 waiting in cc:',
+      '- 01JA7K2M3Q9X4ZB6C8D0EFGH03 (5m, by you): Pin the bun version in CI',
+      '- 01JA7K2M3Q9X4ZB6C8D0EFGH01 (12m, by you): check why the cache test is flaky',
+    ].join('\n'),
+  )
+})
+
+test('notes takes a query, another project or all, and refuses a project it does not know', async ($, on) => {
+  const { world } = await startSession($, on, projects())
+  expect(textOf(await call($, world, 'notes', { query: 'cache' }))).toContain('check why the cache test is flaky')
+  expect(textOf(await call($, world, 'notes', { query: 'cache' }))).not.toContain('Pin the bun')
+  expect(textOf(await call($, world, 'notes', { query: 'nothing like it' }))).toBe('No waiting notes in cc match "nothing like it".')
+  expect(textOf(await call($, world, 'notes', { project: 'INFRA' }))).toBe(
+    '1 waiting in infra:\n- 01JA7K2M3Q9X4ZB6C8D0EFGH02 (30m, by you): rotate the staging certs',
+  )
+  const all = textOf(await call($, world, 'notes', { project: 'all' }))
+  expect(all).toStartWith('3 waiting in any project:')
+  expect(all).toContain('): [infra] rotate the staging certs')
+  expect(all).toContain('): Pin the bun version in CI')
+  expect(await call($, world, 'notes', { project: 'nope' })).toEqual({ deny: 'No project named "nope". Known: cc, infra.' })
+})
+
+test('notes marks a proposal', { options: ON }, async ($, on) => {
+  const dir = fixture()
+  reviewer(on, '```json\n["the cache key misses the locale"]\n```')
+  const { world } = await startSession($, on, dir)
+  const done = await turn($)
+  await done()
+  await until(() => proposed(dir).length === 1, 'one proposal')
+  await settle()
+  expect(textOf(await call($, world, 'notes', {}))).toContain('(now, by claude, proposed): the cache key misses the locale')
+})
+
+test('notes says who wrote each note and caps a long list', async ($, on) => {
+  const dir = fixture()
+  for (let i = 0; i < NOTES_MAX + 2; i++) put(dir, `01JA7K2M3Q9X4ZB6C8D0EF${String(i).padStart(4, '0')}`, `note ${i}`, CC, 20 + i)
+  const { world } = await startSession($, on, dir)
+  await jot($, world, 'one of mine')
+  const listed = textOf(await call($, world, 'notes', {})).split('\n')
+  expect(listed[0]).toBe(`${NOTES_MAX + 4} waiting in cc:`)
+  expect(listed[1]).toEndWith('(now, by claude): one of mine')
+  expect(listed).toHaveLength(NOTES_MAX + 2)
+  expect(listed.at(-1)).toBe('… and 4 more; narrow with query.')
+})
+
+test("archive archives a waiting note by id, with a toast, and the pane's u undoes it", async ($, on) => {
+  const dir = projects()
+  const { world } = await startSession($, on, dir)
+  const id = '01JA7K2M3Q9X4ZB6C8D0EFGH03'
+  expect(await call($, world, 'archive', { id })).toEqual({ result: ARCHIVE_REPLY.archived(id) })
+  expect(noteIn(dir, id).status).toBe('archived')
+  expect(world.toasts).toContain('◆ Claude archived: Pin the bun version in CI')
+  expect(textOf(await call($, world, 'notes', {}))).not.toContain(id)
+  expect(await call($, world, 'archive', { id })).toEqual({ deny: ARCHIVE_REPLY.notOpen(id, 'archived') })
+  expect(await call($, world, 'archive', { id: 'nope' })).toEqual({ deny: ARCHIVE_REPLY.missing('nope') })
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-digit-1' })
+  await ui.press({ key: 'key-u' })
+  expect(noteIn(dir, id).status).toBe('open')
+  await ui.unmount()
+})
+
+test('a jot that repeats a waiting note in its project saves nothing and gives its id', async ($, on) => {
+  const dir = projects()
+  const { world } = await startSession($, on, dir)
+  expect(await jot($, world, '  pin the BUN version   in ci ')).toEqual({ result: JOT_REPLY.already('01JA7K2M3Q9X4ZB6C8D0EFGH03') })
+  expect(claudes(dir)).toEqual([])
+  expect(world.toasts.filter(text => text.includes('jotted'))).toEqual([])
+  // The same text in another project is a new note.
+  expect(textOf(await call($, world, 'jot', { note: 'Pin the bun version in CI', project: 'infra' }))).toStartWith('Saved to ostrakon as ')
+})
+
+test('a jot can go to another project by name, and a name it does not know is refused', async ($, on) => {
+  const dir = projects()
+  const { world } = await startSession($, on, dir)
+  await call($, world, 'jot', { note: 'the staging cert expires Friday', project: 'Infra' })
+  expect(claudes(dir)[0]).toMatchObject({ text: 'the staging cert expires Friday', project: { key: INFRA.key } })
+  expect(await call($, world, 'jot', { note: 'x', project: 'nope' })).toEqual({ deny: 'No project named "nope". Known: cc, infra.' })
+  expect(claudes(dir)).toHaveLength(1)
+})
+
+test("harvest on: a review doesn't propose a note already waiting in this project, or the same one twice", { options: ON }, async ($, on) => {
+  const dir = fixture()
+  reviewer(on, '```json\n["Check why the cache test is FLAKY", "the cache key misses the locale", "the cache key misses the locale"]\n```')
+  await startSession($, on, dir)
+  const done = await turn($)
+  await done()
+  await until(() => proposed(dir).length === 1, 'one proposal')
+  await settle()
+  expect(proposed(dir).map(note => note.text)).toEqual(['the cache key misses the locale'])
 })

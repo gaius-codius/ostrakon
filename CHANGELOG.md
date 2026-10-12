@@ -10,6 +10,13 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 - A logo: a pottery shard. The mark, lockups and icons are in `brand/`, the README opens with it, and the phone app uses it for its icons, its tab and beside its name.
 - Install just the mod from Claude Code: `claude plugin marketplace add gaius-codius/ostrakon`, then `claude plugin install ostrakon@ostrakon`. `ostrakon doctor` recognises that install, and warns if the mod is also loaded through `CLAUDE_CODE_PLUGIN_DIRS`; `install.sh` doesn't load it a second time.
+- Claude can read and close notes: a `notes` tool lists the notes waiting in this project, another or all of them, with their ids, and an `archive` tool archives one once its work is done (`u` in the pane undoes it).
+- Claude's `jot` takes an optional project, so a note about another project lands there.
+
+### Changed
+
+- Claude's `jot` doesn't save a note that's already waiting in the project with the same text; it replies with that note's id. A saved jot's reply gives its id too.
+- Harvest doesn't propose a note that's already waiting in the project, or the same note twice from one review.
 
 ## [0.2.0] - 2026-10-11
 

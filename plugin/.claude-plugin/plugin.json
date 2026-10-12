@@ -28,7 +28,7 @@
     "harvest": {
       "type": "boolean",
       "title": "Harvest",
-      "description": "After each turn, ask the model once (from the cached conversation) for side issues worth keeping; they wait above the prompt for you to keep. Claude's own work is unchanged. Off: notes come only from you, or from Claude when you ask it to jot.",
+      "description": "After each turn, ask the model once (from the cached conversation) for side issues worth keeping; they wait above the prompt for you to keep. Claude's own work is unchanged. Off: notes come only from you and from Claude's jot tool.",
       "default": false
     },
     "harvestMode": {
