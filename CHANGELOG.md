@@ -6,6 +6,8 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-12
+
 ### Changed
 
 - The pane has one view instead of two: notes are always grouped by project, and typing filters within the groups, hiding projects with no match. Proposed notes show only while the search is empty. `l` and `ctrl+l` (list view) are gone, so you can drop the `ctrl+l` binding; `h` (history) and `z` (fold) work everywhere.
@@ -57,7 +59,8 @@ The first public release.
 - `ostrakon pair`: a QR code with a one-time code (5 minutes, works once) pairs a phone with the hub; `--token` prints the long-lived link instead.
 - The `ostrakon` command (`pair`, `hub`, `update`, `version`), `install.sh` and `update.sh`.
 
-[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/gaius-codius/ostrakon/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/gaius-codius/ostrakon/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/gaius-codius/ostrakon/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/gaius-codius/ostrakon/releases/tag/v0.1.0
