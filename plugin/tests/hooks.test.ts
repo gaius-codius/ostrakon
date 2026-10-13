@@ -29,7 +29,15 @@ test('the pane opens on this project, searches everywhere once typing, and Enter
   expect(await ui.find({ type: 'Text', text: /add a cache invalidation metric/ })).toBeDefined()
 
   await ui.input({ key: 'q', text: 'kubernetes', kind: 'change' })
-  expect(await ui.find({ type: 'Text', text: /No notes match “kubernetes” in any project/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^No notes match\. ⏎ saves it to / })).toBeDefined()
+  // A query the field holds isn't repeated, and the footer, not the body, has the scope key.
+  expect(await ui.find({ type: 'Text', text: /kubernetes/ })).toBeUndefined()
+  expect((await ui.findAll({ type: 'Text', text: /^ctrl\+s$/ })).length).toBe(1)
+  // One the field cuts off reads whole under it.
+  const long = `kubernetes ${'node pool '.repeat(20)}upgrade`
+  await ui.input({ key: 'q', text: long, kind: 'change' })
+  expect(await ui.find({ type: 'Text', text: /upgrade$/ })).toBeDefined()
+  await ui.input({ key: 'q', text: 'kubernetes', kind: 'change' })
   await ui.input({ key: 'q', text: 'kubernetes', kind: 'submit' })
   expect(world.toasts.some(toast => toast.includes('saved to'))).toBe(false)
   expect([...dir.files.values()].some(file => file.text.includes('kubernetes'))).toBe(true)

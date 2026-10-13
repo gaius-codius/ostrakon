@@ -6,6 +6,15 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Changed
+
+- In the pane, a search that matches nothing no longer repeats your text twice below the field: one line says Enter saves it, and a query too long for the field shows once, whole, above that line.
+- In the pane, the edit box's buttons name their keys (`esc cancel`, `⏎ save`).
+
+### Fixed
+
+- In the pane, the search field's `⏎ to list` no longer wraps onto a second row, and it's gone when nothing matches, since Enter saves the query then.
+
 ## [0.4.0] - 2026-10-12
 
 ### Changed
