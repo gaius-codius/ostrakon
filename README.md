@@ -5,14 +5,15 @@
   </picture>
 </h1>
 
-A scratchpad for Claude Code: capture thoughts and follow-ups from within Claude Code without breaking your flow, triage and sync them across projects and machines, and turn them into prompts. An optional small hub keeps your notes in sync between machines and serves a phone app for capturing and triaging on the go.
+A scratchpad for Claude Code. Halfway through a prompt, something else comes to mind: open the pane, note it, close the pane, and your prompt is back as you left it. Later, pull the note into the prompt when you get to it. Claude can jot notes for you too.
 
+![Half a prompt typed in Claude Code; the ostrakon pane opens and the prompt empties, a note is typed and saved, and when the pane closes the prompt is back as it was, with the new note first in the row of chips above it](docs/images/demo.gif)
 
-![The ostrakon pane docked beside a Claude Code session, listing open notes across projects, with this project's notes as numbered chips above the prompt](docs/images/pane.png)
+Notes are kept per project, and the pane shows all of them. Syncing between machines and a phone app are optional.
 
 ## What it does
 
-- **Capture** a note in under two seconds, even while Claude is working, without losing your prompt draft: `/jot text`, or `//` typed into an empty prompt.
+- **Capture** a note in under two seconds, even while Claude is working. Mid-prompt, `ctrl+x s` opens the pane and `ctrl+n` starts a note; close the pane and your draft is back. In an empty prompt, `/jot text` or `//` saves one without opening anything.
 - **Gives Claude a `jot` tool**: Claude jots notes it thinks are important or wants to pass on to you. You can also ask it to add one: "jot that down". Claude can also list your notes and archive one once it's done.
 - **Triage** open notes across all your projects in a searchable pane: edit, move, archive, bundle several into one prompt.
 - **Dispatch** a note into the prompt. This project's open notes sit in a row of numbered chips above the prompt (the "pocket"); press a note's number in an empty prompt to pull it in.
@@ -21,6 +22,8 @@ A scratchpad for Claude Code: capture thoughts and follow-ups from within Claude
 - **Phone**: capture and triage from your phone with the hub's web app, installed to the Home Screen, or send a note from the share sheet or Siri with an iOS Shortcut.
 
 Notes are plain Markdown files with some YAML. One per note, in `~/.local/share/ostrakon/` by default, so they are yours to read, grep and back up.
+
+![The ostrakon pane docked beside a Claude Code session, listing open notes across projects, with this project's notes as numbered chips above the prompt](docs/images/pane.png)
 
 ## Sync
 
@@ -36,6 +39,13 @@ Sync is optional and works both ways. Add, edit, move or archive a note on one m
 
 ## Install
 
+There are two ways to install it:
+
+- **The install script** gets you the mod and the `ostrakon` command: `update`, `doctor`, `pair`, and the hub for syncing and the phone app. Updates come through `ostrakon update`.
+- **Claude Code's plugin marketplace** gets you the mod only. There's no `ostrakon` command, so you can't run the hub or pair a phone from it; folder sync, and a hub set up on another machine, still work. Updates come through Claude Code.
+
+Use one or the other. Either way, set up the [keybindings](#keybindings) afterwards.
+
 ### Requirements
 
 - **Claude Code** with mods support (see the [mods docs](https://code.claude.com/docs/en/plugins/mods/overview)). Tested with 2.1.296; mods are still changing, so a much older or newer version may not work.
@@ -44,7 +54,7 @@ Sync is optional and works both ways. Add, edit, move or archive a note on one m
 
 Tested on Linux. macOS should work for the mod but hasn't been tried yet; reports are welcome.
 
-### Install it
+### With the install script
 
 One command clones ostrakon into `~/.local/share/ostrakon-src` and installs the newest release:
 
@@ -75,14 +85,14 @@ To try it without installing anything, load it for a single session: `claude --p
 { "env": { "CLAUDE_CODE_PLUGIN_DIRS": "/path/to/ostrakon/plugin" } }
 ```
 
-#### Or install just the mod, from Claude Code
+### From the plugin marketplace
 
 ```sh
 claude plugin marketplace add gaius-codius/ostrakon
 claude plugin install ostrakon@ostrakon
 ```
 
-This gets you the mod and nothing else: no `ostrakon` command, so no `update`, `doctor` or hub. Update it with `claude plugin update ostrakon@ostrakon`, or turn on auto-update for the marketplace in `/plugin`. A new copy arrives with each release. Use one way or the other: if you also run the install script, it sees the plugin and doesn't load the mod a second time.
+Update it with `claude plugin update ostrakon@ostrakon`, or turn on auto-update for the marketplace in `/plugin`. A new copy arrives with each release. If you also run the install script, it sees the plugin and doesn't load the mod a second time.
 
 ### Updating
 

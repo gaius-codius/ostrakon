@@ -45,4 +45,31 @@ timeout 60 chromium --headless=new --disable-gpu --hide-scrollbars --force-devic
   --timeout=6000 --user-data-dir="$R/chromium-readme" \
   --screenshot="$OUT/phone.png" "http://127.0.0.1:$PORT/?token=$TOKEN" >/dev/null 2>&1
 T kill-session -t hub
+
+# The demo: half a prompt typed, a note captured in the pane, and the prompt back as it was. A
+# session of its own with no hub or mirror (lib.sh's settings), so its note goes nowhere.
+SCREENS_KEY=github.com/me/cc SCREENS_PATH=/home/me/code/cc start few 120 26
+frames=$R/demo; rm -rf "$frames"; mkdir -p "$frames"; n=0; delays=()
+frame() { # centiseconds to hold it
+  shot demo "" >/dev/null
+  n=$((n + 1)); delays+=("$1")
+  magick "$R/shots/demo.png" -fill "$bg" -draw 'rectangle 0,30 600,135' "$frames/$(printf %02d $n).png"
+}
+typed() { # text, centiseconds to hold the last frame; a few words to a frame
+  local words; read -ra words <<<"$1"; local i
+  for ((i = 0; i < ${#words[@]}; i += 3)); do
+    if ((i + 3 < ${#words[@]})); then lit "${words[*]:i:3} "; frame 25; else lit "${words[*]:i:3}"; frame "$2"; fi
+  done
+}
+frame 80
+typed "refactor the session store so each request gets its own" 150
+keys C-x s; sleep 1; frame 150
+keys C-n; frame 80
+typed "the retry test leaks a timer, fix after this" 100
+keys Enter; sleep 0.5; frame 180
+keys C-q; sleep 1; frame 350
+T kill-session -t rv
+args=(); i=0
+for f in "$frames"/*.png; do args+=(-delay "${delays[i]}" "$f"); i=$((i + 1)); done
+magick "${args[@]}" -loop 0 -layers Optimize "$OUT/demo.gif"
 ls -l "$OUT"
