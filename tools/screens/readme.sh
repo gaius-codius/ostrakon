@@ -22,16 +22,19 @@ T kill-session -t hub 2>/dev/null; rm -rf "$HUBDATA"
 T new-session -d -s hub -c "$ROOT" "HUB_PORT=$PORT HUB_DATA=$HUBDATA HUB_TOKEN=$TOKEN bun server/hub.ts"
 for _ in $(seq 1 20); do curl -sf 127.0.0.1:$PORT/healthz >/dev/null && break; sleep 0.25; done
 settings=$R/readme-settings.json
-opts="{\"hubUrl\":\"http://127.0.0.1:$PORT\",\"hubToken\":\"$TOKEN\"}"
+# mirrorDir emptied: left out, the person's own settings set it, and the session syncs the fixture
+# into their vault and their vault's notes into the screenshot.
+opts="{\"hubUrl\":\"http://127.0.0.1:$PORT\",\"hubToken\":\"$TOKEN\",\"mirrorDir\":\"\"}"
 echo "{\"theme\":\"dark\",\"env\":{\"CLAUDE_CODE_PLUGIN_DIRS\":\"\"},\"pluginConfigs\":{\"ostrakon\":{\"options\":$opts},\"ostrakon@inline\":{\"options\":$opts}}}" > "$settings"
 SCREENS_KEY=github.com/me/cc SCREENS_PATH=/home/me/code/cc SCREENS_SETTINGS=$settings start few 150 40
 
 # The pane, docked beside the conversation (ctrl+x s, the README's binding).
 keys C-x s; sleep 2
-# The header sits left of the docked pane: paint it over with the background instead of cropping.
+# The header sits left of the docked pane, and a notice (login expiry) can sit under it: paint both
+# over with the background instead of cropping.
 shot readme-pane "" >/dev/null
 bg=$(magick "$R/shots/readme-pane.png" -format '%[pixel:p{4,4}]' info:)
-magick "$R/shots/readme-pane.png" -fill "$bg" -draw 'rectangle 0,30 705,105' "$OUT/pane.png"
+magick "$R/shots/readme-pane.png" -fill "$bg" -draw 'rectangle 0,30 705,135' "$OUT/pane.png"
 keys Escape; sleep 1
 T kill-session -t rv
 
