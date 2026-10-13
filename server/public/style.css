@@ -906,8 +906,6 @@ dialog.sheet::backdrop {
 /* The whole note: a long one scrolls in its own space, so the actions stay in view. */
 .sheet .quote {
   margin: 0;
-  display: flex;
-  gap: 0.625rem;
   max-height: min(33dvh, 15rem);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -922,11 +920,8 @@ dialog.sheet::backdrop {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.sheet .quote .bar {
-  color: var(--faint);
-}
 .sheet .meta {
-  margin: 0 0 0 1.125rem;
+  margin: 0;
   font: 0.75rem / 1.5 var(--mono);
   color: var(--dim);
 }
@@ -1368,15 +1363,10 @@ dialog.drawer .panel {
 }
 #refused .quote {
   margin: 0;
-  display: flex;
-  gap: 0.625rem;
   font-size: 0.9375rem;
   line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-#refused .bar {
-  color: var(--faint);
 }
 #refused .reason {
   margin: 0;

@@ -91,7 +91,7 @@ Light is `:root`, dark is `@media (prefers-color-scheme: dark)`. `—` means dar
 | `--text` | `#1d1d1f` | `#ececf0` | text; the toast's background |
 | `--text-soft` | `#3c3c40` | `#c4c4cc` | secondary text |
 | `--dim` | `#64646a` | `#9a9aa4` | ages, hints, headings, icons |
-| `--faint` | `#6f6d68` | `#86868f` | counts, `⋯`, quote bars |
+| `--faint` | `#6f6d68` | `#86868f` | counts, `⋯`, the pane's quote bars |
 | `--deco` | `#b8b6b0` | `#5a5a62` | the `▪` marker (decoration, not text) |
 | `--accent` | `#b5532f` | `#d97757` | Save, focus rings, Keep, the capture border |
 | `--accent-text` | `#a84a28` | `#e8957a` | accent words on a surface (Archive in the sheet) |
@@ -170,7 +170,7 @@ The terminal column names `look.ts` `GLYPH` keys; the phone column names `app.js
 | `↑` | waiting to sync (`↑ queued`) | — | `queued` |
 | `↓` | more rows below | `down` | — |
 | `⚠` | storage problem | `problem` | — |
-| `▎` | quoted text | `quote` | `quote`, index.html |
+| `▎` | quoted text | `quote` | — |
 | `›` | opens more (Move to project, the Shortcut link, a fold) | — | `next`, index.html, style.css |
 
 The phone draws its dots and rings in CSS (`.dot`, `.dot.ring`), and `⋯` (Note actions), the sheet's action icons and the mark beside its name (from `brand/mark-small.svg`, in `--accent`) as SVG. `↑` is the one mark with two meanings; a word always stands beside it.
@@ -292,9 +292,9 @@ Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one
 ### 1.0.1 — 2026-10-13
 - Change: Sheets and drawers start below the screen before their first frame, and their dialog clips its overflow instead of hiding it (§7).
 - Why: Opening the note menu showed it in place for a frame, then it dropped and rose; and on iOS the dialog scrolled to show the focused action, so the menu rode up the screen and snapped back.
-- Change: Sheets and drawers rise in 0.28s on a steep ease-out that ends on time (was a 0.32s spring with a small bounce, which took about 0.35s to settle) and sink in 0.16s; Move to project became the sheet's second page, with Back, Escape and a swipe right to go back, instead of the project picker as a second dialog; a swipe down closes a sheet; a note is edited in a panel sized to the screen above the keyboard, not in the list; a tap on a note opens its sheet, which shows the note whole, and holding a note edits it.
-- Why: Opening the menu felt slow, and going from the menu to the picker sank one dialog and raised another for what is one step, with no way back to the actions. Sheets had no swipe down to close, which iOS sheets have, and a note edited in the list landed wherever iOS scrolled it, often half under the keyboard; scrolling it into place fought iOS's own scroll. A tap edited, so a note longer than the row's four lines (or the sheet's three) could only be read whole by editing it, with the keyboard over half of it.
-Fingerprint: 7c314c7aa71c
+- Change: Sheets and drawers rise in 0.28s on a steep ease-out that ends on time (was a 0.32s spring with a small bounce, which took about 0.35s to settle) and sink in 0.16s; Move to project became the sheet's second page, with Back, Escape and a swipe right to go back, instead of the project picker as a second dialog; a swipe down closes a sheet; a note is edited in a panel sized to the screen above the keyboard, not in the list; a tap on a note opens its sheet, which shows the note whole, and holding a note edits it; the phone quotes a note without the pane's `▎` bar.
+- Why: Opening the menu felt slow, and going from the menu to the picker sank one dialog and raised another for what is one step, with no way back to the actions. Sheets had no swipe down to close, which iOS sheets have, and a note edited in the list landed wherever iOS scrolled it, often half under the keyboard; scrolling it into place fought iOS's own scroll. A tap edited, so a note longer than the row's four lines (or the sheet's three) could only be read whole by editing it, with the keyboard over half of it. The `▎` bar sets quoted text apart in a terminal, which can't draw boxes; on the phone the quote already has its own section.
+Fingerprint: ad50d4f26e1b
 
 ### 1.0.0 — 2026-10-11
 - Change: First version of this file, recording the look after the quiet terminal redesign and the phone redesign, with `tools/check-design.ts` holding it to the code in `tools/check.sh` and CI.

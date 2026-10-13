@@ -53,7 +53,7 @@ const folded = new Set(load('sp.folded', []))
 
 // The marks the phone draws as text; the shared ones as the pane's (plugin/src/ui/look.ts GLYPH).
 // docs/DESIGN.md lists them, and tools/check.sh fails when the two differ.
-const GLYPH = { claude: '◆', phone: '▪', quote: '▎', folded: '▸', saved: '✓', queued: '↑', next: '›' }
+const GLYPH = { claude: '◆', phone: '▪', folded: '▸', saved: '✓', queued: '↑', next: '›' }
 
 const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
 const ulid = () => {
@@ -436,8 +436,6 @@ const renderRefused = () => {
       row.dataset.id = item.id
       return row
     }
-    const bar = make('span', 'bar', GLYPH.quote)
-    bar.setAttribute('aria-hidden', 'true')
     const edit = button(
       'Edit',
       () => {
@@ -449,7 +447,7 @@ const renderRefused = () => {
     )
     const again = button('Retry', () => retry(item), 'btn')
     const drop = button('Discard local copy', () => discard(item), 'btn quiet')
-    const row = make('li', '', make('p', 'quote', bar, make('span', '', item.text)), reason, only, make('div', 'row', edit, again, drop))
+    const row = make('li', '', make('p', 'quote', item.text), reason, only, make('div', 'row', edit, again, drop))
     row.dataset.id = item.id
     return row
   })
