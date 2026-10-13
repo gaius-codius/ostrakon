@@ -219,10 +219,11 @@ Strings the surfaces or the docs depend on, each checked word for word in every 
 
 ## 7. Motion
 
-Things that move: the phone's swipe, sheets and drawers (rise on a spring over a fading scrim), the toast, and the change between list, capture and search (a View Transition where the browser has `document.startViewTransition`; entering search fades instead, so the field can take focus for the keyboard). Nothing else moves; the terminal never animates.
+Things that move: the phone's swipe, sheets and drawers (rise over a fading scrim), the toast, and the change between list, capture and search (a View Transition where the browser has `document.startViewTransition`; entering search fades instead, so the field can take focus for the keyboard). Nothing else moves; the terminal never animates.
 
 - **Swipe to archive:** the row follows the finger by `transform` only, once a frame. Letting go archives only while the finger is still heading left past the threshold, or on a quick flick left; a finger that turned back right, or a short slow drag, springs the row home. An archived row slides out, then its height closes up, then Undo shows. Why: under the first rule, a row dragged past the threshold archived even after the finger turned back, so changing your mind still archived.
-- **Sheets and drawers rise from below and stop:** the panel starts below the screen before the first frame (set in the page, since Motion applies its first keyframe a frame late) and never goes above where it rests by more than the spring's bounce. The dialog that holds it is `overflow: clip`, never `hidden`: a hidden overflow can still be scrolled, and iOS scrolls it to show the focused action while the panel is still below the screen, so the panel rode up the screen and then snapped back. `tools/phone/run.sh` checks both in WebKit.
+- **Sheets and drawers rise from below and stop:** the panel starts below the screen before the first frame (set in the page, since Motion applies its first keyframe a frame late) and never goes above where it rests. The dialog that holds it is `overflow: clip`, never `hidden`: a hidden overflow can still be scrolled, and iOS scrolls it to show the focused action while the panel is still below the screen, so the panel rode up the screen and then snapped back. Since a clipped dialog isn't a scroll container, a scroll on the scrim would reach the page, so the page doesn't scroll while one is open (`html:has(dialog[open])`). `tools/phone/run.sh` checks both in WebKit.
+- **Pages of a sheet:** Move to project is the action sheet's second page, not a second dialog: it slides in from the right over the actions (which slide a little left and fade), and the sheet's height follows, in `RISE_S`. **Back**, Escape or a swipe right goes back; the page follows the finger, and letting go past `BACK_PX`, or on a flick right, goes back, otherwise it slides home. Positions are in px throughout, each move starting from where the page is, so a turn picks up from a finger without a jump.
 - **Reduced motion** (`prefers-reduced-motion: reduce`): nothing moves; things appear and go at once, or fade. A swipe still archives, without the slide.
 - Springs come from Motion, vendored unchanged in `server/public/vendor/motion.js` (MIT) and cached for offline use.
 
@@ -235,6 +236,9 @@ Things that move: the phone's swipe, sheets and drawers (rise on a spring over a
 | `app.js TURN_PX` | 4 | a move this far sets which way the finger is heading |
 | `app.js VELOCITY_MS` | 100 | speed is measured over this many ms |
 | `app.js HOLD_MS` | 550 | holding still this long opens the action sheet |
+| `app.js RISE_S` | 0.28 | a sheet or drawer rises in this long, on a steep ease-out |
+| `app.js SINK_S` | 0.16 | and sinks in this long |
+| `app.js BACK_PX` | 80 | swiping right this far on a sheet's second page goes back |
 | `app.js FRESH_MS` | 3000 | the phone's just-saved row stays tinted |
 | `look.ts MS.fresh` | 2000 | the band's just-saved chip stays at full strength, the rest dim |
 | `look.ts MS.saved` | 3000 | the hint tail `✓ saved to <project>` stays up |
@@ -285,7 +289,9 @@ Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one
 ### 1.0.1 — 2026-10-13
 - Change: Sheets and drawers start below the screen before their first frame, and their dialog clips its overflow instead of hiding it (§7).
 - Why: Opening the note menu showed it in place for a frame, then it dropped and rose; and on iOS the dialog scrolled to show the focused action, so the menu rode up the screen and snapped back.
-Fingerprint: c63743944f39
+- Change: Sheets and drawers rise in 0.28s on a steep ease-out that ends on time (was a 0.32s spring with a small bounce, which took about 0.35s to settle) and sink in 0.16s; Move to project became the sheet's second page, with Back, Escape and a swipe right to go back, instead of the project picker as a second dialog.
+- Why: Opening the menu felt slow, and going from the menu to the picker sank one dialog and raised another for what is one step, with no way back to the actions.
+Fingerprint: 329b4fff6d4c
 
 ### 1.0.0 — 2026-10-11
 - Change: First version of this file, recording the look after the quiet terminal redesign and the phone redesign, with `tools/check-design.ts` holding it to the code in `tools/check.sh` and CI.

@@ -875,6 +875,12 @@ const tweenValue = (from, to, options, onUpdate) => {
 
 const SPRING = { type: 'spring', visualDuration: 0.32, bounce: 0.12 }
 
+// Sheets and drawers rise on a steep ease-out that ends on time (a spring without bounce creeps
+// over its last few pixels), and sink on a quicker ease-in.
+const RISE_S = 0.28
+const SINK_S = 0.16
+const RISE = { duration: RISE_S, ease: [0.32, 0.72, 0, 1] }
+
 // Sheets and drawers: the panel rises over a fading scrim, and sinks on the way out. A dialog
 // opened again while it's still leaving cancels that leaving (its `done` never runs).
 const leaving = new WeakMap()
@@ -891,8 +897,8 @@ const enter = dialog => {
   // the panel would show in place for that frame, then drop and rise.
   scrim.style.opacity = '0'
   panel.style.transform = 'translateY(100%)'
-  run(scrim, { opacity: [0, 1] }, { duration: 0.2 })
-  run(panel, { transform: ['translateY(100%)', 'translateY(0%)'] }, SPRING)
+  run(scrim, { opacity: [0, 1] }, { duration: RISE_S })
+  run(panel, { transform: ['translateY(100%)', 'translateY(0%)'] }, RISE)
 }
 const leave = (dialog, done) => {
   const token = {}
@@ -907,13 +913,61 @@ const leave = (dialog, done) => {
   }
   if (!M) return finish()
   if (reduced.matches) return void run(dialog, { opacity: [1, 0] }, { duration: 0.12 }).finished.then(finish, finish)
-  run(dialog.querySelector('.scrim'), { opacity: 0 }, { duration: 0.18 })
-  run(dialog.querySelector('.panel'), { transform: 'translateY(100%)' }, { duration: 0.2, ease: [0.4, 0, 1, 1] }).finished.then(finish, finish)
+  run(dialog.querySelector('.scrim'), { opacity: 0 }, { duration: SINK_S })
+  run(dialog.querySelector('.panel'), { transform: 'translateY(100%)' }, { duration: SINK_S, ease: [0.4, 0, 1, 1] }).finished.then(finish, finish)
+}
+
+// Every move here starts from the style it has now, given as the first keyframe: Motion goes from
+// the last value it set, which knows nothing of where a finger has since moved it.
+//
+// A page of a sheet over another (the note's actions and Move to): `to` slides in from the side
+// `way` points to (1: from the right, going on; -1: from the left, going back) while `from` slides
+// a little the other way and fades, and the sheet's height goes from one page's to the other's.
+// `isDragged`: a finger already moved them partway, so they go on from there. A turn started
+// before the last one ended takes over from it (the last one's `done` never runs).
+const PAGE_SHIFT = 0.3 // the page underneath sits this far over, of its width
+let pageTurn = null
+const turnPage = (from, to, way, done, isDragged = false) => {
+  const token = {}
+  pageTurn = token
+  const pages = from.parentElement
+  const height = pages.offsetHeight
+  to.hidden = false
+  const finish = () => {
+    if (pageTurn !== token) return
+    pageTurn = null
+    from.hidden = true
+    pages.style.height = ''
+    // Motion may write each animation's last frame back after this; a page shown again always has
+    // its start set first, so what's left on a hidden one doesn't matter.
+    for (const page of [from, to]) {
+      page.style.transform = ''
+      page.style.opacity = ''
+    }
+    done()
+  }
+  if (isStill()) return finish()
+  // In px throughout, as a finger moves them: from a finger's px to a %, the first frame jumps.
+  const width = pages.offsetWidth
+  const aside = `translateX(${-PAGE_SHIFT * width}px)`
+  const off = `translateX(${width}px)`
+  if (!isDragged) {
+    // Where they start, before the first frame (Motion's first keyframe comes a frame late).
+    to.style.transform = way > 0 ? off : aside
+    to.style.opacity = way > 0 ? '1' : '0'
+    from.style.transform = 'translateX(0px)'
+    from.style.opacity = '1'
+  }
+  pages.style.height = `${height}px`
+  run(pages, { height: [`${height}px`, `${to.offsetHeight}px`] }, RISE)
+  run(from, { transform: [from.style.transform, way > 0 ? aside : off], opacity: [Number(from.style.opacity), way > 0 ? 0 : 1] }, RISE)
+  run(to, { transform: [to.style.transform, 'translateX(0px)'], opacity: [Number(to.style.opacity), 1] }, RISE).finished.then(finish, finish)
 }
 
 const motion = {
   sheetIn: enter,
   sheetOut: leave,
+  pageTurn: turnPage,
   // The search bar and its matches settle in (entering search can't wait for a View Transition:
   // the field must take focus at once for the keyboard to come up).
   searchIn: () => {
@@ -949,6 +1003,8 @@ let sheetReturn = null
 // What the sheet last drew: a sync that changes none of it leaves the buttons alone (one may be
 // under a finger mid-press).
 let sheetDrawn = ''
+// Which page of the sheet shows: 'actions', or 'move' (Move to project).
+let sheetPage = 'actions'
 
 // The sheet acts only on an open note: one archived, sent or deleted meanwhile closes it.
 const isActionable = note => note !== undefined && !note.deleted && note.status === 'open'
@@ -965,6 +1021,7 @@ const openSheet = (id, trigger = moreOf(id)) => {
   renderSheet()
   // Still leaving from last time: gone at once.
   if ($('sheet').open) $('sheet').close()
+  showFirstPage()
   $('sheet').showModal()
   $('sheet-actions').querySelector('button')?.focus({ preventScroll: true })
   motion.sheetIn($('sheet'))
@@ -980,14 +1037,58 @@ const closeSheet = after => {
   sheetFor = null
   sheetDrawn = ''
   sheetReturn = null
+  if (picking?.mode === 'move') picking = null
   renderList()
   motion.sheetOut($('sheet'), () => {
     $('sheet').close()
+    showFirstPage()
     // The list was drawn again: the same row's ⋯ is a new button.
     const back = trigger?.isConnected ? trigger : trigger?.classList?.contains('more') ? moreOf(id) : null
     if (after) after(back)
     else if (back && back !== document.body) back.focus({ preventScroll: true })
   })
+}
+
+// ---- the sheet's Move to page ----
+
+// The picker's search and list are one set of nodes: in the drawer for File under, and on the
+// sheet's second page for Move to.
+const pickerHome = () => $('picker').querySelector('.panel')
+
+// The actions page, at once and with nothing left over from a turn or a swipe.
+const showFirstPage = () => {
+  pageTurn = null
+  sheetPage = 'actions'
+  // A turn still running would write its last frame over what's set here.
+  for (const node of [$('sheet-actions'), $('sheet-move'), $('sheet').querySelector('.pages')]) for (const running of node.getAnimations()) running.cancel()
+  for (const page of [$('sheet-actions'), $('sheet-move')]) {
+    page.style.transform = ''
+    page.style.opacity = ''
+  }
+  $('sheet-actions').hidden = false
+  $('sheet-move').hidden = true
+  $('sheet').querySelector('.pages').style.height = ''
+  if ($('picker-body').parentElement !== pickerHome()) pickerHome().append($('picker-body'))
+}
+
+const showMovePage = () => {
+  if (sheetFor === null || sheetPage === 'move') return
+  sheetPage = 'move'
+  picking = { mode: 'move', id: sheetFor }
+  $('picker-search').value = ''
+  $('sheet-move').append($('picker-body'))
+  renderPickerList()
+  motion.pageTurn($('sheet-actions'), $('sheet-move'), 1, () => {})
+  ;($('picker-body').querySelector('[aria-pressed="true"]') ?? $('picker-search')).focus({ preventScroll: true })
+}
+
+// Back to the actions, by Back, Escape or a swipe right; `isDragged` for the swipe.
+const showActionsPage = (isDragged = false) => {
+  if (sheetPage !== 'move') return
+  sheetPage = 'actions'
+  picking = null
+  motion.pageTurn($('sheet-move'), $('sheet-actions'), -1, () => pickerHome().append($('picker-body')), isDragged)
+  $('sheet-actions').querySelector('[data-key="Move to project"]')?.focus({ preventScroll: true })
 }
 
 // The ⋯ to focus once note `id` leaves the list: the next row's, else the one before.
@@ -1041,19 +1142,10 @@ const renderSheet = () => {
       'Copy text',
       act(async id => toast((await copy(current()[id]?.text ?? '')) ? 'Copied' : "Couldn't copy")),
     ),
-    sheetAction(
-      'move',
-      'Move to project',
-      () => {
-        const id = sheetFor
-        closeSheet(back => openPicker({ mode: 'move', id, trigger: back }))
-      },
-      { aside: `${labelOf(note.project)} ${GLYPH.next}` },
-    ),
+    sheetAction('move', 'Move to project', showMovePage, { aside: `${labelOf(note.project)} ${GLYPH.next}` }),
     sheetAction('sent', 'Mark sent', act(markSent, 'gone'), { sub: 'used elsewhere; leaves open notes' }),
     sheetAction('archive', 'Archive', act(archive, 'gone'), { className: 'danger' }),
   ]
-  items[2].setAttribute('aria-haspopup', 'dialog')
   list.replaceChildren(...items)
   if (focused !== undefined) (items.find(item => item.dataset.key === focused) ?? items[0]).focus({ preventScroll: true })
 }
@@ -1072,10 +1164,88 @@ $('sheet').addEventListener(
 )
 $('sheet-scrim').addEventListener('click', () => closeSheet())
 $('sheet-cancel').addEventListener('click', () => closeSheet())
+$('sheet-back').addEventListener('click', () => showActionsPage())
+// Escape goes back a page first.
 $('sheet').addEventListener('cancel', event => {
   event.preventDefault()
-  closeSheet()
+  if (sheetPage === 'move') showActionsPage()
+  else closeSheet()
 })
+// Swiping right on the Move to page goes back, as Back does: the page follows the finger, with the
+// actions coming in under it, and letting go past BACK_PX or on a flick right goes back; otherwise
+// it slides home. Up and down are the list's own scroll (touch-action: pan-y), which ends a swipe.
+const BACK_PX = 80
+let backSwipe = null
+// A swipe's lift lands as a click on whatever is under it; that click doesn't count.
+let isSwiped = false
+const slideHome = () => {
+  const move = $('sheet-move')
+  const actions = $('sheet-actions')
+  run(move, { transform: [move.style.transform, 'translateX(0px)'] }, RISE)
+  const aside = `translateX(${-PAGE_SHIFT * actions.offsetWidth}px)`
+  run(actions, { transform: [actions.style.transform, aside], opacity: [Number(actions.style.opacity), 0] }, RISE).finished.then(() => {
+    if (sheetPage !== 'move' || backSwipe) return
+    actions.hidden = true
+  })
+}
+$('sheet-move').addEventListener('pointerdown', event => {
+  if (sheetPage !== 'move' || pageTurn || backSwipe || event.button > 0) return
+  backSwipe = { pointer: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, isDragging: false, samples: [{ t: performance.now(), x: event.clientX }] }
+})
+$('sheet-move').addEventListener('pointermove', event => {
+  if (backSwipe?.pointer !== event.pointerId) return
+  const dx = event.clientX - backSwipe.x
+  const dy = event.clientY - backSwipe.y
+  if (!backSwipe.isDragging) {
+    // Mostly up or down: the list's scroll, not a swipe.
+    if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+      backSwipe = null
+      return
+    }
+    if (dx < 10 || dx < Math.abs(dy)) return
+    backSwipe.isDragging = true
+    // Caught sliding home from the last swipe: the finger has it now.
+    for (const page of [$('sheet-move'), $('sheet-actions')]) for (const running of page.getAnimations()) running.cancel()
+    try {
+      $('sheet-move').setPointerCapture(event.pointerId)
+    } catch {}
+    $('sheet-actions').hidden = false
+  }
+  const now = performance.now()
+  backSwipe.samples.push({ t: now, x: event.clientX })
+  while (backSwipe.samples.length > 2 && now - backSwipe.samples[0].t > VELOCITY_MS) backSwipe.samples.shift()
+  backSwipe.dx = Math.max(0, dx)
+  const width = $('sheet-move').offsetWidth
+  const along = Math.min(1, backSwipe.dx / width)
+  $('sheet-move').style.transform = `translateX(${backSwipe.dx}px)`
+  $('sheet-actions').style.transform = `translateX(${-PAGE_SHIFT * width * (1 - along)}px)`
+  $('sheet-actions').style.opacity = String(along)
+})
+const endBackSwipe = event => {
+  if (backSwipe?.pointer !== event.pointerId) return
+  const swipe = backSwipe
+  backSwipe = null
+  if (!swipe.isDragging) return
+  isSwiped = true
+  setTimeout(() => (isSwiped = false), 0)
+  const [first, last] = [swipe.samples[0], swipe.samples.at(-1)]
+  const speed = last.t > first.t ? (last.x - first.x) / (last.t - first.t) : 0
+  const isBack = event.type === 'pointerup' && (swipe.dx > BACK_PX || (speed > FLICK_PX_PER_MS && swipe.dx > FLICK_MIN_PX))
+  if (isBack) showActionsPage(true)
+  else slideHome()
+}
+$('sheet-move').addEventListener('pointerup', endBackSwipe)
+$('sheet-move').addEventListener('pointercancel', endBackSwipe)
+$('sheet-move').addEventListener(
+  'click',
+  event => {
+    if (!isSwiped) return
+    event.preventDefault()
+    event.stopPropagation()
+  },
+  true,
+)
+
 // Tab and Shift+Tab go round the open dialog's own buttons and fields.
 document.addEventListener('keydown', event => {
   const dialog = $('sheet').open ? $('sheet') : $('picker').open ? $('picker') : null
@@ -1362,7 +1532,7 @@ const renderCapture = () => {
   })
   const rest = projects.length - shown.length
   if (rest > 0) {
-    const more = button('', event => openPicker({ mode: 'file', trigger: event.currentTarget }), 'chip more-chip')
+    const more = button('', event => openPicker({ trigger: event.currentTarget }), 'chip more-chip')
     more.append(icon(ICONS.search, { size: 14, stroke: 2 }), make('span', '', `${rest} more`))
     more.setAttribute('aria-label', `More projects, ${rest} others`)
     more.setAttribute('aria-haspopup', 'dialog')
@@ -1551,12 +1721,12 @@ $('capture').addEventListener('submit', event => {
 
 // ---- the project picker (File under, Move to) ----
 
-// `mode`: 'file' picks where the next note goes; 'move' moves note `id`. `trigger` gets focus back.
+// `mode`: 'file' picks where the next note goes, in the drawer (`trigger` gets focus back); 'move'
+// moves note `id`, on the sheet's Move to page.
 let picking = null
 
-const openPicker = ({ mode: pickMode, id = null, trigger = null }) => {
-  picking = { mode: pickMode, id, trigger }
-  $('picker-title').textContent = pickMode === 'move' ? 'Move to' : 'File under'
+const openPicker = ({ trigger = null }) => {
+  picking = { mode: 'file', trigger }
   $('picker-search').value = ''
   renderPickerList()
   // Still leaving from last time: gone at once.
@@ -1570,18 +1740,16 @@ const openPicker = ({ mode: pickMode, id = null, trigger = null }) => {
 // once and puts focus back in the note field while the tap still counts, so the keyboard comes back;
 // otherwise it sinks away first and focus goes back to what opened it.
 const closePicker = (picked = false) => {
-  if (!picking) return
-  const { trigger, mode: pickMode, id } = picking
+  if (picking?.mode !== 'file') return
+  const { trigger } = picking
   picking = null
-  if (picked && pickMode === 'file') {
+  if (picked) {
     $('picker').close()
     return $('text').focus({ preventScroll: true })
   }
   motion.sheetOut($('picker'), () => {
     $('picker').close()
-    // A moved note's row was drawn again, in its new group: focus its new ⋯.
-    const back = trigger?.isConnected ? trigger : id ? moreOf(id) : null
-    back?.focus({ preventScroll: true })
+    if (trigger?.isConnected) trigger.focus({ preventScroll: true })
   })
 }
 
@@ -1635,10 +1803,14 @@ const renderPickerList = () => {
 
 const choose = key => {
   if (!picking) return
+  // On the sheet's Move to page: the sheet closes, then the note moves (so the list it redraws is
+  // the plain one), and focus goes to its ⋯ in its new group.
   if (picking.mode === 'move') {
     const { id } = picking
-    if ((current()[id]?.project?.key ?? null) !== key) moveTo(id, projectOf(key))
-    closePicker(true)
+    closeSheet(() => {
+      if ((current()[id]?.project?.key ?? null) !== key) moveTo(id, projectOf(key))
+      moreOf(id)?.focus({ preventScroll: true })
+    })
     return
   }
   chosen = key

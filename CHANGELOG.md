@@ -6,6 +6,11 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Changed
+
+- On the phone, the note menu and the project picker open and close faster.
+- On the phone, Move to project is now a second page of the note menu instead of a separate picker: tap **Back**, or swipe right, to return to the note's actions.
+
 ### Fixed
 
 - On the phone, the note menu (⋯ or a long press) and the project picker no longer jump up the screen before settling.

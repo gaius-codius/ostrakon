@@ -4,10 +4,16 @@ The phone app (`server/public/`) in WebKit, the engine under iOS Safari, at iPho
 touch. `run.sh` starts a test hub with its own data and token, adds a few notes, and runs
 `sheet.test.mjs` against it:
 
-- the note menu, opened from ⋯ and from a long press, and the project picker each rise from below
+- the note menu, opened from ⋯ and from a long press, and the File under drawer each rise from below
   and stop where they rest: the panel never shows in place first and then drops, never goes past
-  its rest by more than the spring's bounce, and the dialog holding it never scrolls
+  its rest by more than a few pixels, and the dialog holding it never scrolls
   ([DESIGN.md §7](../../docs/DESIGN.md#7-motion)).
+- Move to project turns to the menu's second page (no second dialog), sliding one way only with
+  nothing in the sheet scrolling; Back, Escape and a swipe right go back, a short slow swipe
+  doesn't; picking a project moves the note and closes the menu.
+- the menu shows again, fully, after Move to has been up.
+- the page behind the menu doesn't scroll (desktop WebKit at iPhone size, since mobile
+  WebKit can't be scrolled from a test).
 
 ```sh
 tools/phone/run.sh                           # all of them

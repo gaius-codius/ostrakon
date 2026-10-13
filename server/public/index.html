@@ -113,7 +113,15 @@
         <p class="quote"><span class="bar" aria-hidden="true">▎</span><span id="sheet-text"></span></p>
         <p id="sheet-meta" class="meta"></p>
       </div>
-      <div id="sheet-actions" class="actions"></div>
+      <div class="pages">
+        <div id="sheet-actions" class="page actions"></div>
+        <div id="sheet-move" class="page move" hidden>
+          <div class="bar">
+            <button id="sheet-back" type="button" class="back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"></path></svg>Back</button>
+            <h2 id="sheet-move-title">Move to</h2>
+          </div>
+        </div>
+      </div>
     </div>
     <button id="sheet-cancel" type="button" class="cancel">Cancel</button>
   </div>
@@ -126,16 +134,18 @@
       <h2 id="picker-title">File under</h2>
       <button id="picker-done" type="button" class="link-btn">Done</button>
     </div>
-    <label class="find">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5 20 20"></path></svg>
-      <span class="sr-only">Search projects</span>
-      <input id="picker-search" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
-    </label>
-    <div class="picks-scroll">
-      <ul id="picker-list" class="picks"></ul>
-      <p id="picker-none" class="none" hidden>No project matches</p>
-      <h3 class="always">always</h3>
-      <button id="picker-unfiled" type="button" class="pick" aria-pressed="false"><span class="dot ring" aria-hidden="true"></span><span class="label">unfiled</span><span class="aside"></span></button>
+    <div id="picker-body" class="picker-body">
+      <label class="find">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="M15.5 15.5 20 20"></path></svg>
+        <span class="sr-only">Search projects</span>
+        <input id="picker-search" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+      </label>
+      <div class="picks-scroll">
+        <ul id="picker-list" class="picks"></ul>
+        <p id="picker-none" class="none" hidden>No project matches</p>
+        <h3 class="always">always</h3>
+        <button id="picker-unfiled" type="button" class="pick" aria-pressed="false"><span class="dot ring" aria-hidden="true"></span><span class="label">unfiled</span><span class="aside"></span></button>
+      </div>
     </div>
   </div>
 </dialog>
