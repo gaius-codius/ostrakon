@@ -17,13 +17,14 @@ SCREENS_CWD=${SCREENS_CWD:-$R/project}; mkdir -p "$SCREENS_CWD"
 # Set DEBUG_LOG empty (after sourcing) for a session without the debug banner.
 DEBUG_LOG=$R/debug.log
 T() { tmux -L ostrakon-shots "$@"; }
-# Settings for a fixture session: the theme, and no hub. The person's own settings configure their
-# real hub; a fixture session must never sync its notes into it (P4: it did, once).
+# Settings for a fixture session: the theme, and no hub or mirror. The person's own settings
+# configure their real hub and mirror; a fixture session must never sync its notes into either (P4:
+# it did into the hub, once; a mirror left set did the same into an Obsidian vault).
 isolated() {
   local f=$R/isolated-${SCREENS_THEME:-dark}.json
   # CLAUDE_CODE_PLUGIN_DIRS emptied: the person's settings load their installed plugin, which must
   # not load beside the one under test. SCREENS_OPTIONS adds options (e.g. '"harvest":true').
-  local opts="{\"hubUrl\":\"\",\"hubToken\":\"\"${SCREENS_OPTIONS:+,$SCREENS_OPTIONS}}"
+  local opts="{\"hubUrl\":\"\",\"hubToken\":\"\",\"mirrorDir\":\"\"${SCREENS_OPTIONS:+,$SCREENS_OPTIONS}}"
   echo "{\"theme\":\"${SCREENS_THEME:-dark}\",\"env\":{\"CLAUDE_CODE_PLUGIN_DIRS\":\"\"},\"pluginConfigs\":{\"ostrakon\":{\"options\":$opts},\"ostrakon@inline\":{\"options\":$opts}}}" > $f
   echo $f
 }
