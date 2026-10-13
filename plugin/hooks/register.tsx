@@ -569,8 +569,10 @@ const goBack = async ($: EngineInterface) => {
     focusKey($, SEARCH_KEY)
     return true
   }
+  // Plain '', not redrawn(''): the query drawn last isn't empty, so '' redraws the field anyway,
+  // and a redrawn space would hide the placeholder and lead whatever is typed next.
   if (state.query.trim() !== '') {
-    await setPane($, current => ({ ...current, query: redrawn(''), offset: 0, cursor: null, scope: current.scopeChosen ? current.scope : 'project' }))
+    await setPane($, current => ({ ...current, query: '', offset: 0, cursor: null, scope: current.scopeChosen ? current.scope : 'project' }))
     focusKey($, SEARCH_KEY)
     return true
   }

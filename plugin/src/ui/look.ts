@@ -87,10 +87,13 @@ export const TEXT = {
   toList: 'to list',
   captureLabel: 'new note',
   captureHint: (project: string) => `Notes save to ${project}. Keep typing for the next one.`,
-  noMatch: (query: string, where: string) => [`No notes match “${query}” in ${where}.`, `saves “${query}” as a new note in`] as const,
+  noMatch: (project: string) => `No notes match. ${GLYPH.enter} saves it to ${project}.`,
   bundleIntro: 'Please look at these notes from my ostrakon:',
   bundleNote: 'The picked notes are marked sent once the prompt goes in. Nothing is removed before.',
   editHint: 'draft kept if the pane closes',
+  // The edit box's buttons carry their keys, since that's where the eye is while editing.
+  editCancel: 'esc cancel',
+  editSave: `${GLYPH.enter} save`,
   emptyTitle: (where: string) => `Nothing pending in ${where}.`,
   unfocused: [
     ['ctrl+x tab', 'focus'],
