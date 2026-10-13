@@ -48,8 +48,8 @@ timeout 60 chromium --headless=new --disable-gpu --hide-scrollbars --force-devic
   --screenshot="$OUT/phone.png" "http://127.0.0.1:$PORT/?token=$TOKEN" >/dev/null 2>&1
 T kill-session -t hub
 
-# The GIFs, each in a session of its own with no hub or mirror (lib.sh's settings), so their
-# notes go nowhere. record <name> starts one, frame <centiseconds> adds a frame, gif writes it.
+# The GIF, in a session of its own with no hub or mirror (lib.sh's settings), so their
+# note goes nowhere. record <name> starts it, frame <centiseconds> adds a frame, gif writes it.
 record() {
   SCREENS_KEY=github.com/me/cc SCREENS_PATH=/home/me/code/cc start few 120 26
   gifname=$1; frames=$R/gif-$1; rm -rf "$frames"; mkdir -p "$frames"; n=0; delays=()
@@ -72,22 +72,18 @@ gif() {
   magick "${args[@]}" -loop 0 -layers Optimize "$OUT/$gifname.gif"
 }
 
-# Capture: half a prompt typed, a note captured in the pane, and the prompt back as it was.
-record capture
+# The demo: half a prompt typed, a note captured in the pane and the prompt back as it was, then a
+# note Claude jotted found in the pane and added under the draft with t.
+record demo
 frame 80
 typed "refactor the session store so each request gets its own" 150
 keys C-x s; sleep 1; frame 150
 keys C-n; frame 80
 typed "the retry test leaks a timer, fix after this" 100
 keys Enter; sleep 0.5; frame 180
-keys C-q; sleep 1; frame 350
-gif
-
-# Dispatch: half a prompt typed, a note found in the pane, and t adds it to the prompt under the draft.
-record dispatch
-frame 80
-typed "while you're in the auth code, also look at this:" 150
-keys C-x s; sleep 1; frame 120
+keys C-q; sleep 1; frame 250
+# No frame of the pane reopening: its preview names the session's folder, /tmp/….
+keys C-x s; sleep 1
 typed "401" 100
 keys Enter; frame 150
 keys t; sleep 1; frame 400

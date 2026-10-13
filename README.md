@@ -7,7 +7,7 @@
 
 A scratchpad for Claude Code. Halfway through a prompt, something else comes to mind: open the pane, note it, close the pane, and your prompt is back as you left it. Later, pull the note into the prompt when you get to it. Claude can jot notes for you too.
 
-![Half a prompt typed in Claude Code; the ostrakon pane opens and the prompt empties, a note is typed and saved, and when the pane closes the prompt is back as it was, with the new note first in the row of chips above it](docs/images/capture.gif)
+![Half a prompt typed in Claude Code; the ostrakon pane opens and the prompt empties, a note is typed and saved, and when the pane closes the prompt is back as it was. Then the pane opens again, a search finds a note Claude jotted, and t adds it to the prompt under the draft](docs/images/demo.gif)
 
 Notes are kept per project, and the pane shows all of them. Syncing between machines and a phone app are optional.
 
@@ -20,8 +20,6 @@ Notes are kept per project, and the pane shows all of them. Syncing between mach
 - **Harvest** (opt-in): after each turn, an extra review looks for side issues that came up and offers them as notes, which you keep or dismiss. It doesn't change what Claude is doing.
 - **Sync**: two-way sync enabled by multiple methods. Through a small hub, a plain folder, Obsidian or a combination of methods ([Sync](#sync)).
 - **Phone**: capture and triage from your phone with the hub's web app, installed to the Home Screen, or send a note from the share sheet or Siri with an iOS Shortcut.
-
-![Half a prompt typed in Claude Code; the pane opens, a search for 401 finds a note Claude jotted, and t adds it to the prompt under the draft](docs/images/dispatch.gif)
 
 Notes are plain Markdown files with some YAML. One per note, in `~/.local/share/ostrakon/` by default, so they are yours to read, grep and back up.
 
