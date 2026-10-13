@@ -501,6 +501,18 @@ const heading = (key, lead, name, count, isOpen, note, rowsId) => {
   return make('h2', '', toggle)
 }
 
+// A project heading stuck to the top of the screen is marked `stuck`: with the top 1px taken off
+// the view, a stuck heading (at 0) is no longer wholly in it.
+const stuckWatch =
+  'IntersectionObserver' in window
+    ? new IntersectionObserver(
+        entries => {
+          for (const entry of entries) entry.target.classList.toggle('stuck', entry.intersectionRatio < 1 && entry.boundingClientRect.top < 1)
+        },
+        { rootMargin: '-1px 0px 0px 0px', threshold: 1 },
+      )
+    : null
+
 const renderList = () => {
   if (editing || isTouching) {
     isStale = true
@@ -562,7 +574,9 @@ const renderList = () => {
   }
   // Focus stays on the same control (a row's ⋯, a heading) when the list is drawn again.
   const focused = $('list').contains(document.activeElement) ? document.activeElement.dataset.focus : undefined
+  stuckWatch?.disconnect()
   $('list').replaceChildren(...sections)
+  for (const head of $('list').querySelectorAll('.group h2')) stuckWatch?.observe(head)
   if (focused)
     $('list')
       .querySelector(`[data-focus="${CSS.escape(focused)}"]`)

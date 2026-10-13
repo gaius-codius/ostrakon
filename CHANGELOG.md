@@ -11,6 +11,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 - On the phone, the note menu and the project picker open and close faster.
 - On the phone, Move to project is now a second page of the note menu instead of a separate picker: tap **Back**, or swipe right, to return to the note's actions.
 - On the phone, swipe the note menu down to close it.
+- On the phone, project headings are larger and bolder, in the main text colour, with more space between projects.
 - On the phone, tapping a note opens its actions, showing the whole note, instead of editing it. To edit, hold the note and lift your finger, or tap **Edit**. A note is edited in a panel that fills the screen above the keyboard, with Cancel and Save at the top, instead of in the list.
 
 ### Fixed

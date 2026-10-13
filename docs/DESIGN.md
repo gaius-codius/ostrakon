@@ -35,7 +35,7 @@ Terminal colours are theme keys (they follow the person's theme), except project
 
 ## 3. Project palette
 
-Each project other than the current one gets a colour from a hash of its key, drawn on a dot before its dim name, never on the name. The current project is the accent, in the pane only (the phone has no current project). Unfiled is a grey ring (`○`).
+Each project other than the current one gets a colour from a hash of its key, drawn on a dot before its name, never on the name (the name is dim in the pane; on the phone it's a heading, in the text colour). The current project is the accent, in the pane only (the phone has no current project). Unfiled is a grey ring (`○`).
 
 **Hash:** `hash = (hash * 31 + charCode) >>> 0` over the project key's characters, from 0; the colour is `palette[hash % 8]`. `colourOf` in `look.ts` and in `app.js` must stay the same function.
 
@@ -107,7 +107,7 @@ Light is `:root`, dark is `@media (prefers-color-scheme: dark)`. `—` means dar
 | `--scrim` | `rgba(6, 6, 8, 0.45)` | `rgba(6, 6, 8, 0.62)` | behind sheets and drawers |
 | `--inactive` | `rgb(102, 102, 102)` | `rgb(153, 153, 153)` | a dot with no project colour |
 
-**Type.** IBM Plex Sans and Mono, served from `server/public/fonts/` (latin subsets, OFL) and cached by the service worker, so the app looks the same offline. Sizes are in `rem` from a 100% root (`-apple-system-body` on iOS for Dynamic Type), so text settings scale the page. Body is 1rem at line-height 1.45; metadata, counts and hints are Mono at 0.75rem.
+**Type.** IBM Plex Sans and Mono, served from `server/public/fonts/` (latin subsets, OFL) and cached by the service worker, so the app looks the same offline. Sizes are in `rem` from a 100% root (`-apple-system-body` on iOS for Dynamic Type), so text settings scale the page. Body is 1rem at line-height 1.45; metadata, counts and hints are Mono at 0.75rem. A project heading on the phone is 0.9375rem semibold in the text colour, its dot 0.625rem, with more space above it than between notes: it stands out by weight and contrast, so the notes stay the largest text.
 
 <!-- check: tokens -->
 | Token | Light | Dark | Use |
@@ -115,7 +115,7 @@ Light is `:root`, dark is `@media (prefers-color-scheme: dark)`. `—` means dar
 | `--sans` | `"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif` | — | everything but metadata |
 | `--mono` | `"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace` | — | ages, counts, hints, status, code |
 
-**Spacing and shape** (as used; `style.css` is the reference): page gutter 1.25rem (or the safe area), content at most 40rem wide; rows pad 0.5rem by 1.25rem and bleed to the edges; gaps step through 0.375, 0.5, 0.625, 0.75, 0.875 and 1.125rem. Radii: 0.375rem focus rings and code, 0.75rem buttons and fields, 1rem the toast, 1.125rem the form and sheet groups, 1.375rem pills, chips and the drawer's top. **Targets are 44px** (2.75rem) at the least, in both directions.
+**Spacing and shape** (as used; `style.css` is the reference): page gutter 1.25rem (or the safe area), content at most 40rem wide; rows pad 0.5rem by 1.25rem and bleed to the edges; gaps step through 0.375, 0.5, 0.625, 0.75, 0.875 and 1.125rem, and 1.5rem between projects. Radii: 0.375rem focus rings and code, 0.75rem buttons and fields, 1rem the toast, 1.125rem the form and sheet groups, 1.375rem pills, chips and the drawer's top. **Targets are 44px** (2.75rem) at the least, in both directions.
 
 **Contrast.** Text on its background, recomputed by the checker from the tokens; anything under 4.5:1 fails.
 
@@ -292,8 +292,8 @@ Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one
 ### 1.0.1 — 2026-10-13
 - Change: Sheets and drawers start below the screen before their first frame, and their dialog clips its overflow instead of hiding it (§7).
 - Why: Opening the note menu showed it in place for a frame, then it dropped and rose; and on iOS the dialog scrolled to show the focused action, so the menu rode up the screen and snapped back.
-- Change: Sheets and drawers rise in 0.28s on a steep ease-out that ends on time (was a 0.32s spring with a small bounce, which took about 0.35s to settle) and sink in 0.16s; Move to project became the sheet's second page, with Back, Escape and a swipe right to go back, instead of the project picker as a second dialog; a swipe down closes a sheet; a note is edited in a panel sized to the screen above the keyboard, not in the list; a tap on a note opens its sheet, which shows the note whole, and holding a note edits it; the phone quotes a note without the pane's `▎` bar.
-- Why: Opening the menu felt slow, and going from the menu to the picker sank one dialog and raised another for what is one step, with no way back to the actions. Sheets had no swipe down to close, which iOS sheets have, and a note edited in the list landed wherever iOS scrolled it, often half under the keyboard; scrolling it into place fought iOS's own scroll. A tap edited, so a note longer than the row's four lines (or the sheet's three) could only be read whole by editing it, with the keyboard over half of it. The `▎` bar sets quoted text apart in a terminal, which can't draw boxes; on the phone the quote already has its own section.
+- Change: Sheets and drawers rise in 0.28s on a steep ease-out that ends on time (was a 0.32s spring with a small bounce, which took about 0.35s to settle) and sink in 0.16s; Move to project became the sheet's second page, with Back, Escape and a swipe right to go back, instead of the project picker as a second dialog; a swipe down closes a sheet; a note is edited in a panel sized to the screen above the keyboard, not in the list; a tap on a note opens its sheet, which shows the note whole, and holding a note edits it; the phone quotes a note without the pane's `▎` bar; a project heading on the phone is 0.9375rem semibold in the text colour (was 0.8125rem, dim), with a larger dot, more space above it, and a hairline under it while it's stuck to the top.
+- Why: Opening the menu felt slow, and going from the menu to the picker sank one dialog and raised another for what is one step, with no way back to the actions. Sheets had no swipe down to close, which iOS sheets have, and a note edited in the list landed wherever iOS scrolled it, often half under the keyboard; scrolling it into place fought iOS's own scroll. A tap edited, so a note longer than the row's four lines (or the sheet's three) could only be read whole by editing it, with the keyboard over half of it. The `▎` bar sets quoted text apart in a terminal, which can't draw boxes; on the phone the quote already has its own section. Project headings were the faintest text on the screen, so they read as labels rather than as the sections the notes sit in.
 Fingerprint: ad50d4f26e1b
 
 ### 1.0.0 — 2026-10-11

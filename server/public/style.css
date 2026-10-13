@@ -400,7 +400,7 @@ input[type="search"]::-webkit-search-decoration {
 #list {
   display: flex;
   flex-direction: column;
-  gap: 1.125rem;
+  gap: 1.5rem;
 }
 .group h2 {
   position: sticky;
@@ -408,8 +408,12 @@ input[type="search"]::-webkit-search-decoration {
   z-index: 2;
   margin: 0;
   background: var(--bg);
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
   font-weight: 600;
+}
+/* Stuck to the top (app.js watchStuck): a hairline, so notes don't slide under it unmarked. */
+.group h2.stuck {
+  box-shadow: 0 1px 0 var(--line);
 }
 .group h2 button {
   width: 100%;
@@ -420,7 +424,7 @@ input[type="search"]::-webkit-search-decoration {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--dim);
+  color: var(--text);
   font: inherit;
   text-align: left;
 }
@@ -429,6 +433,10 @@ input[type="search"]::-webkit-search-decoration {
   width: 0.875rem;
   display: flex;
   justify-content: center;
+}
+.group .lead .dot {
+  width: 0.625rem;
+  height: 0.625rem;
 }
 .group .name {
   min-width: 0;
