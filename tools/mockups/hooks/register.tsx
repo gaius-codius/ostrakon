@@ -467,12 +467,7 @@ const SearchView = (ctx: Ctx, query: string) => {
       {ctx.dir === 'ledger' && <LedgerColumns el={ctx.el} width={ctx.width} />}
       {found.length === 0 ? (
         <Box flexDirection="column" paddingY={1}>
-          <Text>
-            No notes match <Text bold>“{query}”</Text> in any project.
-          </Text>
-          <Text dimColor>
-            <Text color="claude">⏎</Text> saves “{query}” as a new note in cc · <Text color="claude">ctrl+s</Text> scope
-          </Text>
+          <Text dimColor>No notes match. ⏎ saves it to cc.</Text>
         </Box>
       ) : (
         <Box flexDirection="column">{rowsOf(ctx, found, { query })}</Box>
@@ -616,9 +611,9 @@ const EditView = (ctx: Ctx) => {
           rename the store helpers to match the spec (createStore, change, scan) and the tests▏ ⏎ save
         </Text>
         <Box gap={2}>
-          <Text>[ cancel ]</Text>
+          <Text>[ esc cancel ]</Text>
           <Text color="claude" bold>
-            [ save ]
+            [ ⏎ save ]
           </Text>
           <Box flexGrow={1} />
           <Text dimColor>draft kept if the pane closes</Text>
@@ -626,7 +621,7 @@ const EditView = (ctx: Ctx) => {
       </Box>
       {rowsOf(ctx, here.slice(2), { firstNumber: 3 })}
       <Box height={1} />
-      <Footer el={ctx.el} dir={ctx.dir} width={ctx.width} keys={[['⏎', 'save'], ['tab then ⏎', 'cancel'], ['esc', 'close, draft kept']]} />
+      <Footer el={ctx.el} dir={ctx.dir} width={ctx.width} keys={[['⏎', 'save'], ['esc', 'close, draft kept']]} />
     </Box>
   )
 }

@@ -29,7 +29,15 @@ test('the pane opens on this project, searches everywhere once typing, and Enter
   expect(await ui.find({ type: 'Text', text: /add a cache invalidation metric/ })).toBeDefined()
 
   await ui.input({ key: 'q', text: 'kubernetes', kind: 'change' })
-  expect(await ui.find({ type: 'Text', text: /No notes match “kubernetes” in any project/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^No notes match\. ⏎ saves it to / })).toBeDefined()
+  // A query the field holds isn't repeated, and the footer, not the body, has the scope key.
+  expect(await ui.find({ type: 'Text', text: /kubernetes/ })).toBeUndefined()
+  expect((await ui.findAll({ type: 'Text', text: /^ctrl\+s$/ })).length).toBe(1)
+  // One the field cuts off reads whole under it.
+  const long = `kubernetes ${'node pool '.repeat(20)}upgrade`
+  await ui.input({ key: 'q', text: long, kind: 'change' })
+  expect(await ui.find({ type: 'Text', text: /upgrade$/ })).toBeDefined()
+  await ui.input({ key: 'q', text: 'kubernetes', kind: 'change' })
   await ui.input({ key: 'q', text: 'kubernetes', kind: 'submit' })
   expect(world.toasts.some(toast => toast.includes('saved to'))).toBe(false)
   expect([...dir.files.values()].some(file => file.text.includes('kubernetes'))).toBe(true)
@@ -148,6 +156,26 @@ test('notes load at session start, and unreadable files show as a problem row', 
   expect(await ui.find({ type: 'Text', text: /a new one from the phone/ })).toBeDefined()
   expect(dir.get('/data/notes/broken.md')).toBe('not a note')
   expect((await texts(ui)).length).toBeGreaterThan(5)
+  await ui.unmount()
+})
+
+test('a search with no match beside an unreadable file still says Enter saves it, and a short pane takes one line of it', async ($, on) => {
+  const dir = fixture()
+  dir.put('/data/notes/broken.md', 'not a note')
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: 'kubernetes', kind: 'change' })
+  expect(await ui.find({ type: 'Text', text: /1 unreadable file/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^No notes match\. / })).toBeDefined()
+  const field = await ui.find({ type: 'Input' })
+  expect((field?.props as { submitLabel?: string } | undefined)?.submitLabel).toBe('')
+  const long = `kubernetes ${'node pool '.repeat(40)}upgrade`
+  await ui.input({ key: 'q', text: long, kind: 'change' })
+  const wrapped = async () => (await texts(ui)).filter(text => /node pool/.test(text) && !text.startsWith('No notes')).length
+  expect(await wrapped()).toBeGreaterThan(1)
+  await ui.redraw({ ...PANE.props, scroll: { offset: 0, bodyRows: 14 } })
+  expect(await wrapped()).toBe(1)
   await ui.unmount()
 })
 

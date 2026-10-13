@@ -425,12 +425,7 @@ export const keysFor = (focus: Focus): Key[] => {
         ...CHORDS(false),
       ]
     case 'edit':
-      return [
-        { action: 'new', shown: ['⏎', 'save'] },
-        { action: 'back', shown: ['esc', 'back, draft kept'] },
-        { action: 'back', shown: ['tab then ⏎', 'cancel'] },
-        ...CHORDS(false),
-      ]
+      return [{ action: 'new', shown: ['⏎', 'save'] }, { action: 'back', shown: ['esc', 'back, draft kept'] }, ...CHORDS(false)]
     case 'bundle':
       return [
         { action: 'send', shown: ['⏎', 'send'] },

@@ -209,6 +209,16 @@ const rightText = (view: PaneView, room: number) => {
   return cut(counted, room)
 }
 
+// A query that matches nothing: Enter saves it as a note, so the field's "to list" would be wrong.
+// Note rows only: a storage problem's row doesn't count as a match (searchSubmit saves past it).
+const isNoMatch = (view: PaneView) => !view.lines.some(line => line.kind === 'note') && view.pane.query.trim() !== ''
+
+// The search field's width: what the glyph and the right side leave, so the row never runs past
+// the pane. Then the room its text has beside the cursor and the field's hint, which keeps its ⏎
+// with no label.
+const searchWidth = (view: PaneView) => Math.max(1, view.width - 2 - 1 - cells(rightText(view, Math.max(10, Math.floor(view.width / 2)))))
+const searchRoom = (view: PaneView) => searchWidth(view) - 1 - cells(isNoMatch(view) ? ` ${GLYPH.enter}` : ` ${GLYPH.enter} ${TEXT.toList}`)
+
 const SearchRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handlers }) => {
   const { Box, Text, Input } = el
   const isFocused = view.focus.kind === 'search' || view.focus.kind === 'empty'
@@ -218,17 +228,19 @@ const SearchRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Ha
       <Text color={isFocused ? COLOUR.accent : COLOUR.history} bold>
         {GLYPH.search}{' '}
       </Text>
-      <Box flexGrow={1}>
+      {/* An explicit width, as capture's: left to flex, the field's "⏎ to list" wraps onto a second row. */}
+      <Box width={searchWidth(view)}>
         <Input
           key={SEARCH_KEY}
           placeholder={TEXT.placeholder}
           value={view.pane.query}
-          submitLabel={TEXT.toList}
+          submitLabel={isNoMatch(view) ? '' : TEXT.toList}
           autoFocus={view.pane.mode === 'browse' ? true : undefined}
           onInput={value => handlers.searchInput(value)}
           onSubmit={value => handlers.searchSubmit(value)}
         />
       </Box>
+      <Box flexGrow={1} />
       <Text dimColor> {right}</Text>
     </Box>
   )
@@ -440,10 +452,11 @@ const Rows = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
                 </Box>
               </Box>
               <Box gap={2}>
-                <Button key='edit-cancel' label='cancel' onPress={() => handlers.editCancel()} />
-                <Button key='edit-save' variant='primary' label='save' onPress={() => handlers.editSubmit(view.pane.edit?.draft ?? '')} />
+                <Button key='edit-cancel' label={TEXT.editCancel} onPress={() => handlers.editCancel()} />
+                <Button key='edit-save' variant='primary' label={TEXT.editSave} onPress={() => handlers.editSubmit(view.pane.edit?.draft ?? '')} />
                 <Box flexGrow={1} />
-                <Text dimColor>{TEXT.editHint}</Text>
+                {/* Only when it fits: wrapped, it adds a row the paging doesn't budget for. */}
+                {editHintFits(view.width) && <Text dimColor>{TEXT.editHint}</Text>}
               </Box>
             </Box>
           )
@@ -457,16 +470,25 @@ const Rows = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
   )
 }
 
+// The edit card's button row: its frame and padding, both buttons, three gaps of 2, the hint.
+const editHintFits = (width: number) => width - 4 >= cells(`[ ${TEXT.editCancel} ]`) + cells(`[ ${TEXT.editSave} ]`) + 3 * 2 + cells(TEXT.editHint)
+
+// Enter saves the query as a note, so this is capture's start: a query the field cuts off reads
+// whole here, as capture's draft does, and one that fits isn't repeated. The footer has the keys.
 const NoMatch = ({ el, view }: { el: E; view: PaneView }) => {
   const { Box, Text } = el
-  const where = view.pane.scope === 'project' ? view.ctx.current.name : 'any project'
-  const [line, hint] = TEXT.noMatch(view.pane.query.trim(), where)
+  const query = view.pane.query.trim()
+  // The field shows the query untrimmed, so its spaces count toward the cut. A body too short for
+  // the preview takes one line, as inline, so the footer stays on screen.
+  const rows = !view.isInline && hasPreview(view) ? WIDTH.previewLines : 1
+  const draft = cells(view.pane.query) > searchRoom(view) ? draftLines(query, view.width, rows) : []
   return (
     <Box flexDirection='column' paddingY={view.isInline ? 0 : 1}>
-      <Text>{line}</Text>
-      <Text dimColor>
-        <Text color={COLOUR.accent}>{GLYPH.enter}</Text> {hint} {view.ctx.current.name} · <Text color={COLOUR.accent}>ctrl+s</Text> scope
-      </Text>
+      {draft.map(line => (
+        <Text>{line === '' ? ' ' : line}</Text>
+      ))}
+      {draft.length > 0 && !view.isInline && <Box height={1} />}
+      <Text dimColor>{cut(TEXT.noMatch(view.ctx.current.name), view.width)}</Text>
     </Box>
   )
 }
@@ -680,7 +702,8 @@ export const Pane = ({
   const body = () => {
     if (pane.mode === 'capture') return <Capture el={el} view={view} />
     if (pane.mode === 'bundle') return <Bundle el={el} view={view} handlers={handlers} rows={bundleRows} />
-    if (view.lines.length === 0 && pane.query.trim() !== '') return <NoMatch el={el} view={view} />
+    // A storage problem's row stays above the no-match line.
+    if (isNoMatch(view)) return [view.lines.length > 0 && <Rows el={el} view={view} handlers={handlers} />, <NoMatch el={el} view={view} />]
     if (view.lines.length === 0 && pane.query.trim() === '') return <Empty el={el} view={view} hasHub={hasHub} hasHarvest={hasHarvest} />
     return <Rows el={el} view={view} handlers={handlers} />
   }
