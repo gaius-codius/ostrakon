@@ -210,11 +210,14 @@ const rightText = (view: PaneView, room: number) => {
 }
 
 // A query that matches nothing: Enter saves it as a note, so the field's "to list" would be wrong.
-const isNoMatch = (view: PaneView) => view.lines.length === 0 && view.pane.query.trim() !== ''
+// Note rows only: a storage problem's row doesn't count as a match (searchSubmit saves past it).
+const isNoMatch = (view: PaneView) => !view.lines.some(line => line.kind === 'note') && view.pane.query.trim() !== ''
 
-// The search field's width, and the room its text has once the field's own hint is drawn.
-const searchWidth = (view: PaneView) => Math.max(10, view.width - 2 - 1 - cells(rightText(view, Math.max(10, Math.floor(view.width / 2)))))
-const searchRoom = (view: PaneView) => searchWidth(view) - (isNoMatch(view) ? 0 : cells(` ${GLYPH.enter} ${TEXT.toList}`)) - 1
+// The search field's width: what the glyph and the right side leave, so the row never runs past
+// the pane. Then the room its text has beside the cursor and the field's hint, which keeps its ⏎
+// with no label.
+const searchWidth = (view: PaneView) => Math.max(1, view.width - 2 - 1 - cells(rightText(view, Math.max(10, Math.floor(view.width / 2)))))
+const searchRoom = (view: PaneView) => searchWidth(view) - 1 - cells(isNoMatch(view) ? ` ${GLYPH.enter}` : ` ${GLYPH.enter} ${TEXT.toList}`)
 
 const SearchRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handlers }) => {
   const { Box, Text, Input } = el
@@ -452,7 +455,8 @@ const Rows = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
                 <Button key='edit-cancel' label={TEXT.editCancel} onPress={() => handlers.editCancel()} />
                 <Button key='edit-save' variant='primary' label={TEXT.editSave} onPress={() => handlers.editSubmit(view.pane.edit?.draft ?? '')} />
                 <Box flexGrow={1} />
-                <Text dimColor>{TEXT.editHint}</Text>
+                {/* Only when it fits: wrapped, it adds a row the paging doesn't budget for. */}
+                {editHintFits(view.width) && <Text dimColor>{TEXT.editHint}</Text>}
               </Box>
             </Box>
           )
@@ -466,12 +470,18 @@ const Rows = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
   )
 }
 
+// The edit card's button row: its frame and padding, both buttons, three gaps of 2, the hint.
+const editHintFits = (width: number) => width - 4 >= cells(`[ ${TEXT.editCancel} ]`) + cells(`[ ${TEXT.editSave} ]`) + 3 * 2 + cells(TEXT.editHint)
+
 // Enter saves the query as a note, so this is capture's start: a query the field cuts off reads
 // whole here, as capture's draft does, and one that fits isn't repeated. The footer has the keys.
 const NoMatch = ({ el, view }: { el: E; view: PaneView }) => {
   const { Box, Text } = el
   const query = view.pane.query.trim()
-  const draft = cells(query) > searchRoom(view) ? draftLines(query, view.width, view.isInline ? 1 : WIDTH.previewLines) : []
+  // The field shows the query untrimmed, so its spaces count toward the cut. A body too short for
+  // the preview takes one line, as inline, so the footer stays on screen.
+  const rows = !view.isInline && hasPreview(view) ? WIDTH.previewLines : 1
+  const draft = cells(view.pane.query) > searchRoom(view) ? draftLines(query, view.width, rows) : []
   return (
     <Box flexDirection='column' paddingY={view.isInline ? 0 : 1}>
       {draft.map(line => (
@@ -692,7 +702,8 @@ export const Pane = ({
   const body = () => {
     if (pane.mode === 'capture') return <Capture el={el} view={view} />
     if (pane.mode === 'bundle') return <Bundle el={el} view={view} handlers={handlers} rows={bundleRows} />
-    if (view.lines.length === 0 && pane.query.trim() !== '') return <NoMatch el={el} view={view} />
+    // A storage problem's row stays above the no-match line.
+    if (isNoMatch(view)) return [view.lines.length > 0 && <Rows el={el} view={view} handlers={handlers} />, <NoMatch el={el} view={view} />]
     if (view.lines.length === 0 && pane.query.trim() === '') return <Empty el={el} view={view} hasHub={hasHub} hasHarvest={hasHarvest} />
     return <Rows el={el} view={view} handlers={handlers} />
   }

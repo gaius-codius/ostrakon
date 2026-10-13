@@ -159,6 +159,26 @@ test('notes load at session start, and unreadable files show as a problem row', 
   await ui.unmount()
 })
 
+test('a search with no match beside an unreadable file still says Enter saves it, and a short pane takes one line of it', async ($, on) => {
+  const dir = fixture()
+  dir.put('/data/notes/broken.md', 'not a note')
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: 'kubernetes', kind: 'change' })
+  expect(await ui.find({ type: 'Text', text: /1 unreadable file/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^No notes match\. / })).toBeDefined()
+  const field = await ui.find({ type: 'Input' })
+  expect((field?.props as { submitLabel?: string } | undefined)?.submitLabel).toBe('')
+  const long = `kubernetes ${'node pool '.repeat(40)}upgrade`
+  await ui.input({ key: 'q', text: long, kind: 'change' })
+  const wrapped = async () => (await texts(ui)).filter(text => /node pool/.test(text) && !text.startsWith('No notes')).length
+  expect(await wrapped()).toBeGreaterThan(1)
+  await ui.redraw({ ...PANE.props, scroll: { offset: 0, bodyRows: 14 } })
+  expect(await wrapped()).toBe(1)
+  await ui.unmount()
+})
+
 const composer = ($: Engine, text: string) => $.prompt.submit({ text, wait: false, origin: { kind: 'composer' } })
 
 test("the person's next submit carrying a filled note marks it sent; after that the fill is spent", async ($, on) => {
