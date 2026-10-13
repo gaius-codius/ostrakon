@@ -33,6 +33,11 @@ before(async () => {
     note('01JA7K2M3Q9X4ZB6C8D0EFGH0A', 'Check the retry on a refused push', 'ostrakon'),
     note('01JA7K2M3Q9X4ZB6C8D0EFGH0B', 'Ask about the release date', 'ostrakon'),
     note('01JA7K2M3Q9X4ZB6C8D0EFGH0C', 'Rename the band setting', 'pane'),
+    // A long one, older than the rest so its group comes last.
+    {
+      ...note('01JA7K2M3Q9X4ZB6C8D0EFGH0D', Array.from({ length: 40 }, (_, at) => `Line ${at + 1} of a long note.`).join('\n'), 'long'),
+      updated: '2026-10-09T01:00:00.000Z',
+    },
     // Enough more for the page to scroll behind a sheet.
     ...Array.from({ length: 30 }, (_, at) => note(`01JA7K2M3Q9X4ZB6C8D0EFGH${String(10 + at)}`, `Older note ${at + 1}`, 'later')),
   ]
@@ -112,14 +117,56 @@ test('the menu rises into place from ⋯', async () => {
   await watchRise('#sheet', () => page.locator('li.note .more').first().tap())
 })
 
-test('the menu rises into place from a long press', async () => {
-  const box = await page.locator('li.note').nth(1).boundingBox()
-  await watchRise('#sheet', async () => {
-    await page.mouse.move(box.x + box.width / 3, box.y + box.height / 2)
-    await page.mouse.down()
-    await page.waitForFunction(() => document.getElementById('sheet').open)
-    await page.mouse.up()
+test('the menu rises into place from a tap on a note', async () => {
+  await watchRise('#sheet', () => page.locator('li.note .text').nth(1).tap())
+})
+
+const editorOpen = (on = page) => on.waitForFunction(() => document.getElementById('editor').open)
+const editorShut = (on = page) => on.waitForFunction(() => !document.getElementById('editor').open)
+
+// Holds a finger on `target` past HOLD_MS (app.js), then lifts it.
+const hold = async (on, target) => {
+  const box = await target.boundingBox()
+  await on.mouse.move(box.x + box.width / 3, box.y + box.height / 2)
+  await on.mouse.down()
+  await on.locator('li.note.held').waitFor()
+  await on.waitForTimeout(100)
+  await on.mouse.up()
+}
+
+test('holding a note edits it, once lifted', async () => {
+  const row = page.locator('li.note').nth(1)
+  const box = await row.locator('.text').boundingBox()
+  await page.mouse.move(box.x + box.width / 3, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.locator('li.note.held').waitFor()
+  assert.equal(await page.evaluate(() => document.getElementById('sheet').open), false, 'holding opened the menu')
+  await page.mouse.up()
+  await editorOpen()
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'editor-text', "the field doesn't have focus")
+  assert.equal(await page.evaluate(() => document.getElementById('sheet').open), false, 'the lift opened the menu')
+})
+
+test('the menu shows a long note whole, scrolling, with every action in view', async () => {
+  const row = page.locator('li.note[data-id="01JA7K2M3Q9X4ZB6C8D0EFGH0D"]')
+  await row.scrollIntoViewIfNeeded()
+  await row.locator('.more').tap()
+  await sheetOpen()
+  await page.waitForTimeout(400)
+  assert.equal(await page.evaluate(() => document.querySelector('#sheet .quote').classList.contains('scrolls')), true, "the long note doesn't scroll")
+  // Scrolled to its end, the last line shows: nothing is cut off.
+  const shown = await page.evaluate(() => {
+    const quote = document.querySelector('#sheet .quote')
+    quote.scrollTop = quote.scrollHeight
+    const text = document.getElementById('sheet-text').getBoundingClientRect()
+    return text.bottom <= quote.getBoundingClientRect().bottom + 1
   })
+  assert.equal(shown, true, "the long note's last line can't be scrolled into view")
+  const { height } = page.viewportSize()
+  for (const name of ['Edit', 'Archive']) {
+    const box = await page.locator('#sheet-actions .action', { hasText: name }).boundingBox()
+    assert.ok(box.y >= 0 && box.y + box.height <= height, `${name} is out of view, at ${Math.round(box.y)}px`)
+  }
 })
 
 test('the File under drawer rises into place', async () => {
@@ -256,6 +303,150 @@ test('the page stays put behind the menu', async t => {
   await wheeled.waitForFunction(() => !document.getElementById('sheet').open)
   // With nothing up it does scroll: the checks above could pass on a page too short to.
   assert.ok((await scrollOnScrim()) > 0, "the page didn't scroll with nothing up")
+})
+
+// A finger's drag down from `point` ({x, y}): `dy` over `ms`.
+const dragDown = async (point, dy, ms) => {
+  await page.mouse.move(point.x, point.y)
+  await page.mouse.down()
+  const steps = Math.max(1, Math.round(ms / 16))
+  for (let step = 1; step <= steps; step += 1) {
+    await page.mouse.move(point.x, point.y + (dy * step) / steps)
+    await page.waitForTimeout(ms / steps)
+  }
+  await page.mouse.up()
+}
+const middleOf = async selector => {
+  const box = await page.locator(selector).boundingBox()
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+}
+const panelTop = () => page.evaluate(() => Math.round(document.querySelector('#sheet .panel').getBoundingClientRect().top))
+
+test('a swipe down closes the menu; a short one settles back', async () => {
+  await page.locator('li.note .more').first().tap()
+  await sheetOpen()
+  await page.waitForTimeout(400)
+  const rest = await panelTop()
+  await dragDown(await middleOf('#sheet .head'), 40, 600)
+  await page.waitForTimeout(400)
+  assert.equal(await page.evaluate(() => document.getElementById('sheet').open), true, 'a short slow swipe closed the menu')
+  assert.ok(Math.abs((await panelTop()) - rest) <= SLACK_PX, `the menu didn't settle back to ${rest}px`)
+  // A short pull that starts on Cancel isn't a tap on it.
+  await dragDown(await middleOf('#sheet-cancel'), 40, 600)
+  await page.waitForTimeout(400)
+  assert.equal(await page.evaluate(() => document.getElementById('sheet').open), true, 'a pull that began on Cancel closed the menu')
+  await dragDown(await middleOf('#sheet .head'), 200, 200)
+  await sheetShut()
+})
+
+test('a swipe down on Move to closes the menu', async () => {
+  await openMovePage()
+  await dragDown(await middleOf('#sheet-move .bar h2'), 200, 200)
+  await sheetShut()
+  assert.equal(await page.evaluate(() => document.getElementById('picker-body').closest('dialog').id), 'picker')
+})
+
+test('the editor rises into place from a hold', async () => {
+  await watchRise('#editor', () => hold(page, page.locator('li.note .text').nth(2)))
+})
+
+// iOS brings the keyboard up only for a focus in the tap itself: Edit focuses the field at once,
+// not once the menu has gone.
+test('Edit in the menu opens the editor with the field focused in the same tap', async () => {
+  await page.locator('li.note .more').first().tap()
+  await sheetOpen()
+  await pageShown()
+  const focused = await page.evaluate(() => {
+    document.querySelector('#sheet-actions [data-key="Edit"]').click()
+    return document.activeElement?.id
+  })
+  assert.equal(focused, 'editor-text', "Edit didn't focus the field in its own click")
+  await sheetShut()
+  assert.equal(await page.evaluate(() => document.getElementById('editor').open), true, 'the editor closed with the menu')
+})
+
+test('Cancel and Escape close the editor and keep the note', async () => {
+  const row = page.locator('li.note').first()
+  const text = await row.locator('.text').textContent()
+  for (const close of [() => page.locator('#editor-cancel').tap(), () => page.keyboard.press('Escape')]) {
+    await hold(page, row.locator('.text'))
+    await editorOpen()
+    await page.locator('#editor-text').fill('Something else')
+    await close()
+    await editorShut()
+    assert.equal(await row.locator('.text').textContent(), text, 'closing without Save changed the note')
+  }
+  assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('more')), true, "focus isn't back on the note's ⋯")
+})
+
+// Editing a note with the keyboard up: the editor fills the screen above it, and the page under it
+// never scrolls. Playwright's WebKit has no keyboard, so the page gets a stand-in visualViewport,
+// shrunk by a keyboard's height on cue.
+const KEYBOARD_PX = 320
+test('the editor fills the screen above the keyboard, and nothing scrolls', async t => {
+  const edited = await pageWith(devices['iPhone 15'])
+  t.after(() => edited.context().close())
+  await edited.context().addInitScript(() => {
+    const view = new EventTarget()
+    Object.assign(view, { offsetTop: 0, offsetLeft: 0, scale: 1, width: innerWidth, height: innerHeight })
+    Object.defineProperty(window, 'visualViewport', { value: view, configurable: true })
+    // The keyboard slides up as iOS's does, with a resize a frame for about a quarter second.
+    window.showKeyboard_ = height =>
+      new Promise(done => {
+        const from = innerHeight - view.height
+        let step = 0
+        const next = () => {
+          step += 1
+          view.height = innerHeight - (from + ((height - from) * step) / 16)
+          view.dispatchEvent(new Event('resize'))
+          if (step < 16) requestAnimationFrame(next)
+          else done()
+        }
+        requestAnimationFrame(next)
+      })
+  })
+  await edited.goto(HUB)
+  await edited.locator('li.note').first().waitFor()
+  // The last row (the long note's group comes last), with the list scrolled to its end.
+  await edited.evaluate(() => scrollTo(0, document.documentElement.scrollHeight))
+  const before = await edited.evaluate(() => scrollY)
+  await hold(edited, edited.locator('li.note').last().locator('.text'))
+  await editorOpen(edited)
+  await edited.evaluate(height => window.showKeyboard_(height), KEYBOARD_PX)
+  await edited.waitForTimeout(400)
+  const { bottom, top, field, focused, scroll, height } = await edited.evaluate(() => {
+    const panel = document.querySelector('#editor .panel').getBoundingClientRect()
+    const text = document.getElementById('editor-text').getBoundingClientRect()
+    return {
+      bottom: panel.bottom,
+      top: panel.top,
+      field: text.bottom,
+      focused: document.activeElement?.id,
+      scroll: scrollY,
+      height: innerHeight,
+    }
+  })
+  assert.equal(focused, 'editor-text', "the field doesn't have focus")
+  assert.equal(scroll, before, 'the page scrolled under the editor')
+  const want = height - KEYBOARD_PX - 8
+  assert.ok(Math.abs(bottom - want) <= SLACK_PX, `the editor's bottom is at ${Math.round(bottom)}px, not just above the keyboard (${want}px)`)
+  assert.ok(top >= 0 && field <= bottom, 'the field runs past the editor')
+  await edited.evaluate(() => window.showKeyboard_(0))
+  await edited.waitForTimeout(100)
+  const rest = await edited.evaluate(() => document.querySelector('#editor .panel').getBoundingClientRect().bottom)
+  assert.ok(rest > bottom + KEYBOARD_PX - 50, `the editor didn't grow back when the keyboard went (its bottom at ${Math.round(rest)}px)`)
+})
+
+test('Save changes the note', async () => {
+  const id = '01JA7K2M3Q9X4ZB6C8D0EFGH0C'
+  const text = page.locator(`li.note[data-id="${id}"] .text`)
+  await text.scrollIntoViewIfNeeded()
+  await hold(page, text)
+  await editorOpen()
+  await page.locator('#editor-text').fill('Rename the band setting to width')
+  await page.locator('#editor-save').tap()
+  await editorShut()
+  await page.waitForFunction(id => document.querySelector(`li.note[data-id="${id}"] .text`)?.textContent.includes('to width'), id)
 })
 
 // Last: it moves a note, which the other tests' rows would notice.

@@ -14,12 +14,12 @@ note from Claude, `▪` one from the phone. Notes Claude proposed (harvest) come
 - **Fold a project**: tap its heading. The phone remembers which are folded. A heading stays at
   the top of the screen while you scroll its group.
 - **Search**: the search button at the top filters open notes, folded groups included.
-- **Edit**: tap a note.
+- **Edit**: hold a note for about half a second, then lift your finger (or **Edit** in its actions).
 - **Archive**: swipe a note left. A strip behind it says `Archive` and turns solid while letting go
   will archive it; drag back right to change your mind.
-- **More actions**: tap a note's `⋯` button (or hold the note for about half a second) for
-  **Edit**, **Copy text**, **Move to project**, **Mark sent** (for a note you used somewhere else)
-  and **Archive**.
+- **More actions**: tap a note (or its `⋯` button) to see it whole, with **Edit**, **Copy text**,
+  **Move to project**, **Mark sent** (for a note you used somewhere else) and **Archive**. Swipe
+  the actions down to close them; on **Move to project**, **Back** or a swipe right goes back.
 
 Moving, archiving and marking sent can all be undone from the message that pops up afterwards.
 
