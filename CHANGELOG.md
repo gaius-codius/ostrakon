@@ -14,6 +14,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 ### Fixed
 
 - In the pane, the search field's `⏎ to list` no longer wraps onto a second row, and it's gone when nothing matches, since Enter saves the query then.
+- In the pane, Esc clears the search field fully: it used to leave a space behind, which hid the `search notes` placeholder and put what you typed next after it.
 
 ## [0.4.0] - 2026-10-12
 
