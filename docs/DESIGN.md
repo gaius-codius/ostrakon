@@ -1,6 +1,6 @@
 # Ostrakon design system
 
-Version: 1.0.0
+Version: 1.0.1
 
 What the terminal mod (the pane, the band and the prompt hint, in `plugin/`) and the phone (`server/public/`) must agree on: colour roles, the project palette, the phone's tokens, symbols, fixed copy, motion and the accessibility bar. [`SPEC.md`](SPEC.md) describes behaviour and points here for these values instead of repeating them. The code holds the values: `plugin/src/ui/look.ts` for the terminal, `style.css`, `app.js` and `index.html` for the phone.
 
@@ -35,7 +35,7 @@ Terminal colours are theme keys (they follow the person's theme), except project
 
 ## 3. Project palette
 
-Each project other than the current one gets a colour from a hash of its key, drawn on a dot before its dim name, never on the name. The current project is the accent, in the pane only (the phone has no current project). Unfiled is a grey ring (`○`).
+Each project other than the current one gets a colour from a hash of its key, drawn on a dot before its name, never on the name (the name is dim in the pane; on the phone it's a heading, in the text colour). The current project is the accent, in the pane only (the phone has no current project). Unfiled is a grey ring (`○`).
 
 **Hash:** `hash = (hash * 31 + charCode) >>> 0` over the project key's characters, from 0; the colour is `palette[hash % 8]`. `colourOf` in `look.ts` and in `app.js` must stay the same function.
 
@@ -91,7 +91,7 @@ Light is `:root`, dark is `@media (prefers-color-scheme: dark)`. `—` means dar
 | `--text` | `#1d1d1f` | `#ececf0` | text; the toast's background |
 | `--text-soft` | `#3c3c40` | `#c4c4cc` | secondary text |
 | `--dim` | `#64646a` | `#9a9aa4` | ages, hints, headings, icons |
-| `--faint` | `#6f6d68` | `#86868f` | counts, `⋯`, quote bars |
+| `--faint` | `#6f6d68` | `#86868f` | counts, `⋯`, the pane's quote bars |
 | `--deco` | `#b8b6b0` | `#5a5a62` | the `▪` marker (decoration, not text) |
 | `--accent` | `#b5532f` | `#d97757` | Save, focus rings, Keep, the capture border |
 | `--accent-text` | `#a84a28` | `#e8957a` | accent words on a surface (Archive in the sheet) |
@@ -107,7 +107,7 @@ Light is `:root`, dark is `@media (prefers-color-scheme: dark)`. `—` means dar
 | `--scrim` | `rgba(6, 6, 8, 0.45)` | `rgba(6, 6, 8, 0.62)` | behind sheets and drawers |
 | `--inactive` | `rgb(102, 102, 102)` | `rgb(153, 153, 153)` | a dot with no project colour |
 
-**Type.** IBM Plex Sans and Mono, served from `server/public/fonts/` (latin subsets, OFL) and cached by the service worker, so the app looks the same offline. Sizes are in `rem` from a 100% root (`-apple-system-body` on iOS for Dynamic Type), so text settings scale the page. Body is 1rem at line-height 1.45; metadata, counts and hints are Mono at 0.75rem.
+**Type.** IBM Plex Sans and Mono, served from `server/public/fonts/` (latin subsets, OFL) and cached by the service worker, so the app looks the same offline. Sizes are in `rem` from a 100% root (`-apple-system-body` on iOS for Dynamic Type), so text settings scale the page. Body is 1rem at line-height 1.45; metadata, counts and hints are Mono at 0.75rem. A project heading on the phone is 0.9375rem semibold in the text colour, its dot 0.625rem, with more space above it than between notes: it stands out by weight and contrast, so the notes stay the largest text.
 
 <!-- check: tokens -->
 | Token | Light | Dark | Use |
@@ -115,7 +115,7 @@ Light is `:root`, dark is `@media (prefers-color-scheme: dark)`. `—` means dar
 | `--sans` | `"IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif` | — | everything but metadata |
 | `--mono` | `"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace` | — | ages, counts, hints, status, code |
 
-**Spacing and shape** (as used; `style.css` is the reference): page gutter 1.25rem (or the safe area), content at most 40rem wide; rows pad 0.5rem by 1.25rem and bleed to the edges; gaps step through 0.375, 0.5, 0.625, 0.75, 0.875 and 1.125rem. Radii: 0.375rem focus rings and code, 0.75rem buttons and fields, 1rem the toast, 1.125rem the form and sheet groups, 1.375rem pills, chips and the drawer's top. **Targets are 44px** (2.75rem) at the least, in both directions.
+**Spacing and shape** (as used; `style.css` is the reference): page gutter 1.25rem (or the safe area), content at most 40rem wide; rows pad 0.5rem by 1.25rem and bleed to the edges; gaps step through 0.375, 0.5, 0.625, 0.75, 0.875 and 1.125rem, and 1.5rem between projects. Radii: 0.375rem focus rings and code, 0.75rem buttons and fields, 1rem the toast, 1.125rem the form and sheet groups, 1.375rem pills, chips and the drawer's top. **Targets are 44px** (2.75rem) at the least, in both directions.
 
 **Contrast.** Text on its background, recomputed by the checker from the tokens; anything under 4.5:1 fails.
 
@@ -170,7 +170,7 @@ The terminal column names `look.ts` `GLYPH` keys; the phone column names `app.js
 | `↑` | waiting to sync (`↑ queued`) | — | `queued` |
 | `↓` | more rows below | `down` | — |
 | `⚠` | storage problem | `problem` | — |
-| `▎` | quoted text | `quote` | `quote`, index.html |
+| `▎` | quoted text | `quote` | — |
 | `›` | opens more (Move to project, the Shortcut link, a fold) | — | `next`, index.html, style.css |
 
 The phone draws its dots and rings in CSS (`.dot`, `.dot.ring`), and `⋯` (Note actions), the sheet's action icons and the mark beside its name (from `brand/mark-small.svg`, in `--accent`) as SVG. `↑` is the one mark with two meanings; a word always stands beside it.
@@ -219,9 +219,13 @@ Strings the surfaces or the docs depend on, each checked word for word in every 
 
 ## 7. Motion
 
-Things that move: the phone's swipe, sheets and drawers (rise on a spring over a fading scrim), the toast, and the change between list, capture and search (a View Transition where the browser has `document.startViewTransition`; entering search fades instead, so the field can take focus for the keyboard). Nothing else moves; the terminal never animates.
+Things that move: the phone's swipe, sheets, drawers and the editor (rise over a fading scrim), the toast, and the change between list, capture and search (a View Transition where the browser has `document.startViewTransition`; entering search fades instead, so the field can take focus for the keyboard). Nothing else moves; the terminal never animates.
 
 - **Swipe to archive:** the row follows the finger by `transform` only, once a frame. Letting go archives only while the finger is still heading left past the threshold, or on a quick flick left; a finger that turned back right, or a short slow drag, springs the row home. An archived row slides out, then its height closes up, then Undo shows. Why: under the first rule, a row dragged past the threshold archived even after the finger turned back, so changing your mind still archived.
+- **Sheets and drawers rise from below and stop:** the panel starts below the screen before the first frame (set in the page, since Motion applies its first keyframe a frame late) and never goes above where it rests. The dialog that holds it is `overflow: clip`, never `hidden`: a hidden overflow can still be scrolled, and iOS scrolls it to show the focused action while the panel is still below the screen, so the panel rode up the screen and then snapped back. Since a clipped dialog isn't a scroll container, a scroll on the scrim would reach the page, so the page doesn't scroll while one is open (`html:has(dialog[open])`). `tools/phone/run.sh` checks both in WebKit.
+- **Pages of a sheet:** Move to project is the action sheet's second page, not a second dialog: it slides in from the right over the actions (which slide a little left and fade), and the sheet's height follows, in `RISE_S`. **Back**, Escape or a swipe right goes back; the page follows the finger, and letting go past `BACK_PX`, or on a flick right, goes back, otherwise it slides home. Positions are in px throughout, each move starting from where the page is, so a turn picks up from a finger without a jump.
+- **Swipe down to close:** a sheet follows the finger down as its scrim fades, and letting go past `DISMISS_PX`, or on a flick down, closes it; otherwise it settles back. It starts anywhere on the sheet but a list that scrolls (Move to's projects, the actions when they don't fit), where up and down are the list's. A swipe's lift is never a tap on what's under it.
+- **The editor:** a note is edited in a panel over the list, rising and sinking as a sheet does, its height what the keyboard leaves of the screen (the visualViewport), with Cancel and Save at the top and a long note scrolling inside the field. iOS slides the view over the page for the keyboard rather than shrinking it, so a field in the list landed wherever iOS scrolled it, and scrolling it into place fought iOS: the screen jerked, or left a blank past the list. Sizing a panel to the view needs no scrolling.
 - **Reduced motion** (`prefers-reduced-motion: reduce`): nothing moves; things appear and go at once, or fade. A swipe still archives, without the slide.
 - Springs come from Motion, vendored unchanged in `server/public/vendor/motion.js` (MIT) and cached for offline use.
 
@@ -233,7 +237,11 @@ Things that move: the phone's swipe, sheets and drawers (rise on a spring over a
 | `app.js FLICK_MIN_PX` | 24 | …once it has moved this far |
 | `app.js TURN_PX` | 4 | a move this far sets which way the finger is heading |
 | `app.js VELOCITY_MS` | 100 | speed is measured over this many ms |
-| `app.js HOLD_MS` | 550 | holding still this long opens the action sheet |
+| `app.js HOLD_MS` | 550 | holding still this long marks the row, and the lift edits it |
+| `app.js RISE_S` | 0.28 | a sheet or drawer rises in this long, on a steep ease-out |
+| `app.js SINK_S` | 0.16 | and sinks in this long |
+| `app.js BACK_PX` | 80 | swiping right this far on a sheet's second page goes back |
+| `app.js DISMISS_PX` | 96 | swiping a sheet down this far closes it |
 | `app.js FRESH_MS` | 3000 | the phone's just-saved row stays tinted |
 | `look.ts MS.fresh` | 2000 | the band's just-saved chip stays at full strength, the rest dim |
 | `look.ts MS.saved` | 3000 | the hint tail `✓ saved to <project>` stays up |
@@ -245,7 +253,7 @@ Things that move: the phone's swipe, sheets and drawers (rise on a spring over a
 |---|---|
 | Text at 4.5:1 or better in both themes (§3, §4, checked) | readable in sunlight and with low vision |
 | Targets 44×44px at the least | thumbs |
-| Every gesture has a button and a keyboard path: swipe = Archive in the sheet, hold = `⋯` | not everyone can swipe or hold |
+| Every gesture has a button and a keyboard path: swipe = Archive in the sheet, hold = Edit in the sheet, tap = `⋯` | not everyone can swipe or hold |
 | Sheets and drawers are modal: focus stays inside, Escape closes, focus goes back to where it came from | keyboard and screen reader users don't get lost |
 | Save, sync and search results are announced (`role="status"`, live regions) | the screen changes without focus moving |
 | At 200% text, nothing scrolls sideways at 390px wide | large text is a setting people use |
@@ -281,6 +289,13 @@ Keys, layout and behaviour are in [`SPEC.md`](SPEC.md). The terminal's spacing i
 
 Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one or more `- Change:` lines and one or more `- Why:` lines. The newest entry ends with `Fingerprint: <hash>` of the design values in the code (`bun tools/check-design.ts --fingerprint` prints it). Versions: major when a meaning changes or something goes (a glyph means something else, a colour role moves); minor when something is added; patch for a value tweak or a doc fix. Entries are never removed.
 
+### 1.0.1 — 2026-10-13
+- Change: Sheets and drawers start below the screen before their first frame, and their dialog clips its overflow instead of hiding it (§7).
+- Why: Opening the note menu showed it in place for a frame, then it dropped and rose; and on iOS the dialog scrolled to show the focused action, so the menu rode up the screen and snapped back.
+- Change: Sheets and drawers rise in 0.28s on a steep ease-out that ends on time (was a 0.32s spring with a small bounce, which took about 0.35s to settle) and sink in 0.16s; Move to project became the sheet's second page, with Back, Escape and a swipe right to go back, instead of the project picker as a second dialog; a swipe down closes a sheet; a note is edited in a panel sized to the screen above the keyboard, not in the list; a tap on a note opens its sheet, which shows the note whole, and holding a note edits it; the phone quotes a note without the pane's `▎` bar; a project heading on the phone is 0.9375rem semibold in the text colour (was 0.8125rem, dim), with a larger dot, more space above it, and a hairline under it while it's stuck to the top.
+- Why: Opening the menu felt slow, and going from the menu to the picker sank one dialog and raised another for what is one step, with no way back to the actions. Sheets had no swipe down to close, which iOS sheets have, and a note edited in the list landed wherever iOS scrolled it, often half under the keyboard; scrolling it into place fought iOS's own scroll. A tap edited, so a note longer than the row's four lines (or the sheet's three) could only be read whole by editing it, with the keyboard over half of it. The `▎` bar sets quoted text apart in a terminal, which can't draw boxes; on the phone the quote already has its own section. Project headings were the faintest text on the screen, so they read as labels rather than as the sections the notes sit in.
+Fingerprint: ad50d4f26e1b
+
 ### 1.0.0 — 2026-10-11
 - Change: First version of this file, recording the look after the quiet terminal redesign and the phone redesign, with `tools/check-design.ts` holding it to the code in `tools/check.sh` and CI.
 - Why: The pane, the band and the phone are written in separate files and languages, and they had already drifted: the pane hashed projects over five theme keys and the phone over six, so a project could take a different colour on each.
@@ -296,7 +311,6 @@ Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one
 - Why: Under the old rule, letting go anywhere past 80px archived, even after the finger turned back, so changing your mind still archived.
 - Change: The accessibility bar (§8): 44px targets, a button for every gesture, modal sheets, live regions, 200% text at 390px, axe clean.
 - Why: The phone is used one-handed and with large text, and a gesture-only action shuts out anyone who can't make it.
-Fingerprint: c63743944f39
 
 ### 0.1.0 — 2026-10-11
 - Change: The look as first released (ostrakon v0.1.0): theme keys only, project colours from six theme keys hashed from the project key, heavy and light rules between parts, and the phone on system fonts with its own small token set.

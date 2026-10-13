@@ -40,9 +40,9 @@ let retryMs = 1000
 let retryTimer = 0
 let pollGen = 0
 let pollAbort = null
-let editing = null // { id, draft }
-// While a finger is on a row, or a row is being edited, the list isn't redrawn under it; a sync that
-// arrives meanwhile is drawn when it ends.
+let editing = null // { id, draft }: the note open in the editor
+// While a finger is on a row, or a note is being edited, the list isn't redrawn under it; a sync
+// that arrives meanwhile is drawn when it ends.
 let isTouching = false
 let isStale = false
 let toastTimer = 0
@@ -53,7 +53,7 @@ const folded = new Set(load('sp.folded', []))
 
 // The marks the phone draws as text; the shared ones as the pane's (plugin/src/ui/look.ts GLYPH).
 // docs/DESIGN.md lists them, and tools/check.sh fails when the two differ.
-const GLYPH = { claude: '◆', phone: '▪', quote: '▎', folded: '▸', saved: '✓', queued: '↑', next: '›' }
+const GLYPH = { claude: '◆', phone: '▪', folded: '▸', saved: '✓', queued: '↑', next: '›' }
 
 const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
 const ulid = () => {
@@ -436,8 +436,6 @@ const renderRefused = () => {
       row.dataset.id = item.id
       return row
     }
-    const bar = make('span', 'bar', GLYPH.quote)
-    bar.setAttribute('aria-hidden', 'true')
     const edit = button(
       'Edit',
       () => {
@@ -449,7 +447,7 @@ const renderRefused = () => {
     )
     const again = button('Retry', () => retry(item), 'btn')
     const drop = button('Discard local copy', () => discard(item), 'btn quiet')
-    const row = make('li', '', make('p', 'quote', bar, make('span', '', item.text)), reason, only, make('div', 'row', edit, again, drop))
+    const row = make('li', '', make('p', 'quote', item.text), reason, only, make('div', 'row', edit, again, drop))
     row.dataset.id = item.id
     return row
   })
@@ -502,6 +500,18 @@ const heading = (key, lead, name, count, isOpen, note, rowsId) => {
   toggle.append(make('span', 'count', String(count), make('span', 'sr-only', count === 1 ? ' note' : ' notes')))
   return make('h2', '', toggle)
 }
+
+// A project heading stuck to the top of the screen is marked `stuck`: with the top 1px taken off
+// the view, a stuck heading (at 0) is no longer wholly in it.
+const stuckWatch =
+  'IntersectionObserver' in window
+    ? new IntersectionObserver(
+        entries => {
+          for (const entry of entries) entry.target.classList.toggle('stuck', entry.intersectionRatio < 1 && entry.boundingClientRect.top < 1)
+        },
+        { rootMargin: '-1px 0px 0px 0px', threshold: 1 },
+      )
+    : null
 
 const renderList = () => {
   if (editing || isTouching) {
@@ -564,7 +574,9 @@ const renderList = () => {
   }
   // Focus stays on the same control (a row's ⋯, a heading) when the list is drawn again.
   const focused = $('list').contains(document.activeElement) ? document.activeElement.dataset.focus : undefined
+  stuckWatch?.disconnect()
   $('list').replaceChildren(...sections)
+  for (const head of $('list').querySelectorAll('.group h2')) stuckWatch?.observe(head)
   if (focused)
     $('list')
       .querySelector(`[data-focus="${CSS.escape(focused)}"]`)
@@ -768,47 +780,61 @@ const decide = (id, status) => {
   if (hadFocus) ((status === 'open' ? moreOf(id) : null) ?? $('list').querySelector('[data-focus^="Keep:"], h2 button'))?.focus({ preventScroll: true })
 }
 
+// A note is edited in a panel over the list, the height of what the keyboard leaves of the screen.
+// iOS slides the view over the page for the keyboard rather than shrinking the page, so a field in
+// the list landed wherever iOS scrolled it, and scrolling it into place fought iOS. A panel sized
+// to the view needs no scrolling: the field is always in sight, and a long note scrolls inside it.
+const fitEditor = () => {
+  const view = window.visualViewport
+  const editor = $('editor')
+  // Zoomed in, the view is smaller for that, not for a keyboard: the panel keeps the screen.
+  if (!view || view.scale > 1.01) {
+    editor.style.removeProperty('--view-top')
+    editor.style.removeProperty('--view-height')
+    delete editor.dataset.keyboard
+    return
+  }
+  editor.style.setProperty('--view-top', `${view.offsetTop}px`)
+  editor.style.setProperty('--view-height', `${view.height}px`)
+  editor.toggleAttribute('data-keyboard', window.innerHeight - view.height > 40)
+}
+
+// Opened from a hold's lift or Edit's tap: the field takes focus in that same touch, as iOS shows
+// the keyboard only for a focus a touch asked for.
 const startEdit = id => {
   const note = current()[id]
-  const row = $('list').querySelector(`li.note[data-id="${id}"]`)
-  if (!note || !row) return
+  if (!note || editing) return
   editing = { id, draft: note.text }
-  row.className = 'note editing'
-  const field = document.createElement('textarea')
+  const field = $('editor-text')
   field.value = note.text
-  field.setAttribute('aria-label', 'Edit note')
-  field.addEventListener('input', () => (editing.draft = field.value))
-  field.addEventListener('keydown', event => {
-    if (event.key === 'Escape') endEdit(false)
-    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) endEdit(true)
-  })
-  row.replaceChildren(
-    field,
-    make(
-      'div',
-      'actions',
-      button('Cancel', () => endEdit(false), 'btn'),
-      button('Save', () => endEdit(true), 'primary'),
-    ),
-  )
-  field.focus()
+  fitEditor()
+  window.visualViewport?.addEventListener('resize', fitEditor)
+  window.visualViewport?.addEventListener('scroll', fitEditor)
+  if ($('editor').open) $('editor').close()
+  $('editor').showModal()
+  // Not scrolled to: the panel is still below the screen, rising in.
+  field.focus({ preventScroll: true })
   field.setSelectionRange(field.value.length, field.value.length)
+  field.scrollTop = field.scrollHeight
+  motion.sheetIn($('editor'))
 }
 
 const endEdit = isSaved => {
   if (!editing) return
   const { id, draft } = editing
-  editing = null
   const note = current()[id]
   const text = draft.trim()
-  const hadFocus = $('list').querySelector('li.note.editing')?.contains(document.activeElement)
-  if (!(isSaved && note && text !== '' && text !== note.text)) render()
   // Not queued: the editor stays open with the draft.
-  else if (!queue({ ...note, text, updated: stamp(note.updated), origin: 'iphone' })) {
-    editing = { id, draft }
-    return editing
-  }
-  if (hadFocus) moreOf(id)?.focus({ preventScroll: true })
+  if (isSaved && note && text !== '' && text !== note.text && !queue({ ...note, text, updated: stamp(note.updated), origin: 'iphone' })) return
+  editing = null
+  window.visualViewport?.removeEventListener('resize', fitEditor)
+  window.visualViewport?.removeEventListener('scroll', fitEditor)
+  $('editor-text').blur()
+  render()
+  motion.sheetOut($('editor'), () => {
+    $('editor').close()
+    moreOf(id)?.focus({ preventScroll: true })
+  })
 }
 
 const markSent = id => {
@@ -875,6 +901,12 @@ const tweenValue = (from, to, options, onUpdate) => {
 
 const SPRING = { type: 'spring', visualDuration: 0.32, bounce: 0.12 }
 
+// Sheets and drawers rise on a steep ease-out that ends on time (a spring without bounce creeps
+// over its last few pixels), and sink on a quicker ease-in.
+const RISE_S = 0.28
+const SINK_S = 0.16
+const RISE = { duration: RISE_S, ease: [0.32, 0.72, 0, 1] }
+
 // Sheets and drawers: the panel rises over a fading scrim, and sinks on the way out. A dialog
 // opened again while it's still leaving cancels that leaving (its `done` never runs).
 const leaving = new WeakMap()
@@ -887,29 +919,98 @@ const enter = dialog => {
     return
   }
   dialog.style.opacity = ''
-  run(scrim, { opacity: [0, 1] }, { duration: 0.2 })
-  run(panel, { transform: ['translateY(100%)', 'translateY(0%)'] }, SPRING)
+  // Below the screen before the first frame: Motion applies its first keyframe a frame late, and
+  // the panel would show in place for that frame, then drop and rise.
+  scrim.style.opacity = '0'
+  panel.style.transform = 'translateY(100%)'
+  run(scrim, { opacity: [0, 1] }, { duration: RISE_S })
+  run(panel, { transform: ['translateY(100%)', 'translateY(0%)'] }, RISE)
 }
-const leave = (dialog, done) => {
+// `isDragged`: a finger pulled it partway down, so it goes on from there, already moving (an
+// ease-in would stall it under the finger). Like the pages, it starts from the style it has now,
+// in px: Motion would go from the last value it set, before the finger moved it.
+const leave = (dialog, done, isDragged = false) => {
   const token = {}
   leaving.set(dialog, token)
+  const panel = dialog.querySelector('.panel')
+  const scrim = dialog.querySelector('.scrim')
   const finish = () => {
     if (leaving.get(dialog) !== token) return
     leaving.delete(dialog)
     dialog.style.opacity = ''
-    dialog.querySelector('.panel').style.transform = ''
-    dialog.querySelector('.scrim').style.opacity = ''
+    panel.style.transform = ''
+    scrim.style.opacity = ''
     done()
   }
   if (!M) return finish()
   if (reduced.matches) return void run(dialog, { opacity: [1, 0] }, { duration: 0.12 }).finished.then(finish, finish)
-  run(dialog.querySelector('.scrim'), { opacity: 0 }, { duration: 0.18 })
-  run(dialog.querySelector('.panel'), { transform: 'translateY(100%)' }, { duration: 0.2, ease: [0.4, 0, 1, 1] }).finished.then(finish, finish)
+  const ease = isDragged ? RISE.ease : [0.4, 0, 1, 1]
+  run(scrim, { opacity: [Number(scrim.style.opacity || 1), 0] }, { duration: SINK_S })
+  run(panel, { transform: [panel.style.transform || 'translateY(0px)', `translateY(${panel.offsetHeight}px)`] }, { duration: SINK_S, ease }).finished.then(
+    finish,
+    finish,
+  )
+}
+// Back where it rests, from wherever a finger left it.
+const settleSheet = dialog => {
+  const panel = dialog.querySelector('.panel')
+  const scrim = dialog.querySelector('.scrim')
+  run(scrim, { opacity: [Number(scrim.style.opacity || 1), 1] }, { duration: RISE_S })
+  run(panel, { transform: [panel.style.transform || 'translateY(0px)', 'translateY(0px)'] }, RISE)
+}
+
+// Every move here starts from the style it has now, given as the first keyframe: Motion goes from
+// the last value it set, which knows nothing of where a finger has since moved it.
+//
+// A page of a sheet over another (the note's actions and Move to): `to` slides in from the side
+// `way` points to (1: from the right, going on; -1: from the left, going back) while `from` slides
+// a little the other way and fades, and the sheet's height goes from one page's to the other's.
+// `isDragged`: a finger already moved them partway, so they go on from there. A turn started
+// before the last one ended takes over from it (the last one's `done` never runs).
+const PAGE_SHIFT = 0.3 // the page underneath sits this far over, of its width
+let pageTurn = null
+const turnPage = (from, to, way, done, isDragged = false) => {
+  const token = {}
+  pageTurn = token
+  const pages = from.parentElement
+  const height = pages.offsetHeight
+  to.hidden = false
+  const finish = () => {
+    if (pageTurn !== token) return
+    pageTurn = null
+    from.hidden = true
+    pages.style.height = ''
+    // Motion may write each animation's last frame back after this; a page shown again always has
+    // its start set first, so what's left on a hidden one doesn't matter.
+    for (const page of [from, to]) {
+      page.style.transform = ''
+      page.style.opacity = ''
+    }
+    done()
+  }
+  if (isStill()) return finish()
+  // In px throughout, as a finger moves them: from a finger's px to a %, the first frame jumps.
+  const width = pages.offsetWidth
+  const aside = `translateX(${-PAGE_SHIFT * width}px)`
+  const off = `translateX(${width}px)`
+  if (!isDragged) {
+    // Where they start, before the first frame (Motion's first keyframe comes a frame late).
+    to.style.transform = way > 0 ? off : aside
+    to.style.opacity = way > 0 ? '1' : '0'
+    from.style.transform = 'translateX(0px)'
+    from.style.opacity = '1'
+  }
+  pages.style.height = `${height}px`
+  run(pages, { height: [`${height}px`, `${to.offsetHeight}px`] }, RISE)
+  run(from, { transform: [from.style.transform, way > 0 ? aside : off], opacity: [Number(from.style.opacity), way > 0 ? 0 : 1] }, RISE)
+  run(to, { transform: [to.style.transform, 'translateX(0px)'], opacity: [Number(to.style.opacity), 1] }, RISE).finished.then(finish, finish)
 }
 
 const motion = {
   sheetIn: enter,
   sheetOut: leave,
+  sheetSettle: settleSheet,
+  pageTurn: turnPage,
   // The search bar and its matches settle in (entering search can't wait for a View Transition:
   // the field must take focus at once for the keyboard to come up).
   searchIn: () => {
@@ -945,6 +1046,8 @@ let sheetReturn = null
 // What the sheet last drew: a sync that changes none of it leaves the buttons alone (one may be
 // under a finger mid-press).
 let sheetDrawn = ''
+// Which page of the sheet shows: 'actions', or 'move' (Move to project).
+let sheetPage = 'actions'
 
 // The sheet acts only on an open note: one archived, sent or deleted meanwhile closes it.
 const isActionable = note => note !== undefined && !note.deleted && note.status === 'open'
@@ -961,29 +1064,80 @@ const openSheet = (id, trigger = moreOf(id)) => {
   renderSheet()
   // Still leaving from last time: gone at once.
   if ($('sheet').open) $('sheet').close()
+  showFirstPage()
   $('sheet').showModal()
+  $('sheet').querySelector('.quote').scrollTop = 0
+  markScrolls()
   $('sheet-actions').querySelector('button')?.focus({ preventScroll: true })
   motion.sheetIn($('sheet'))
   renderList()
 }
 
 // Focus goes back to the trigger once the sheet has gone (the page is out of reach until then);
-// `after`, when given, runs then instead, handed that trigger.
-const closeSheet = after => {
+// `after`, when given, runs then instead, handed that trigger. `isDragged`: pulled down by a finger.
+const closeSheet = (after, isDragged = false) => {
   if (sheetFor === null) return
   const id = sheetFor
   const trigger = sheetReturn
   sheetFor = null
   sheetDrawn = ''
   sheetReturn = null
+  if (picking?.mode === 'move') picking = null
   renderList()
-  motion.sheetOut($('sheet'), () => {
-    $('sheet').close()
-    // The list was drawn again: the same row's ⋯ is a new button.
-    const back = trigger?.isConnected ? trigger : trigger?.classList?.contains('more') ? moreOf(id) : null
-    if (after) after(back)
-    else if (back && back !== document.body) back.focus({ preventScroll: true })
-  })
+  motion.sheetOut(
+    $('sheet'),
+    () => {
+      $('sheet').close()
+      showFirstPage()
+      // The list was drawn again: the same row's ⋯ is a new button.
+      const back = trigger?.isConnected ? trigger : trigger?.classList?.contains('more') ? moreOf(id) : null
+      if (after) after(back)
+      else if (back && back !== document.body) back.focus({ preventScroll: true })
+    },
+    isDragged,
+  )
+}
+
+// ---- the sheet's Move to page ----
+
+// The picker's search and list are one set of nodes: in the drawer for File under, and on the
+// sheet's second page for Move to.
+const pickerHome = () => $('picker').querySelector('.panel')
+
+// The actions page, at once and with nothing left over from a turn or a swipe.
+const showFirstPage = () => {
+  pageTurn = null
+  sheetPage = 'actions'
+  // A turn still running would write its last frame over what's set here.
+  for (const node of [$('sheet-actions'), $('sheet-move'), $('sheet').querySelector('.pages')]) for (const running of node.getAnimations()) running.cancel()
+  for (const page of [$('sheet-actions'), $('sheet-move')]) {
+    page.style.transform = ''
+    page.style.opacity = ''
+  }
+  $('sheet-actions').hidden = false
+  $('sheet-move').hidden = true
+  $('sheet').querySelector('.pages').style.height = ''
+  if ($('picker-body').parentElement !== pickerHome()) pickerHome().append($('picker-body'))
+}
+
+const showMovePage = () => {
+  if (sheetFor === null || sheetPage === 'move') return
+  sheetPage = 'move'
+  picking = { mode: 'move', id: sheetFor }
+  $('picker-search').value = ''
+  $('sheet-move').append($('picker-body'))
+  renderPickerList()
+  motion.pageTurn($('sheet-actions'), $('sheet-move'), 1, () => {})
+  ;($('picker-body').querySelector('[aria-pressed="true"]') ?? $('picker-search')).focus({ preventScroll: true })
+}
+
+// Back to the actions, by Back, Escape or a swipe right; `isDragged` for the swipe.
+const showActionsPage = (isDragged = false) => {
+  if (sheetPage !== 'move') return
+  sheetPage = 'actions'
+  picking = null
+  motion.pageTurn($('sheet-move'), $('sheet-actions'), -1, () => pickerHome().append($('picker-body')), isDragged)
+  $('sheet-actions').querySelector('[data-key="Move to project"]')?.focus({ preventScroll: true })
 }
 
 // The ⋯ to focus once note `id` leaves the list: the next row's, else the one before.
@@ -995,7 +1149,7 @@ const neighbourOf = id => {
 
 // Runs a sheet action once the sheet is closed, so the list it redraws is the plain one. Focus then
 // goes back to the row's ⋯; `then`: 'gone' when the note leaves the list (focus goes to a
-// neighbour's ⋯), 'own' when the action puts focus somewhere itself (Edit, in its field).
+// neighbour's ⋯).
 const act =
   (run, then = 'back') =>
   () => {
@@ -1003,7 +1157,6 @@ const act =
     const near = then === 'gone' ? neighbourOf(id) : null
     closeSheet(back => {
       run(id)
-      if (then === 'own') return
       const target = then === 'gone' ? (near ? moreOf(near) : null) : back
       target?.focus({ preventScroll: true })
     })
@@ -1031,27 +1184,30 @@ const renderSheet = () => {
   $('sheet-text').textContent = note.text
   $('sheet-meta').replaceChildren(dot(note.project), `${labelOf(note.project)} · ${by} · ${ageOf(note.updated)}`)
   const items = [
-    sheetAction('edit', 'Edit', act(startEdit, 'own')),
+    // At once, not once the sheet has gone: the field's focus has to come in this tap.
+    sheetAction('edit', 'Edit', () => {
+      const id = sheetFor
+      closeSheet(() => {})
+      startEdit(id)
+    }),
     sheetAction(
       'copy',
       'Copy text',
       act(async id => toast((await copy(current()[id]?.text ?? '')) ? 'Copied' : "Couldn't copy")),
     ),
-    sheetAction(
-      'move',
-      'Move to project',
-      () => {
-        const id = sheetFor
-        closeSheet(back => openPicker({ mode: 'move', id, trigger: back }))
-      },
-      { aside: `${labelOf(note.project)} ${GLYPH.next}` },
-    ),
+    sheetAction('move', 'Move to project', showMovePage, { aside: `${labelOf(note.project)} ${GLYPH.next}` }),
     sheetAction('sent', 'Mark sent', act(markSent, 'gone'), { sub: 'used elsewhere; leaves open notes' }),
     sheetAction('archive', 'Archive', act(archive, 'gone'), { className: 'danger' }),
   ]
-  items[2].setAttribute('aria-haspopup', 'dialog')
   list.replaceChildren(...items)
+  if ($('sheet').open) markScrolls()
   if (focused !== undefined) (items.find(item => item.dataset.key === focused) ?? items[0]).focus({ preventScroll: true })
+}
+
+// A long note's text, and actions that don't fit (large text, a short screen), scroll, and a swipe
+// down on them is theirs.
+const markScrolls = () => {
+  for (const box of [$('sheet-actions'), $('sheet').querySelector('.quote')]) box.classList.toggle('scrolls', box.scrollHeight > box.clientHeight)
 }
 
 $('sheet').addEventListener('pointerdown', () => (isSheetPressed = true))
@@ -1068,10 +1224,150 @@ $('sheet').addEventListener(
 )
 $('sheet-scrim').addEventListener('click', () => closeSheet())
 $('sheet-cancel').addEventListener('click', () => closeSheet())
+$('sheet-back').addEventListener('click', () => showActionsPage())
+// Escape goes back a page first.
 $('sheet').addEventListener('cancel', event => {
   event.preventDefault()
-  closeSheet()
+  if (sheetPage === 'move') showActionsPage()
+  else closeSheet()
 })
+// Swiping right on the Move to page goes back, as Back does: the page follows the finger, with the
+// actions coming in under it, and letting go past BACK_PX or on a flick right goes back; otherwise
+// it slides home. Up and down are the list's own scroll (touch-action: pan-y), which ends a swipe.
+const BACK_PX = 80
+let backSwipe = null
+// A swipe's lift lands as a click on whatever is under it; that click doesn't count.
+let isSwiped = false
+const slideHome = () => {
+  const move = $('sheet-move')
+  const actions = $('sheet-actions')
+  run(move, { transform: [move.style.transform, 'translateX(0px)'] }, RISE)
+  const aside = `translateX(${-PAGE_SHIFT * actions.offsetWidth}px)`
+  run(actions, { transform: [actions.style.transform, aside], opacity: [Number(actions.style.opacity), 0] }, RISE).finished.then(() => {
+    if (sheetPage !== 'move' || backSwipe) return
+    actions.hidden = true
+  })
+}
+$('sheet-move').addEventListener('pointerdown', event => {
+  if (sheetPage !== 'move' || pageTurn || backSwipe || event.button > 0) return
+  backSwipe = { pointer: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, isDragging: false, samples: [{ t: performance.now(), x: event.clientX }] }
+})
+$('sheet-move').addEventListener('pointermove', event => {
+  if (backSwipe?.pointer !== event.pointerId) return
+  const dx = event.clientX - backSwipe.x
+  const dy = event.clientY - backSwipe.y
+  if (!backSwipe.isDragging) {
+    if (pullDown?.isDragging) {
+      backSwipe = null
+      return
+    }
+    // Mostly up or down: the list's scroll, not a swipe.
+    if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+      backSwipe = null
+      return
+    }
+    if (dx < 10 || dx < Math.abs(dy)) return
+    backSwipe.isDragging = true
+    // Caught sliding home from the last swipe: the finger has it now.
+    for (const page of [$('sheet-move'), $('sheet-actions')]) for (const running of page.getAnimations()) running.cancel()
+    try {
+      $('sheet-move').setPointerCapture(event.pointerId)
+    } catch {}
+    $('sheet-actions').hidden = false
+  }
+  const now = performance.now()
+  backSwipe.samples.push({ t: now, x: event.clientX })
+  while (backSwipe.samples.length > 2 && now - backSwipe.samples[0].t > VELOCITY_MS) backSwipe.samples.shift()
+  backSwipe.dx = Math.max(0, dx)
+  const width = $('sheet-move').offsetWidth
+  const along = Math.min(1, backSwipe.dx / width)
+  $('sheet-move').style.transform = `translateX(${backSwipe.dx}px)`
+  $('sheet-actions').style.transform = `translateX(${-PAGE_SHIFT * width * (1 - along)}px)`
+  $('sheet-actions').style.opacity = String(along)
+})
+const endBackSwipe = event => {
+  if (backSwipe?.pointer !== event.pointerId) return
+  const swipe = backSwipe
+  backSwipe = null
+  if (!swipe.isDragging) return
+  isSwiped = true
+  setTimeout(() => (isSwiped = false), 0)
+  const [first, last] = [swipe.samples[0], swipe.samples.at(-1)]
+  const speed = last.t > first.t ? (last.x - first.x) / (last.t - first.t) : 0
+  const isBack = event.type === 'pointerup' && (swipe.dx > BACK_PX || (speed > FLICK_PX_PER_MS && swipe.dx > FLICK_MIN_PX))
+  if (isBack) showActionsPage(true)
+  else slideHome()
+}
+$('sheet-move').addEventListener('pointerup', endBackSwipe)
+$('sheet-move').addEventListener('pointercancel', endBackSwipe)
+$('sheet').addEventListener(
+  'click',
+  event => {
+    if (!isSwiped) return
+    event.preventDefault()
+    event.stopPropagation()
+  },
+  true,
+)
+
+// Swiping down on the sheet closes it: the panel follows the finger and the scrim fades with it,
+// and letting go past DISMISS_PX or on a flick down closes it; otherwise it settles back. It starts
+// anywhere but what scrolls (a long note's text, the actions when they overflow, Move to's
+// projects), whose own scroll up and down is.
+const DISMISS_PX = 96
+let pullDown = null
+const isScrolling = target => target.closest('.actions.scrolls, .quote.scrolls, .picks-scroll') !== null
+$('sheet')
+  .querySelector('.panel')
+  .addEventListener('pointerdown', event => {
+    if (pullDown || pageTurn || event.button > 0 || isScrolling(event.target)) return
+    pullDown = { pointer: event.pointerId, x: event.clientX, y: event.clientY, dy: 0, isDragging: false, samples: [{ t: performance.now(), y: event.clientY }] }
+  })
+$('sheet')
+  .querySelector('.panel')
+  .addEventListener('pointermove', event => {
+    if (pullDown?.pointer !== event.pointerId) return
+    const dx = event.clientX - pullDown.x
+    const dy = event.clientY - pullDown.y
+    if (!pullDown.isDragging) {
+      // Sideways first, or a swipe back already under way: not ours.
+      if (backSwipe?.isDragging || (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy))) {
+        pullDown = null
+        return
+      }
+      if (dy < 10 || dy < Math.abs(dx)) return
+      pullDown.isDragging = true
+      backSwipe = null
+      const panel = $('sheet').querySelector('.panel')
+      for (const running of panel.getAnimations()) running.cancel()
+      try {
+        panel.setPointerCapture(event.pointerId)
+      } catch {}
+    }
+    const now = performance.now()
+    pullDown.samples.push({ t: now, y: event.clientY })
+    while (pullDown.samples.length > 2 && now - pullDown.samples[0].t > VELOCITY_MS) pullDown.samples.shift()
+    pullDown.dy = Math.max(0, dy)
+    const panel = $('sheet').querySelector('.panel')
+    panel.style.transform = `translateY(${pullDown.dy}px)`
+    $('sheet-scrim').style.opacity = String(1 - Math.min(1, pullDown.dy / panel.offsetHeight))
+  })
+const endPullDown = event => {
+  if (pullDown?.pointer !== event.pointerId) return
+  const pull = pullDown
+  pullDown = null
+  if (!pull.isDragging) return
+  isSwiped = true
+  setTimeout(() => (isSwiped = false), 0)
+  const [first, last] = [pull.samples[0], pull.samples.at(-1)]
+  const speed = last.t > first.t ? (last.y - first.y) / (last.t - first.t) : 0
+  const isGone = event.type === 'pointerup' && (pull.dy > DISMISS_PX || (speed > FLICK_PX_PER_MS && pull.dy > FLICK_MIN_PX))
+  if (isGone) closeSheet(undefined, true)
+  else motion.sheetSettle($('sheet'))
+}
+$('sheet').querySelector('.panel').addEventListener('pointerup', endPullDown)
+$('sheet').querySelector('.panel').addEventListener('pointercancel', endPullDown)
+
 // Tab and Shift+Tab go round the open dialog's own buttons and fields.
 document.addEventListener('keydown', event => {
   const dialog = $('sheet').open ? $('sheet') : $('picker').open ? $('picker') : null
@@ -1082,11 +1378,11 @@ document.addEventListener('keydown', event => {
   stops[(at + (event.shiftKey ? -1 : 1) + stops.length) % stops.length]?.focus()
 })
 
-// Tap edits; swipe left archives, over a strip that says so and firms up while letting go would
-// archive. Letting go archives only while the finger is still heading left past ARCHIVE_PX, or on a
-// quick flick left; a finger that turned back right springs the row home. Holding still opens the
-// action sheet, at once, with the finger still down; what the finger does after that (a small move,
-// the lift) is ignored.
+// Tap opens the action sheet; swipe left archives, over a strip that says so and firms up while
+// letting go would archive. Letting go archives only while the finger is still heading left past
+// ARCHIVE_PX, or on a quick flick left; a finger that turned back right springs the row home.
+// Holding still edits: the row marks the hold at once, and editing starts on the lift, since iOS
+// brings the keyboard up only for a field focused in a touch's own event.
 const HOLD_MS = 550
 const ARCHIVE_PX = 80
 const FLICK_PX_PER_MS = 0.5 // 500 px/s
@@ -1105,6 +1401,7 @@ const gestures = (row, face, id) => {
   let frame = 0
   let spring = null
   let isLeaving = false
+  let isHeld = false // held still past HOLD_MS: the lift edits
 
   // The face follows the finger once a frame, by transform only.
   const paint = () => {
@@ -1121,6 +1418,8 @@ const gestures = (row, face, id) => {
     clearTimeout(holdTimer)
     start = null
     isDragging = false
+    isHeld = false
+    row.classList.remove('held')
     samples = []
   }
   // Done with the row: the list may be drawn again.
@@ -1179,14 +1478,15 @@ const gestures = (row, face, id) => {
       })
   }
 
-  // A right click (or a browser's own long press) opens the sheet too; the hold has usually opened it.
+  // A right click opens the sheet too. A browser's own long press (Android's) is the hold, which
+  // edits: it comes while the press is still ours, and does nothing.
   row.addEventListener('contextmenu', event => {
     event.preventDefault()
-    if (!editing && !isDragging) openSheet(id)
+    if (!editing && !isDragging && start === null) openSheet(id)
   })
   row.addEventListener('pointerdown', event => {
-    // The ⋯ button is a plain button: no swipe, hold or tap-to-edit starts on it. One finger at a
-    // time: a second one on the row is ignored.
+    // The ⋯ button is a plain button: no swipe, hold or tap starts on it. One finger at a time: a
+    // second one on the row is ignored.
     if (editing || isLeaving || event.button > 0 || start || event.target.closest('.more')) return
     // Caught mid-spring: the row stays where it is, under the finger.
     if (spring) {
@@ -1201,10 +1501,9 @@ const gestures = (row, face, id) => {
     isTouching = true
     if (!isDragging)
       holdTimer = setTimeout(() => {
-        settle()
-        release()
+        isHeld = true
+        row.classList.add('held')
         navigator.vibrate?.(10)
-        openSheet(id)
       }, HOLD_MS)
     // Moves and the lift stay with this row even when the finger (or mouse) leaves it.
     try {
@@ -1228,6 +1527,8 @@ const gestures = (row, face, id) => {
       heading = Math.sign(event.clientX - turnX)
       turnX = event.clientX
     }
+    // Once held, the finger only says where to lift: no swipe.
+    if (isHeld) return
     if (!isDragging && Math.abs(moved) > 10) {
       clearTimeout(holdTimer)
       isDragging = true
@@ -1241,11 +1542,12 @@ const gestures = (row, face, id) => {
   row.addEventListener('pointerup', event => {
     if (!isOurs(event)) return
     const wasDragging = isDragging
+    const wasHeld = isHeld
     const v = velocity()
     settle()
     if (!wasDragging) {
       release()
-      return startEdit(id)
+      return wasHeld ? startEdit(id) : openSheet(id)
     }
     const isFlick = v <= -FLICK_PX_PER_MS && dx <= -FLICK_MIN_PX && heading <= 0
     const isPast = dx < -ARCHIVE_PX && heading < 0 && v <= 0.05
@@ -1358,7 +1660,7 @@ const renderCapture = () => {
   })
   const rest = projects.length - shown.length
   if (rest > 0) {
-    const more = button('', event => openPicker({ mode: 'file', trigger: event.currentTarget }), 'chip more-chip')
+    const more = button('', event => openPicker({ trigger: event.currentTarget }), 'chip more-chip')
     more.append(icon(ICONS.search, { size: 14, stroke: 2 }), make('span', '', `${rest} more`))
     more.setAttribute('aria-label', `More projects, ${rest} others`)
     more.setAttribute('aria-haspopup', 'dialog')
@@ -1547,12 +1849,12 @@ $('capture').addEventListener('submit', event => {
 
 // ---- the project picker (File under, Move to) ----
 
-// `mode`: 'file' picks where the next note goes; 'move' moves note `id`. `trigger` gets focus back.
+// `mode`: 'file' picks where the next note goes, in the drawer (`trigger` gets focus back); 'move'
+// moves note `id`, on the sheet's Move to page.
 let picking = null
 
-const openPicker = ({ mode: pickMode, id = null, trigger = null }) => {
-  picking = { mode: pickMode, id, trigger }
-  $('picker-title').textContent = pickMode === 'move' ? 'Move to' : 'File under'
+const openPicker = ({ trigger = null }) => {
+  picking = { mode: 'file', trigger }
   $('picker-search').value = ''
   renderPickerList()
   // Still leaving from last time: gone at once.
@@ -1566,18 +1868,16 @@ const openPicker = ({ mode: pickMode, id = null, trigger = null }) => {
 // once and puts focus back in the note field while the tap still counts, so the keyboard comes back;
 // otherwise it sinks away first and focus goes back to what opened it.
 const closePicker = (picked = false) => {
-  if (!picking) return
-  const { trigger, mode: pickMode, id } = picking
+  if (picking?.mode !== 'file') return
+  const { trigger } = picking
   picking = null
-  if (picked && pickMode === 'file') {
+  if (picked) {
     $('picker').close()
     return $('text').focus({ preventScroll: true })
   }
   motion.sheetOut($('picker'), () => {
     $('picker').close()
-    // A moved note's row was drawn again, in its new group: focus its new ⋯.
-    const back = trigger?.isConnected ? trigger : id ? moreOf(id) : null
-    back?.focus({ preventScroll: true })
+    if (trigger?.isConnected) trigger.focus({ preventScroll: true })
   })
 }
 
@@ -1631,16 +1931,33 @@ const renderPickerList = () => {
 
 const choose = key => {
   if (!picking) return
+  // On the sheet's Move to page: the sheet closes, then the note moves (so the list it redraws is
+  // the plain one), and focus goes to its ⋯ in its new group.
   if (picking.mode === 'move') {
     const { id } = picking
-    if ((current()[id]?.project?.key ?? null) !== key) moveTo(id, projectOf(key))
-    closePicker(true)
+    closeSheet(() => {
+      if ((current()[id]?.project?.key ?? null) !== key) moveTo(id, projectOf(key))
+      moreOf(id)?.focus({ preventScroll: true })
+    })
     return
   }
   chosen = key
   renderCapture()
   closePicker(true)
 }
+
+$('editor-text').addEventListener('input', () => {
+  if (editing) editing.draft = $('editor-text').value
+})
+$('editor-text').addEventListener('keydown', event => {
+  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) endEdit(true)
+})
+$('editor-cancel').addEventListener('click', () => endEdit(false))
+$('editor-save').addEventListener('click', () => endEdit(true))
+$('editor').addEventListener('cancel', event => {
+  event.preventDefault()
+  endEdit(false)
+})
 
 $('picker-search').addEventListener('input', renderPickerList)
 $('picker-unfiled').addEventListener('click', () => choose(null))

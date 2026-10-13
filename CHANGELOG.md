@@ -8,11 +8,17 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ### Changed
 
+- On the phone, the note menu and the project picker open and close faster.
+- On the phone, Move to project is now a second page of the note menu instead of a separate picker: tap **Back**, or swipe right, to return to the note's actions.
+- On the phone, swipe the note menu down to close it.
+- On the phone, tapping a note opens its actions, showing the whole note, instead of editing it. To edit, hold the note and lift your finger, or tap **Edit**. A note is edited in a panel that fills the screen above the keyboard, with Cancel and Save at the top, instead of in the list.
+- On the phone, project headings are larger and bolder, in the main text colour, with more space between projects.
 - In the pane, a search that matches nothing no longer repeats your text twice below the field: one line says Enter saves it, and a query too long for the field shows once, whole, above that line.
 - In the pane, the edit box's buttons name their keys (`esc cancel`, `⏎ save`).
 
 ### Fixed
 
+- On the phone, the note menu (⋯ or a long press) and the project picker no longer jump up the screen before settling.
 - In the pane, the search field's `⏎ to list` no longer wraps onto a second row, and it's gone when nothing matches, since Enter saves the query then.
 - In the pane, Esc clears the search field fully: it used to leave a space behind, which hid the `search notes` placeholder and put what you typed next after it.
 

@@ -1,0 +1,8 @@
+{
+  "name": "ostrakon-phone-tests",
+  "private": true,
+  "description": "The phone app in WebKit at iPhone size (tools/phone/README.md)",
+  "devDependencies": {
+    "playwright-core": "1.64.0"
+  }
+}

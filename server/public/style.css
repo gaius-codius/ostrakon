@@ -400,7 +400,7 @@ input[type="search"]::-webkit-search-decoration {
 #list {
   display: flex;
   flex-direction: column;
-  gap: 1.125rem;
+  gap: 1.5rem;
 }
 .group h2 {
   position: sticky;
@@ -408,8 +408,12 @@ input[type="search"]::-webkit-search-decoration {
   z-index: 2;
   margin: 0;
   background: var(--bg);
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
   font-weight: 600;
+}
+/* Stuck to the top (app.js watchStuck): a hairline, so notes don't slide under it unmarked. */
+.group h2.stuck {
+  box-shadow: 0 1px 0 var(--line);
 }
 .group h2 button {
   width: 100%;
@@ -420,7 +424,7 @@ input[type="search"]::-webkit-search-decoration {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--dim);
+  color: var(--text);
   font: inherit;
   text-align: left;
 }
@@ -429,6 +433,10 @@ input[type="search"]::-webkit-search-decoration {
   width: 0.875rem;
   display: flex;
   justify-content: center;
+}
+.group .lead .dot {
+  width: 0.625rem;
+  height: 0.625rem;
 }
 .group .name {
   min-width: 0;
@@ -595,33 +603,11 @@ input[type="search"]::-webkit-search-decoration {
   background: var(--accent);
   color: var(--on-accent);
 }
-.note.chosen .face {
+/* The note the sheet is open for, and a note held long enough to edit on the lift. */
+.note.chosen .face,
+.note.held .face {
   background: var(--raised);
 }
-.note.editing {
-  user-select: auto;
-  -webkit-user-select: auto;
-  padding: 0.5rem 1.25rem 0.75rem;
-}
-.note.editing textarea {
-  width: 100%;
-  min-height: 6rem;
-  padding: 0.625rem 0.75rem;
-  border: 1px solid var(--accent);
-  border-radius: 0.75rem;
-  background: var(--surface);
-  resize: vertical;
-}
-.note.editing textarea:focus {
-  outline: none;
-}
-.note.editing .actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
 /* ---- notes the hub refused ---- */
 #refused {
   margin-top: 1.125rem;
@@ -864,6 +850,12 @@ code {
   font-weight: 600;
 }
 
+/* The page stays put under a sheet or drawer. Their dialogs clip rather than hide (no scroll
+   container), so a scroll on the scrim would reach the page. */
+html:has(dialog[open]) {
+  overflow: hidden;
+}
+
 /* ---- the action sheet: the note quoted, its actions, Cancel apart ---- */
 dialog.sheet {
   position: fixed;
@@ -877,7 +869,9 @@ dialog.sheet {
   border: 0;
   background: transparent;
   color: var(--text);
-  overflow: hidden;
+  /* Clip, not hidden: a hidden overflow can still be scrolled, and iOS scrolls it to show the
+     focused action while the panel is still below the screen, rising in. */
+  overflow: clip;
 }
 dialog.sheet::backdrop {
   background: transparent;
@@ -906,7 +900,7 @@ dialog.sheet::backdrop {
   min-height: 0;
   background: var(--surface);
   border-radius: 1.125rem;
-  overflow: hidden;
+  overflow: clip;
 }
 .sheet .head {
   flex: none;
@@ -917,27 +911,25 @@ dialog.sheet::backdrop {
   border-bottom: 1px solid var(--line);
   touch-action: none;
 }
+/* The whole note: a long one scrolls in its own space, so the actions stay in view. */
 .sheet .quote {
   margin: 0;
-  display: flex;
-  gap: 0.625rem;
+  max-height: min(33dvh, 15rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   font-size: 0.9375rem;
   line-height: 1.45;
+}
+.sheet .quote.scrolls {
+  touch-action: pan-y;
 }
 .sheet .quote #sheet-text {
   min-width: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.sheet .bar {
-  color: var(--faint);
 }
 .sheet .meta {
-  margin: 0 0 0 1.125rem;
+  margin: 0;
   font: 0.75rem / 1.5 var(--mono);
   color: var(--dim);
 }
@@ -948,9 +940,73 @@ dialog.sheet::backdrop {
   height: 0.4375rem;
   margin-right: 0.5rem;
 }
+/* Its pages, the actions and Move to, share one place: one shows at a time, and both while one
+   slides over the other. Each keeps its own height, which the sheet's follows. */
+.sheet .pages {
+  display: grid;
+  min-height: 0;
+  overflow: clip;
+}
+.sheet .page {
+  grid-area: 1 / 1;
+  align-self: start;
+  min-width: 0;
+}
+.sheet .page[hidden] {
+  display: none;
+}
 .sheet .actions {
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+.sheet .move {
+  display: flex;
+  flex-direction: column;
+  height: min(30rem, calc(100dvh - 17rem));
+  padding: 0 1.125rem;
+  /* Over the actions as it slides in. */
+  background: var(--surface);
+}
+/* Swipes on the sheet are its own (down closes it, right goes back a page), except up and down on
+   what scrolls: Move to's projects, and a long note or actions that don't fit. */
+.sheet .panel {
+  touch-action: none;
+}
+.sheet .picks-scroll,
+.sheet .actions.scrolls {
+  touch-action: pan-y;
+}
+.sheet .move .bar {
+  flex: none;
+  position: relative;
+  min-height: 2.75rem;
+  margin-top: 0.375rem;
+  display: flex;
+  align-items: center;
+}
+.sheet .move h2 {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  pointer-events: none;
+}
+.sheet .back {
+  min-height: 2.75rem;
+  margin-left: -0.5rem;
+  padding: 0 0.75rem 0 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  border: 0;
+  background: none;
+  color: var(--accent-text);
+  font-size: 1rem;
+}
+.sheet .move .picks-scroll {
+  padding-bottom: 0.5rem;
 }
 .sheet .action {
   width: 100%;
@@ -1033,6 +1089,81 @@ dialog.sheet::backdrop {
   display: none;
 }
 
+/* ---- the editor: a note edited in a panel over the list, as tall as the keyboard leaves room for.
+   --view-top and --view-height are the part of the screen not under the keyboard (app.js
+   fitEditor); the panel is sized to it, so nothing has to scroll for the field to show. ---- */
+dialog.editor {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  overflow: clip;
+}
+dialog.editor::backdrop {
+  background: transparent;
+}
+.editor .scrim {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  background: var(--scrim);
+}
+.editor .panel {
+  --gap-top: max(0.5rem, env(safe-area-inset-top));
+  --gap-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  position: absolute;
+  left: max(0.5rem, env(safe-area-inset-left));
+  right: max(0.5rem, env(safe-area-inset-right));
+  top: calc(var(--view-top, 0px) + var(--gap-top));
+  height: calc(var(--view-height, 100%) - var(--gap-top) - var(--gap-bottom));
+  max-width: 39rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 0.375rem 0.875rem 0.875rem;
+  background: var(--surface);
+  border-radius: 1.375rem;
+}
+/* With the keyboard up, the home bar's room is the keyboard's. */
+.editor[data-keyboard] .panel {
+  --gap-bottom: 0.5rem;
+}
+.editor .bar {
+  flex: none;
+  min-height: 3.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.editor h2 {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+.editor textarea {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: 0.5rem 0.25rem;
+  border: 0;
+  background: transparent;
+  resize: none;
+  font-size: 1.0625rem;
+  line-height: 1.45;
+  overscroll-behavior: contain;
+}
+.editor textarea:focus {
+  outline: none;
+}
+
 /* ---- drawers: a modal panel from the bottom (the project picker) ---- */
 dialog.drawer {
   position: fixed;
@@ -1046,7 +1177,7 @@ dialog.drawer {
   border: 0;
   background: transparent;
   color: var(--text);
-  overflow: hidden;
+  overflow: clip;
 }
 dialog.drawer::backdrop {
   background: transparent;
@@ -1092,7 +1223,7 @@ dialog.drawer .panel {
   font-size: 1.0625rem;
   font-weight: 600;
 }
-.drawer .find {
+.picker-body .find {
   flex: none;
   margin-top: 0.5rem;
   min-height: 2.75rem;
@@ -1104,7 +1235,7 @@ dialog.drawer .panel {
   background: var(--raised);
   color: var(--dim);
 }
-.drawer .find input {
+.picker-body .find input {
   flex: 1;
   min-width: 0;
   min-height: 2.75rem;
@@ -1113,17 +1244,26 @@ dialog.drawer .panel {
   color: var(--text);
   font-size: 1rem;
 }
-.drawer .find input:focus {
+.picker-body .find input:focus {
   outline: none;
 }
-.drawer .find:focus-within {
+.picker-body .find:focus-within {
   box-shadow: 0 0 0 2px var(--accent);
 }
-.drawer .picks-scroll {
+/* The picker's search and list: in the drawer for File under, on the sheet's second page for Move to. */
+.picker-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.picker-body .picks-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+.drawer .picks-scroll {
   padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
 }
 .picks {
@@ -1175,12 +1315,12 @@ dialog.drawer .panel {
   flex: none;
   color: var(--accent);
 }
-.drawer .always {
+.picker-body .always {
   margin: 1.375rem 0 0.25rem 0.25rem;
   font: 500 0.75rem var(--mono);
   color: var(--faint);
 }
-.drawer .none {
+.picker-body .none {
   margin: 0.875rem 0.25rem 0;
   color: var(--dim);
   font-size: 0.9375rem;
@@ -1231,15 +1371,10 @@ dialog.drawer .panel {
 }
 #refused .quote {
   margin: 0;
-  display: flex;
-  gap: 0.625rem;
   font-size: 0.9375rem;
   line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-#refused .bar {
-  color: var(--faint);
 }
 #refused .reason {
   margin: 0;
