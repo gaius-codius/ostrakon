@@ -2,6 +2,7 @@
 # Installs ostrakon from this checkout. Safe to run again; it skips what is already done.
 #   ./install.sh         the mod (in every Claude Code session) and the `ostrakon` command
 #   ./install.sh --hub   also the hub: a token, the systemd user unit, started now and at login
+#   --keys / --no-keys   add the README's keybindings without asking, or skip them (default: ask)
 #   --release            first move this checkout to the newest release (what the README's install does)
 set -euo pipefail
 
@@ -10,13 +11,16 @@ BIN=$HOME/.local/bin
 SETTINGS=$HOME/.claude/settings.json
 ENV_FILE=$HOME/.config/ostrakon-hub/env
 UNIT_DIR=$HOME/.config/systemd/user
+KEYS_FILE=$HOME/.claude/keybindings.json
 
-want_hub=0 want_release=0 rest=()
+want_hub=0 want_release=0 want_keys=ask rest=()
 for arg in "$@"; do
   case $arg in
     --hub) want_hub=1; rest+=("$arg") ;;
     --release) want_release=1 ;;
-    -h | --help) sed -n '2,5p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --keys) want_keys=yes; rest+=("$arg") ;;
+    --no-keys) want_keys=no; rest+=("$arg") ;;
+    -h | --help) sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "install.sh: unknown option: $arg" >&2; exit 1 ;;
   esac
 done
@@ -67,7 +71,74 @@ else:
     print(f"set CLAUDE_CODE_PLUGIN_DIRS in {path}" + (f" (backup: {path}.bak)" if os.path.exists(path + '.bak') else ''))
 EOF
 fi
-say "  keybindings are yours to add: README.md, Keybindings"
+
+# The keybindings: the README's, added to ~/.claude/keybindings.json key by key. A key bound to
+# something else, or an action the person already gave another key, is left as it is.
+keys_py=$(cat <<'EOF'
+import json, os, shutil, sys
+mode, path = sys.argv[1], sys.argv[2]
+pane = {"ctrl+x s": "app:cycleDiffBase", "ctrl+q": "pane:previous", "ctrl+f": "app:toggleDiffNoiseFilter",
+        "ctrl+s": "app:toggleDiffPreSession", "ctrl+n": "pane:next"}
+want = {"Chat": {"ctrl+x s": "app:cycleDiffBase"}, "Pane": pane, "PaneField": pane}
+try:
+    keys = json.load(open(path)) if os.path.exists(path) else {}
+    blocks = keys.setdefault("bindings", [])
+    assert isinstance(blocks, list)
+except (ValueError, AssertionError):
+    print(f"! {path} isn't valid keybindings JSON; add them yourself: README.md, Keybindings")
+    sys.exit(1)
+added, skipped = [], []
+for context, chords in want.items():
+    mine = [b for b in blocks if isinstance(b, dict) and b.get("context") == context]
+    bound = {k: v for b in mine for k, v in b.get("bindings", {}).items()}
+    for key, action in chords.items():
+        if bound.get(key) == action:
+            continue
+        if key in bound:
+            skipped.append(f"{context} {key} (bound to {bound[key]})")
+        elif action in bound.values():
+            skipped.append(f"{context} {action} (already on another key)")
+        else:
+            if not mine:
+                mine = [{"context": context, "bindings": {}}]
+                blocks.append(mine[0])
+            mine[0].setdefault("bindings", {})[key] = action
+            added.append(f"{context} {key}")
+if mode == "check":
+    if not added:
+        print(f"already set in {path}" + (f"; left alone: {', '.join(skipped)}" if skipped else ""))
+    sys.exit(0 if added else 1)
+if os.path.exists(path):
+    shutil.copy2(path, path + ".bak")
+else:
+    keys = {"$schema": "https://www.schemastore.org/claude-code-keybindings.json", **keys}
+with open(path, "w") as out:
+    json.dump(keys, out, indent=2)
+    out.write("\n")
+print(f"added {len(added)} keys to {path}" + (f" (backup: {path}.bak)" if os.path.exists(path + ".bak") else ""))
+for s in skipped:
+    print(f"  left alone: {s}")
+EOF
+)
+say "== keybindings"
+if [ $want_keys = no ]; then
+  say "skipped; to add them later: ./install.sh --keys"
+elif ! has python3; then
+  say "! python3 not found; add them yourself: README.md, Keybindings"
+elif python3 -I -c "$keys_py" check "$KEYS_FILE"; then
+  answer=n
+  if [ $want_keys = yes ]; then
+    answer=y
+  elif { : </dev/tty; } 2>/dev/null; then
+    # From /dev/tty, so the question still works when get.sh is piped into bash.
+    read -r -p "add ostrakon's keybindings (ctrl+x s opens the pane) to $KEYS_FILE? [Y/n] " answer </dev/tty || answer=n
+    answer=${answer:-y}
+  fi
+  case $answer in
+    [Yy]*) mkdir -p "$(dirname "$KEYS_FILE")"; python3 -I -c "$keys_py" apply "$KEYS_FILE" ;;
+    *) say "not added; to add them later: ./install.sh --keys (or by hand: README.md, Keybindings)" ;;
+  esac
+fi
 
 # The command: a link in ~/.local/bin, never over a file that isn't one of ours.
 say "== ostrakon command"
