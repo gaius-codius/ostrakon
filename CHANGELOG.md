@@ -6,6 +6,8 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-14
+
 ### Added
 
 - The install script asks whether to add ostrakon's keybindings to `~/.claude/keybindings.json`, leaving alone any key you've already bound to something else. `--keys` adds them without asking, `--no-keys` skips them.
@@ -81,7 +83,8 @@ The first public release.
 - `ostrakon pair`: a QR code with a one-time code (5 minutes, works once) pairs a phone with the hub; `--token` prints the long-lived link instead.
 - The `ostrakon` command (`pair`, `hub`, `update`, `version`), `install.sh` and `update.sh`.
 
-[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/gaius-codius/ostrakon/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/gaius-codius/ostrakon/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/gaius-codius/ostrakon/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/gaius-codius/ostrakon/compare/v0.2.0...v0.3.0
