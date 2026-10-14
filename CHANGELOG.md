@@ -6,6 +6,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Added
+
+- The install script asks whether to add ostrakon's keybindings to `~/.claude/keybindings.json`, leaving alone any key you've already bound to something else. `--keys` adds them without asking, `--no-keys` skips them.
+
 ## [0.5.0] - 2026-10-14
 
 ### Changed

@@ -49,7 +49,7 @@ There are two ways to install it:
 - **The install script** gets you the mod and the `ostrakon` command: `update`, `doctor`, `pair`, and the hub for syncing and the phone app. Updates come through `ostrakon update`.
 - **Claude Code's plugin marketplace** gets you the mod only. There's no `ostrakon` command, so you can't run the hub or pair a phone from it; folder sync, and a hub set up on another machine, still work. Updates come through Claude Code.
 
-Use one or the other. Either way, set up the [keybindings](#keybindings) afterwards.
+Use one or the other. The install script offers to add the [keybindings](#keybindings); with the marketplace, add them yourself.
 
 ### Requirements
 
@@ -120,7 +120,7 @@ It checks that the mod loads, which Claude Code version last ran it and whether 
 
 ### Keybindings
 
-A mod can't add keyboard shortcuts of its own, so ostrakon borrows some existing Claude Code actions (which is why the names below look unrelated). Bind your keys to them in `~/.claude/keybindings.json`:
+A mod can't add keyboard shortcuts of its own, so ostrakon borrows some existing Claude Code actions (which is why the names below look unrelated). The install script asks whether to add these to `~/.claude/keybindings.json` (`--keys` adds them without asking, `--no-keys` skips them). It leaves alone any key you've bound to something else, and any of these actions you've already given a key. To add them by hand:
 
 ```json
 {

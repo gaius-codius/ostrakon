@@ -17,7 +17,6 @@ Ideas for what might come next, roughly in order within each section. Nothing he
 
 ### Install and update
 
-- **Keybindings.** `install.sh --keys` would add the README's key bindings to `~/.claude/keybindings.json`, skipping any key that's already bound to something else.
 - **Other plugin folders.** When `CLAUDE_CODE_PLUGIN_DIRS` already lists other folders, the installer tells you what to add rather than adding it itself. It could do it for you once Claude Code documents how that list is separated.
 
 ### Development

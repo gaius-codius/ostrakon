@@ -3,6 +3,7 @@
 # then runs its install.sh. Safe to run again.
 #   curl -fsSL https://raw.githubusercontent.com/gaius-codius/ostrakon/main/get.sh | bash
 #   ... | bash -s -- --hub    also set up the hub
+#   ... | bash -s -- --keys   add the keybindings without asking (--no-keys: skip them)
 #   ... | bash -s -- --main   follow main (the newest code) instead of releases
 # Run again, it updates the clone and keeps what it follows; --main switches to main.
 # The clone goes in ~/.local/share/ostrakon-src; set OSTRAKON_SRC to put it somewhere else, and
@@ -17,8 +18,9 @@ main() {
   for arg in "$@"; do
     case $arg in
       --hub) install+=(--hub) ;;
+      --keys | --no-keys) install+=("$arg") ;;
       --main) track=--main ;;
-      -h | --help) printf '%s\n' "usage: get.sh [--hub] [--main]   (see the comment at the top of get.sh)"; return 0 ;;
+      -h | --help) printf '%s\n' "usage: get.sh [--hub] [--keys | --no-keys] [--main]   (see the comment at the top of get.sh)"; return 0 ;;
       *) echo "get.sh: unknown option: $arg" >&2; return 1 ;;
     esac
   done
