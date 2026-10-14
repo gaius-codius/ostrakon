@@ -7,7 +7,12 @@
 
 A scratchpad for Claude Code. Halfway through a prompt, something else comes to mind: open the pane, note it, close the pane, and your prompt is back as you left it. Later, pull the note into the prompt when you get to it. Claude can jot notes for you too.
 
-![Half a prompt typed in Claude Code; the ostrakon pane opens and the prompt empties, a note is typed and saved, and when the pane closes the prompt is back as it was. Then the pane opens again, a search finds a note Claude jotted, and t adds it to the prompt under the draft](docs/images/demo.gif)
+In the demo: note something mid-prompt, then add a saved note to the prompt.
+
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/demo.png">
+  <img src="docs/images/demo.gif" alt="Half a prompt typed in Claude Code; the ostrakon pane opens and the prompt empties, a note is typed and saved, and when the pane closes the prompt is back as it was. Then the pane opens again, a search finds a note Claude jotted, and t adds it to the prompt under the draft">
+</picture>
 
 Notes are kept per project, and the pane shows all of them. Syncing between machines and a phone app are optional.
 
