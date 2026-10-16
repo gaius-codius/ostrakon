@@ -437,6 +437,3 @@ if (import.meta.main && process.argv[2] === 'pair') {
   backup()
   setInterval(backup, 24 * 60 * 60 * 1000)
 }
-
-// Planted for #29: CI must fail here.
-export const planted: number = 'not a number'
