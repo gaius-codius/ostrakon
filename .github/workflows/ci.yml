@@ -12,9 +12,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# The plugin's own tests and type-check need the `claude` CLI (the mods test kit and the type
-# declarations ship inside it), so they run locally through tools/check.sh. What runs here is
-# what needs only Bun and the repo.
+# What runs here is what needs only Bun and the repo. The mod's own tests need the `claude` CLI
+# (the mods test kit ships inside it), so they run locally through tools/check.sh.
+#
+# Type-checking: server/tsconfig.json covers the hub and every file of the mod that doesn't import
+# the engine's types. The rest (plugin/hooks, plugin/tests, plugin/src/ui/*.tsx, plugin/src/focus.ts)
+# is checked by tools/check.sh only: its declarations (plugin/.claude-plugin/types) are written by
+# Claude Code when a logged-in session loads the mod (validate and test don't write them), and
+# they're Claude Code's own files, rewritten each release, so they aren't kept in this repo.
 jobs:
   hub-tests:
     runs-on: ubuntu-latest
@@ -23,6 +28,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - run: bun install --frozen-lockfile && bun run typecheck
+        working-directory: server
       - run: bun test
         working-directory: server
 

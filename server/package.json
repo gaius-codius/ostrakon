@@ -1,0 +1,12 @@
+{
+  "name": "ostrakon-hub-check",
+  "private": true,
+  "description": "Type-checks the hub and the mod's engine-free code (server/tsconfig.json); the hub itself needs only Bun",
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.3",
+    "typescript": "5.6.3"
+  }
+}
