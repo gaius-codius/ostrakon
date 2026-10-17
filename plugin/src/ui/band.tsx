@@ -57,20 +57,30 @@ const labelOf = (note: Note, width: number, isMarked: boolean) =>
     : wordCut(oneLine(note.text), width, WIDTH.chipMin)
 
 // Each chip and `+N` take the gap before them; `fixed` (the opener, a title) is the rest of the row.
-const chipsWidth = (labels: string[]) => labels.reduce((sum, label) => sum + GAP + chipWidth(label), 0)
 const moreWidth = (more: number) => (more > 0 ? GAP + `+${more}`.length : 0)
 
 // Fits `notes` (in order) into `room` columns: every label is shortened first, from `widest` down
 // to WIDTH.chipMin, then chips drop from the right into `more`. `fixed` is what the rest of the row
 // takes whatever the chips do.
 const fit = (notes: Note[], max: number, room: number, widest: number, fixed: number, isMarked: boolean): Chips => {
+  // Each width's labels are cut and measured once, not once per count: that's most of the layout's time.
+  // `taken[i]` is what the first i + 1 chips take, each with the gap before it.
+  const cutAt = new Map<number, { labels: string[]; taken: number[] }>()
+  const cutTo = (width: number) => {
+    const cached = cutAt.get(width)
+    if (cached) return cached
+    const labels = notes.slice(0, max).map(note => labelOf(note, width, isMarked))
+    let sum = 0
+    const row = { labels, taken: labels.map(label => (sum += GAP + chipWidth(label))) }
+    cutAt.set(width, row)
+    return row
+  }
   for (let count = Math.min(notes.length, max); count >= 1; count--) {
-    const shown = notes.slice(0, count)
     const more = notes.length - count
     for (let width = widest; width >= WIDTH.chipMin; width--) {
-      const labels = shown.map(note => labelOf(note, width, isMarked))
-      if (fixed + chipsWidth(labels) + moreWidth(more) <= room) {
-        return { chips: shown.map((note, i) => ({ n: i + 1, id: note.id, label: labels[i] ?? '' })), more }
+      const { labels, taken } = cutTo(width)
+      if (fixed + (taken[count - 1] ?? 0) + moreWidth(more) <= room) {
+        return { chips: notes.slice(0, count).map((note, i) => ({ n: i + 1, id: note.id, label: labels[i] ?? '' })), more }
       }
     }
   }
