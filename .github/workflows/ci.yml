@@ -41,8 +41,12 @@ jobs:
   mod-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Named, so it's `bash -eo pipefail`: GitHub's default `bash -e` would take tee's exit for the tests'.
+    defaults:
+      run:
+        shell: bash
     env:
-      SHA256: eef5a2e2b09a5e7d2ce784d1b3ba335ae7fc6c7f6256c802a0ebf2c21e4fd0e1
+      SHA256: "eef5a2e2b09a5e7d2ce784d1b3ba335ae7fc6c7f6256c802a0ebf2c21e4fd0e1"
       DISABLE_AUTOUPDATER: 1
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 1
     steps:
