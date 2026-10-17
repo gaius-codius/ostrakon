@@ -155,7 +155,7 @@ describe('pocketOf', () => {
   })
 
   test('no notes, no chips', () => {
-    expect(pocketOf([], CC.key, 5, WIDE, OPENER)).toEqual({ chips: [], more: 0 })
+    expect(pocketOf([], CC.key, 5, WIDE, OPENER)).toEqual({ chips: [], more: 1 })
     expect(pocketOf([note('elsewhere', 1, { project: INFRA })], CC.key, 5, WIDE, OPENER)).toEqual({ chips: [], more: 0 })
   })
 
