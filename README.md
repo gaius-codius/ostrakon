@@ -190,7 +190,7 @@ More, including a couple of folder-sync edge cases, in [`ROADMAP.md`](ROADMAP.md
 ## Development
 
 - How it's designed, and notes on the platform it builds on: [`docs/SPEC.md`](docs/SPEC.md). How it looks: [`docs/DESIGN.md`](docs/DESIGN.md). Ideas for what's next: [`ROADMAP.md`](ROADMAP.md).
-- `tools/check.sh` runs every check: `claude plugin validate`, the design check ([`docs/DESIGN.md`](docs/DESIGN.md) against the code), the type-check, `claude plugin test` and the hub's tests. The mod's tests and type-check need the `claude` CLI installed, because the mods test kit and types ship with it.
+- `tools/check.sh` runs every check: `claude plugin validate`, the design check ([`docs/DESIGN.md`](docs/DESIGN.md) against the code), the type-check, `claude plugin test` and the hub's tests. The mod's tests and type-check need the `claude` CLI installed, because the mods test kit and types ship with it. CI runs the tests on the version `bin/tested-with` names.
 - The hub's tests need only [Bun](https://bun.sh): `cd server && bun test`.
 - How to contribute, and how releases are made: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - `tools/` also has the screenshot pipeline and some experiment scripts; they write to `working-docs/`, which git ignores.

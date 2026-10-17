@@ -21,7 +21,7 @@ Ideas for what might come next, roughly in order within each section. Nothing he
 
 ### Development
 
-- **The mod's tests in CI.** The mod's tests and type-check need the `claude` CLI, so CI runs only the hub's tests, shellcheck and the security scans. They can move to CI once the mods test kit runs there.
+- **The whole type-check in CI.** CI runs the mod's tests, but it type-checks only the hub and the mod's files that don't use the engine's types: Claude Code writes those types only when a logged-in session loads the mod. That part can move to CI once they can be written without a login.
 
 ## Known limitations
 
