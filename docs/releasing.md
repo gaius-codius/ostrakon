@@ -28,7 +28,10 @@ time. The steps that actually cut the release are at the end, and in [`CONTRIBUT
 ## 3. Update what names versions or requirements
 
 - [`bin/tested-with`](../bin/tested-with): the Claude Code and Bun versions you just tested with.
-  `ostrakon doctor` compares people's versions to these.
+  `ostrakon doctor` compares people's versions to these, and CI runs the mod's tests on that
+  Claude Code. When it changes, set `SHA256` in the `mod-tests` job of
+  [`ci.yml`](../.github/workflows/ci.yml) to the new linux-x64 tarball's
+  (`curl -fsSL https://registry.npmjs.org/@anthropic-ai/claude-code-linux-x64/-/claude-code-linux-x64-<version>.tgz | sha256sum | cut -d' ' -f1`).
 - The README's **Requirements** section: the same versions, and anything newly needed or no longer
   needed. `tools/release.sh prepare` refuses to continue if the README and `bin/tested-with` name
   different versions.

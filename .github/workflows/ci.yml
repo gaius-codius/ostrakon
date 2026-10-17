@@ -12,8 +12,8 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# What runs here is what needs only Bun and the repo. The mod's own tests need the `claude` CLI
-# (the mods test kit ships inside it), so they run locally through tools/check.sh.
+# What runs here needs no Claude login and no secrets. The mod's own tests run in mod-tests, on the
+# `claude` binary itself (the mods test kit ships inside it), which runs them without signing in.
 #
 # Type-checking: server/tsconfig.json covers the hub and every file of the mod that doesn't import
 # the engine's types. The rest (plugin/hooks, plugin/tests, plugin/src/ui/*.tsx, plugin/src/focus.ts)
@@ -32,6 +32,41 @@ jobs:
         working-directory: server
       - run: bun test
         working-directory: server
+
+  # claude plugin validate and claude plugin test, on the Claude Code version bin/tested-with names.
+  # The binary is npm's linux-x64 (glibc) package, run unmodified; SHA256 is that tarball's, so
+  # bumping claude= in bin/tested-with fails here until SHA256 is bumped with it (docs/releasing.md).
+  # Not the @anthropic-ai/claude-code wrapper: its postinstall picks the platform, so there's no one
+  # hash to pin.
+  mod-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Named, so it's `bash -eo pipefail`: GitHub's default `bash -e` would take tee's exit for the tests'.
+    defaults:
+      run:
+        shell: bash
+    env:
+      SHA256: "eef5a2e2b09a5e7d2ce784d1b3ba335ae7fc6c7f6256c802a0ebf2c21e4fd0e1"
+      DISABLE_AUTOUPDATER: 1
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Claude Code
+        run: |
+          version=$(sed -n 's/^claude=//p' bin/tested-with)
+          cd "$RUNNER_TEMP"
+          curl -fsSL --proto '=https' -o claude.tgz "https://registry.npmjs.org/@anthropic-ai/claude-code-linux-x64/-/claude-code-linux-x64-${version}.tgz"
+          echo "${SHA256}  claude.tgz" | sha256sum -c -
+          tar -xzf claude.tgz --strip-components=1 package/claude
+          chmod +x claude
+          ./claude --version
+      - run: '"$RUNNER_TEMP/claude" plugin validate plugin'
+      # A run that finds no tests would pass too, so it has to report some passing.
+      - run: |
+          "$RUNNER_TEMP/claude" plugin test plugin | tee "$RUNNER_TEMP/test.log"
+          grep -Eq '^ *[1-9][0-9]* pass$' "$RUNNER_TEMP/test.log" || { echo "no tests passed"; exit 1; }
 
   # The phone app in WebKit at iPhone size (tools/phone/README.md).
   phone:
