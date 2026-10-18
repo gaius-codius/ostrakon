@@ -6,7 +6,7 @@ import { parseNote, serializeNote } from '../src/frontmatter'
 import { engineOver } from './engine'
 import type { MemDir } from './memdir'
 
-// The prefix of this plugin's tools; tools/check.sh fails when plugin.json names another plugin.
+// The prefix of this plugin's tools; tools/check-names.sh fails when plugin.json names another plugin.
 export const TOOL_PREFIX = 'mcp__ostrakon__'
 
 export const PANE = {
@@ -68,7 +68,7 @@ export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '') =
   })
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   // The engine names a plugin's tool mcp__<plugin>__<name>, with the name in plugin.json (the kit
-  // loads no JSON, so tools/check.sh checks this prefix against it). The name it gave is kept, so
+  // loads no JSON, so tools/check-names.sh checks this prefix against it). The name it gave is kept, so
   // tests call the tool by it and a pattern that doesn't match it fails.
   on('tool.register', ($, e) => {
     const tool = `${TOOL_PREFIX}${e.name}`
