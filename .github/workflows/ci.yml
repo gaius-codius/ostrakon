@@ -13,7 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 # What runs here needs no Claude login and no secrets. The mod's own tests run in mod-tests, on the
-# `claude` binary itself (the mods test kit ships inside it), which runs them without signing in.
+# `claude` binary itself (the mods test kit ships inside it), which runs them without signing in,
+# after tools/check-names.sh holds the test kit's tool prefix against plugin.json.
 #
 # Type-checking: server/tsconfig.json covers the hub and every file of the mod that doesn't import
 # the engine's types. The rest (plugin/hooks, plugin/tests, plugin/src/ui/*.tsx, plugin/src/focus.ts)
@@ -33,7 +34,8 @@ jobs:
       - run: bun test
         working-directory: server
 
-  # claude plugin validate and claude plugin test, on the Claude Code version bin/tested-with names.
+  # tools/check-names.sh, then claude plugin validate and claude plugin test, on the Claude Code
+  # version bin/tested-with names.
   # The binary is npm's linux-x64 (glibc) package, run unmodified; SHA256 is that tarball's, so
   # bumping claude= in bin/tested-with fails here until SHA256 is bumped with it (docs/releasing.md).
   # Not the @anthropic-ai/claude-code wrapper: its postinstall picks the platform, so there's no one
@@ -53,6 +55,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # First: it needs nothing from Claude Code, and the tests can't catch a rename it misses.
+      - name: Tool prefix matches plugin.json
+        run: tools/check-names.sh
       - name: Install Claude Code
         run: |
           version=$(sed -n 's/^claude=//p' bin/tested-with)
