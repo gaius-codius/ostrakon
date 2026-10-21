@@ -21,9 +21,11 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 - The key sheet lists `a` keep and `r` dismiss, and leads with them on a proposed row; its last line is no longer cut off.
 - A folded group's footer offers `z unfold`; sent and archived rows show `i keys`.
 - The move picker starts on the first project the note can go to, and leaves out the one it's in (it read `move to: none`).
+- The move picker and the edit card keep the keyboard when a note arrives, goes or moves in the list while they're open. The picker used to close and lose the destination chosen with the arrow keys, and the card's typing went to the list.
 - The preview keeps the age when the path is long, and a long mirror problem leaves the queued count and the keys on the footer.
 - With no notes, the band shows the project's whole name.
 - The `pocket` setting's description names `;` and the digit.
+- Docked, the pane's footer stays on the body's last row, with a short list, no match or no notes, instead of moving up under them. The no-match line is indented like the note rows.
 - A folder that gets a git remote is no longer two projects: the notes saved there before the remote move to the remote's project once a session there has synced.
 
 ## [0.6.0] - 2026-10-14

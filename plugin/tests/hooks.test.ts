@@ -2,6 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
 import { MemDir } from './memdir'
+import { FOOTER_KEY } from '../src/ui/pane'
 import { COLOUR, GLYPH, JOT_CONTEXT } from '../src/ui/look'
 import { CC, INFRA, PANE, mountPane, noteIn, put, run, startSession, texts } from './world'
 
@@ -364,6 +365,66 @@ test('the key sheet pages to fit the inline body, j and k turning the pages roun
   await ui.unmount()
 })
 
+// An element as the tests read the drawn tree.
+type Drawn = { type: string; props?: Record<string, unknown>; children?: unknown[] }
+
+// Rows a drawn element takes, for the column layouts the pane's states draw: a Text is a row, a
+// Box its fixed height, or its rows (summed down a column, the tallest across a row) and padding.
+const rowsOf = (node: unknown): number => {
+  if (typeof node !== 'object' || node === null) return 0
+  const { type, props = {}, children = [] } = node as Drawn
+  if (type === 'Text' || type === 'Button' || type === 'Input') return 1
+  if (props.display === 'none' || props.position === 'absolute') return 0
+  if (typeof props.height === 'number') return props.height
+  const inner = children.map(rowsOf)
+  const content = props.flexDirection === 'column' ? inner.reduce((sum, rows) => sum + rows, 0) : Math.max(0, ...inner)
+  const pad = 2 * Number(props.paddingY ?? 0) + (props.borderStyle !== undefined ? 2 : 0)
+  return Math.max(content + pad, Number(props.minHeight ?? 0))
+}
+// The footer's row in the pane: what's above it, with the rows a minHeight leaves to a flexGrow.
+const footerRow = async (ui: Awaited<ReturnType<typeof mountPane>>) => {
+  const [root] = await ui.findAll({ type: 'Box' })
+  const children = (root?.children ?? []) as Drawn[]
+  // A child's key is in its props; only what find returns carries it as `key`.
+  const at = children.findIndex(child => child.props?.key === FOOTER_KEY)
+  expect(at).toBeGreaterThan(-1)
+  const above = children
+    .slice(0, at)
+    .map(rowsOf)
+    .reduce((sum, rows) => sum + rows, 0)
+  const total = children.map(rowsOf).reduce((sum, rows) => sum + rows, 0)
+  const grows = children.slice(0, at).some(child => Number(child.props?.flexGrow ?? 0) > 0)
+  const spare = grows ? Math.max(0, Number(root?.props.minHeight ?? 0) - total) : 0
+  return above + spare + rowsOf(children[at]) - 1
+}
+
+test("docked, the footer keeps the body's last row with notes and with no match", async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  const last = PANE.props.scroll.bodyRows - 1
+  expect(await footerRow(ui)).toBe(last)
+  await ui.input({ key: 'q', text: 'kubernetes', kind: 'change' })
+  expect(await footerRow(ui)).toBe(last)
+  // The no-match line is indented one, as the note rows are.
+  const boxes = await ui.findAll({ type: 'Box' })
+  const noMatch = boxes.find(box =>
+    (box.children as Drawn[]).some(child => child.type === 'Text' && /^No notes match/.test(String((child.children ?? []).join('')))),
+  )
+  expect(noMatch?.props.paddingLeft).toBe(1)
+  await ui.unmount()
+})
+
+test("docked, the empty pane's footer keeps the body's last row too", async ($, on) => {
+  await startSession($, on, new MemDir())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  expect(await ui.find({ type: 'Text', text: /^Nothing pending in cc\.$/ })).toBeDefined()
+  expect(await footerRow(ui)).toBe(PANE.props.scroll.bodyRows - 1)
+  await ui.unmount()
+})
+
 test('docked in a body too short for the preview and three rows besides, the preview goes', async ($, on) => {
   const dir = fixture()
   await startSession($, on, dir)
@@ -486,6 +547,41 @@ test("m offers every place but the note's own, starting on the first", async ($,
   expect(picker?.props.value).toBe(INFRA.key)
   await ui.unmount()
 })
+
+// The keys of the controls the ring stops on, in the order it visits them: the action layer, a
+// `display: 'none'` Box, isn't one.
+const ringOf = (node: unknown): string[] => {
+  if (typeof node !== 'object' || node === null) return []
+  const { type, props, children } = node as Drawn
+  if (type === 'Box' && props?.display === 'none') return []
+  if (type === 'Button' || type === 'Input' || type === 'Select') return [String(props?.key)]
+  return (children ?? []).flatMap(ringOf)
+}
+
+// The terminal keeps the ring at its place in this order across a redraw: a row added above the
+// move picker or the edit card would leave the ring on that row, the picker closed and its
+// arrow-key choice gone, or the card's typing going to the list.
+for (const [press, control] of [
+  ['key-m', 'move'],
+  ['key-e', 'edit'],
+] as const) {
+  test(`a note arriving above the ${control} control leaves it at its place in the ring`, async ($, on) => {
+    const dir = fixture()
+    const { clock } = await startSession($, on, dir)
+    await run($, 'jot', '')
+    const ui = await mountPane($)
+    await ui.input({ key: 'q', text: '', kind: 'submit' })
+    await ui.press({ key: press })
+    const before = ringOf(await ui.drawn())
+    expect(before).toContain(control)
+    put(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH04', 'a newer one from the phone', CC, 1)
+    await clock.advance(2100)
+    expect(await ui.find({ type: 'Text', text: /a newer one from the phone/ })).toBeDefined()
+    const after = ringOf(await ui.drawn())
+    expect(after.indexOf(control)).toBe(before.indexOf(control))
+    await ui.unmount()
+  })
+}
 
 test('a narrow docked empty pane drops the shard before cutting the ways in', async ($, on) => {
   await startSession($, on, new MemDir())
