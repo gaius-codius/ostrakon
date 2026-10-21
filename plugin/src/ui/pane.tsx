@@ -2,7 +2,22 @@ import type { Elements } from 'claude-code'
 
 import type { Note, NoteProblem, NoteProject, PaneState } from '../../types'
 import type { Action, Ctx, Focus, Key, Line, Page } from '../model'
-import { ageOf, cells, cut, fitOneLine, fitStatuses, footerPairs, fromField, groupLabel, labelOf, oneLine, sheetLines, uniqueKeys, wrap } from '../model'
+import {
+  ageOf,
+  cells,
+  cut,
+  fitOneLine,
+  fitStatuses,
+  footerPairs,
+  fromField,
+  groupLabel,
+  isSheetPair,
+  labelOf,
+  oneLine,
+  sheetLines,
+  uniqueKeys,
+  wrap,
+} from '../model'
 import { CHORD, COLOUR, GLYPH, SHARD, TEXT, WIDTH, colourOf } from './look'
 import type { Tone } from './look'
 
@@ -61,6 +76,8 @@ export const slotKey = (slot: number) => `slot-${slot}`
 export const UP_KEY = 'more-up'
 export const DOWN_KEY = 'more-down'
 export const LAYER_PREFIX = 'key-'
+// The key sheet's `i` in the action layer: opened from a text field, the sheet takes the keys here.
+export const SHEET_KEY = `${LAYER_PREFIX}i`
 
 const markerOf = (note: Note, pane: PaneState): [string, string | undefined] => {
   if (pane.picks.length > 0) return pane.picks.includes(note.id) ? [GLYPH.picked, COLOUR.accent] : [GLYPH.unpicked, COLOUR.history]
@@ -357,7 +374,7 @@ const Footer = ({ el, view }: { el: E; view: PaneView }) => {
   if (view.syncStatus !== '') statuses.push([view.syncStatus, COLOUR.offline])
   // One line: at most WIDTH.footerPairs actions, the legend if there's room, `i keys` on the right.
   const all: [string, string][] = focus.kind === 'unfocused' ? TEXT.unfocused : footerPairs(view.keys)
-  const keySheet = all.find(([key]) => key === 'i')
+  const keySheet = all.find(isSheetPair)
   // Statuses are cut, never wrapped, and leave room for `i keys` (two gaps: the spacer's and its own).
   // They take at most half the line, so a long one (a mirror's path) leaves the keys a place.
   const shown = fitStatuses(
@@ -365,11 +382,11 @@ const Footer = ({ el, view }: { el: E; view: PaneView }) => {
     Math.min(Math.max(WIDTH.label, Math.floor(view.width / 2)), view.width - 2 - (keySheet ? 2 + cells(keySheet.join(' ')) : 0)),
   )
   const lead = shown.map(([text]) => text).join('  ')
-  const actions = all.filter(([key]) => key !== 'i').slice(0, WIDTH.footerPairs)
+  const actions = all.filter(pair => !isSheetPair(pair)).slice(0, WIDTH.footerPairs)
   if (view.showLegend && !view.isInline) actions.push([TEXT.legend, ''])
   // The spacer before `i keys` takes one more gap than fitOneLine counts.
   const fitted = fitOneLine(keySheet ? [...actions, keySheet] : actions, lead, view.width - 2)
-  const pairs = fitted.filter(([key]) => key !== 'i')
+  const pairs = fitted.filter(pair => !isSheetPair(pair))
   const Pair = ({ pair: [key, label] }: { pair: [string, string] }) =>
     key === TEXT.legend ? (
       <Text dimColor>{key}</Text>

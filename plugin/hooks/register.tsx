@@ -72,7 +72,7 @@ import { HarvestRow, PocketRow, harvestOf, openerOf, pocketOf } from '../src/ui/
 import type { BandHandlers, Drawn } from '../src/ui/band'
 import { BAND_KEY, HINT, JOT_CONTEXT, MS, TEXT, TOAST, WIDTH, toneOf } from '../src/ui/look'
 import type { Tone } from '../src/ui/look'
-import { CAPTURE_KEY, EDIT_KEY, MOVE_KEY, Pane, SEARCH_KEY, SEND_KEY, chromeRows, sheetPages, slotKey } from '../src/ui/pane'
+import { CAPTURE_KEY, EDIT_KEY, MOVE_KEY, Pane, SEARCH_KEY, SEND_KEY, SHEET_KEY, chromeRows, sheetPages, slotKey } from '../src/ui/pane'
 import type { Handlers, PaneView } from '../src/ui/pane'
 
 const PANE = 'ostrakon'
@@ -572,6 +572,25 @@ const markSent = async ($: EngineInterface, ids: string[]) => {
   }
 }
 
+// The key sheet's open and close. Opened from a text field, where `i` would be typed, it takes the
+// keys and hands them back to that field on close; opened on a row, the row keeps them.
+const openSheet = async ($: EngineInterface) => {
+  const state = await read($, pane)
+  const from = state.mode === 'capture' || state.mode === 'edit' ? state.mode : state.focus === 'line' ? null : 'search'
+  await setPane($, current => ({ ...current, mode: 'sheet', sheetPage: 0, sheetFrom: from }))
+  if (from !== null) focusKey($, SHEET_KEY)
+}
+
+const closeSheet = async ($: EngineInterface) => {
+  const from = (await read($, pane)).sheetFrom ?? null
+  if (from === 'capture' || from === 'edit') {
+    await setPane($, current => ({ ...current, mode: from, sheetFrom: null }))
+    return focusKey($, from === 'capture' ? CAPTURE_KEY : EDIT_KEY)
+  }
+  await setPane($, current => ({ ...current, mode: 'browse', sheetFrom: null, ...(from === 'search' ? { focus: 'search' as const } : {}) }))
+  if (from === 'search') focusKey($, SEARCH_KEY)
+}
+
 // One step back, for Esc: a mode to the list, a row to the search field, a query to empty. False
 // at the top: the pane closes.
 const goBack = async ($: EngineInterface) => {
@@ -580,6 +599,10 @@ const goBack = async ($: EngineInterface) => {
     // The draft is kept: editing the note again picks it back up.
     await setPane($, current => ({ ...current, mode: 'browse' }))
     if (state.edit) await focusLine($, state.edit.id)
+    return true
+  }
+  if (state.mode === 'sheet' && (state.sheetFrom ?? null) !== null) {
+    await closeSheet($)
     return true
   }
   if (state.mode === 'move' || state.mode === 'sheet' || state.mode === 'bundle') {
@@ -615,6 +638,9 @@ const refocus = async ($: EngineInterface) => {
   // Focusing an element only moves the pane's ring; opening it again with focus takes the keys.
   await $.ui.open({ id: PANE, title: 'ostrakon', focus: true, closeOnEscape: true }).catch(() => undefined)
   const state = await read($, pane)
+  // The key sheet closed back to capture or the edit card (Esc): their field takes the keys again.
+  if (state.mode === 'capture') return focusKey($, CAPTURE_KEY)
+  if (state.mode === 'edit') return focusKey($, EDIT_KEY)
   if (state.focus === 'line' && state.cursor !== null) return focusLine($, state.cursor)
   focusKey($, SEARCH_KEY)
 }
@@ -975,8 +1001,8 @@ const act = async ($: EngineInterface, action: Action) => {
       return
     case 'keys':
     case 'details':
-      await setPane($, current => ({ ...current, mode: current.mode === 'sheet' ? 'browse' : 'sheet', sheetPage: 0 }))
-      return
+      if (state.mode === 'sheet') return closeSheet($)
+      return openSheet($)
     case 'close':
     case 'toggle':
       await closePane($)

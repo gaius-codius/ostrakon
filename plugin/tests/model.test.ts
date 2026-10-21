@@ -2,7 +2,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import type { Note, NoteProject } from '../types'
 import type { Ctx, Focus, Line } from '../src/model'
-import { COLOUR, TEXT, WIDTH, colourOf, toneOf } from '../src/ui/look'
+import { CHORD, COLOUR, TEXT, WIDTH, colourOf, toneOf } from '../src/ui/look'
 import {
   ageOf,
   bundleText,
@@ -171,6 +171,34 @@ describe('model', () => {
     ])
   })
 
+  test('a text field, which takes i, shows the key sheet as its chord; everywhere else the chord is answered unshown', () => {
+    const open = note('n', CC, 1)
+    const fields: Focus[] = [
+      { kind: 'search', hasResults: true, hasQuery: false },
+      { kind: 'search', hasResults: false, hasQuery: true },
+      { kind: 'empty' },
+      { kind: 'capture' },
+      { kind: 'edit' },
+    ]
+    for (const focus of fields) {
+      const pairs = footerPairs(keysFor(focus))
+      expect(pairs.at(-1)).toEqual([CHORD.keys.keys, 'keys'])
+      expect(pairs.some(([key]) => key === 'i')).toBe(false)
+    }
+    const rows: Focus[] = [
+      { kind: 'line', line: { kind: 'note', key: open.id, note: open, group: CC.key, hits: [] }, picks: 0 },
+      { kind: 'line', line: { kind: 'group', key: 'group:x', group: 'x', project: CC, isFolded: false, count: 0 }, picks: 0 },
+      { kind: 'line', line: { kind: 'problem', key: 'problem', count: 1 }, picks: 0 },
+      { kind: 'sheet', page: 0, pages: 1, lead: [] },
+    ]
+    for (const focus of rows) {
+      const chorded = uniqueKeys(keysFor(focus)).find(key => key.chord === CHORD.keys.action)
+      expect(chorded?.action).toBe('keys')
+      expect(chorded?.shown).toBeUndefined()
+    }
+    expect(TEXT.keySheet.map(([key]) => key)).toEqual(expect.arrayContaining([CHORD.keys.keys, 'ctrl+x tab']))
+  })
+
   test("the key sheet leads with a row's own keys, in its footer's order", () => {
     const open = note('n', CC, 1)
     const row: Focus = { kind: 'line', line: { kind: 'note', key: open.id, note: open, group: CC.key, hits: [] }, picks: 0 }
@@ -270,6 +298,14 @@ describe('model', () => {
       ['i', 'keys'],
     ]
     expect(fitOneLine(pairs, '', 30).map(([key]) => key)).toEqual(['v', 't', 'i'])
+    // In a text field the pair is the chord's, kept the same way.
+    const field: [string, string][] = [
+      ['ctrl+s', 'scope'],
+      ['ctrl+n', 'new'],
+      ['ctrl+q', 'close'],
+      ['ctrl+x i', 'keys'],
+    ]
+    expect(fitOneLine(field, '', 40).map(([key]) => key)).toEqual(['ctrl+s', 'ctrl+n', 'ctrl+x i'])
   })
 
   test('dispatch names other projects, and edit fields round-trip newlines', () => {
