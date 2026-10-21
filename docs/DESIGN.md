@@ -1,6 +1,6 @@
 # Ostrakon design system
 
-Version: 1.0.1
+Version: 2.0.0
 
 What the terminal mod (the pane, the band and the prompt hint, in `plugin/`) and the phone (`server/public/`) must agree on: colour roles, the project palette, the phone's tokens, symbols, fixed copy, motion and the accessibility bar. [`SPEC.md`](SPEC.md) describes behaviour and points here for these values instead of repeating them. The code holds the values: `plugin/src/ui/look.ts` for the terminal, `style.css`, `app.js` and `index.html` for the phone.
 
@@ -23,7 +23,7 @@ Terminal colours are theme keys (they follow the person's theme), except project
 <!-- check: roles -->
 | Role | Terminal key | Phone token | Use | Why |
 |---|---|---|---|---|
-| `accent` | `claude` | `--accent`, `--accent-text` | current project, row numbers, picks, `◆`, search hits, the capture frame, Save | the one colour for act, now or yours |
+| `accent` | `claude` | `--accent`, `--accent-text` | current project, row numbers, the band's keys, picks, `◆`, search hits, the capture frame, Save | the one colour for act, now or yours |
 | `band` | `subtle` | `--raised` | the selected row's background | marks the row without a rule |
 | `unfiled` | `inactive` | `--dim` | the unfiled ring | grey: no project, nothing to say |
 | `history` | `inactive` | — | sent and archived rows, unpicked marks | done, so out of the way |
@@ -194,7 +194,7 @@ Strings the surfaces or the docs depend on, each checked word for word in every 
 | `◆ from Claude` | plugin/src/ui/look.ts, docs/SPEC.md | the pane's legend while a `◆` row shows |
 | `From Claude` | server/public/app.js | what the phone's `◆` reads as |
 | `Proposed by Claude` | server/public/app.js, docs/SPEC.md | the phone's heading for proposals |
-| `keep all` | plugin/src/ui/look.ts | the harvest band's `0: keep all` (the engine draws `0: `) |
+| `keep all` | plugin/src/ui/look.ts | the harvest band's `;0 keep all` |
 | `Claude won't see it` | plugin/src/ui/look.ts, docs/SPEC.md | the hint tail while a `/jot` draft is typed |
 | `saved to` | plugin/src/ui/look.ts, docs/SPEC.md | the hint tail after a save: `✓ saved to <project>` |
 | `Archived · u undo` | plugin/src/ui/look.ts, docs/SPEC.md | the pane's archive toast |
@@ -265,7 +265,7 @@ Things that move: the phone's swipe, sheets, drawers and the editor (rise over a
 | Constraint | Rule |
 |---|---|
 | Theme keys or hex | Roles are theme keys, so every theme works. Only project colours are hex (§3), with theme keys on `*-ansi` themes. |
-| What the engine draws | A plain Button's chrome and its hotkey digit (in `suggestion`), the band separator, the hint line's own text. A Button label takes no bold or colour, so the fresh chip stands out by dimming the others. |
+| What the engine draws | A plain Button's chrome and its hotkey digit (in `suggestion`), the band separator, the hint line's own text. A Button label takes no bold or colour, so the fresh chip stands out by dimming the others. The band's Buttons take no hotkey (the engine would press one on a lone digit typed into the prompt); each chip's `;n` key is our own Text before it. |
 | Width | Draw to `bodyColumns - 1`. Band chips shorten (to `WIDTH.chipMin`) before they drop into `+N`; the opener and `+N` stay. |
 | Narrow empty pane | The shard goes first when the descriptions would be cut beside it. |
 | Narrow harvest row | Title shortens to `◆`; then, with no room for a chip: one column apart, then `✎` without the project, then no `◆`. |
@@ -288,6 +288,11 @@ Keys, layout and behaviour are in [`SPEC.md`](SPEC.md). The terminal's spacing i
 ## 11. Changelog
 
 Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one or more `- Change:` lines and one or more `- Why:` lines. The newest entry ends with `Fingerprint: <hash>` of the design values in the code (`bun tools/check-design.ts --fingerprint` prints it). Versions: major when a meaning changes or something goes (a glyph means something else, a colour role moves); minor when something is added; patch for a value tweak or a doc fix. Entries are never removed.
+
+### 2.0.0 — 2026-10-21
+- Change: The band's chips read `;1 label` instead of `1: label`, and keep all reads `;0 keep all`: the key is a `;` and the digit, drawn by us in the accent (as the pane's row numbers), and the chip's Button takes no hotkey. The harvest hint reads `;1–;3 keep one · ;0 keep all · …`.
+- Why: A lone digit typed into an empty prompt pressed the band's chip of that number, so answering one of Claude's numbered questions with `2` pulled a note into the prompt or kept a proposal instead.
+Fingerprint: ad50d4f26e1b
 
 ### 1.0.1 — 2026-10-13
 - Change: Sheets and drawers start below the screen before their first frame, and their dialog clips its overflow instead of hiding it (§7).

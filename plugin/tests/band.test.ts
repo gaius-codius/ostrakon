@@ -123,7 +123,7 @@ describe('pocketOf', () => {
     for (const columns of [20, 30, 45, 60, 80, 100, 120, 160]) {
       const { chips, more } = pocketOf(notes, CC.key, 9, columns, opener)
       // The opener, then each Button's `n: label` (3 cells and the label's) and `+N`, 3 apart.
-      const drawn = [opener, ...chips.map(chip => `${chip.n}: ${chip.label}`), ...(more > 0 ? [`+${more}`] : [])]
+      const drawn = [opener, ...chips.map(chip => `;${chip.n} ${chip.label}`), ...(more > 0 ? [`+${more}`] : [])]
       const width = drawn.reduce((sum, text) => sum + cellsIn(text), 0) + GAP * (drawn.length - 1)
       expect(chips.length + more).toBe(9)
       if (chips.length > 0) expect(width).toBeLessThanOrEqual(columns)
@@ -133,12 +133,12 @@ describe('pocketOf', () => {
   test('the harvest row stays one line within the columns, with chips or without', () => {
     const proposals = Array.from({ length: 12 }, (_, i) => note(`${LONG} ${i}`, i, { by: 'claude', status: 'proposed' }))
     for (const columns of [60, 100, 160]) expect(harvestOf(proposals.slice(0, 5), columns, OPENER).chips.length).toBeGreaterThan(0)
-    // Down to `✎ +12 0: keep all`, the narrowest the row gets.
+    // Down to `✎ +12 ;0 keep all`, the narrowest the row gets.
     const opener = openerOf('ostrakon')
     for (const count of [1, 5, 12]) {
       for (let columns = 17; columns <= 160; columns++) {
         const { chips, more, title, gap, opener: shown } = harvestOf(proposals.slice(0, count), columns, opener)
-        const drawn = [shown, title, ...chips.map(chip => `${chip.n}: ${chip.label}`), ...(more > 0 ? [`+${more}`] : []), `0: ${TEXT.keepAll}`].filter(
+        const drawn = [shown, title, ...chips.map(chip => `;${chip.n} ${chip.label}`), ...(more > 0 ? [`+${more}`] : []), `;0 ${TEXT.keepAll}`].filter(
           text => text !== '',
         )
         const width = drawn.reduce((sum, text) => sum + cellsIn(text), 0) + gap * (drawn.length - 1)
@@ -164,7 +164,7 @@ describe('pocketOf', () => {
     const roomy = harvestOf(proposals, WIDE, OPENER)
     expect(roomy.more).toBe(0)
     expect(roomy.chips.map(chip => chip.label)).toEqual(proposals.map(proposal => `${proposal.text.slice(0, 21)}…`))
-    // The opener, the title and `0: keep all` take 37 of the 76 columns; two chips and `+2` fit the rest.
+    // The opener, the title and `;0 keep all` take 37 of the 76 columns; two chips and `+2` fit the rest.
     const narrow = harvestOf(proposals, 76, OPENER)
     expect(narrow.chips).toHaveLength(2)
     expect(narrow.more).toBe(2)
@@ -181,7 +181,7 @@ describe('pocketOf', () => {
   test('a harvest too narrow for any chip counts them all in more and closes up to fit: one apart, then no project, then no ◆', () => {
     const one = [note('x', 1, { status: 'proposed' })]
     const opener = openerOf('ostrakon')
-    // `✎ ostrakon   ◆   +1   0: keep all` takes 33.
+    // `✎ ostrakon   ◆   +1   ;0 keep all` takes 33.
     expect(harvestOf(one, 33, opener)).toMatchObject({ chips: [], more: 1, title: '◆', opener: '✎ ostrakon', gap: 3 })
     expect(harvestOf(one, 30, opener)).toMatchObject({ chips: [], more: 1, title: '◆', opener: '✎ ostrakon', gap: 1 })
     expect(harvestOf(one, 26, opener)).toMatchObject({ chips: [], more: 1, title: '◆', opener: '✎', gap: 1 })

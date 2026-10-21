@@ -6,6 +6,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Changed
+
+- The band's notes are pulled into the prompt with two keys: type `;` and the note's number (`;2`) in an empty prompt. A lone number no longer does anything, so it answers Claude's numbered questions again. After a turn, `;1` keeps a proposal and `;0` keeps them all. To start a prompt with `;` and a digit, paste it.
+
 ## [0.6.0] - 2026-10-14
 
 ### Added

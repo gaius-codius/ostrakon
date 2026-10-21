@@ -82,6 +82,11 @@ export const WIDTH = {
   harvestChip: 22,
 } as const
 
+// The band's keys (SPEC §10): `;` then a chip's digit, typed into an empty prompt. Never a lone
+// digit, which answers Claude's numbered questions.
+export const BAND_KEY = ';'
+export const bandKey = (n: number) => `${BAND_KEY}${n}`
+
 export const TEXT = {
   placeholder: 'search notes',
   toList: 'to list',
@@ -123,7 +128,8 @@ export const TEXT = {
   keepAll: 'keep all',
   harvestTitle: `${GLYPH.claude} from this turn`,
   harvestShort: GLYPH.claude,
-  harvestHint: (n: number) => `${n === 0 ? '' : `${n === 1 ? '1' : `1–${n}`} keep one · `}0 keep all · the rest wait in the pane under “proposed”`,
+  harvestHint: (n: number) =>
+    `${n === 0 ? '' : `${n === 1 ? bandKey(1) : `${bandKey(1)}–${bandKey(n)}`} keep one · `}${bandKey(0)} keep all · the rest wait in the pane under “proposed”`,
   // The hint shows under the first few harvests ever, then the row speaks for itself.
   harvestHintTimes: 3,
 } as const

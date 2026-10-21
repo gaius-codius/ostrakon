@@ -52,6 +52,8 @@ export type World = {
   drop?: string
   turnOnSubmit?: string
   heldCompletion?: { turnId: string; gate: Promise<void>; isHeld?: boolean }
+  // The next prompt read the test holds in the engine until its gate opens.
+  heldRead?: { gate: Promise<void>; isHeld?: boolean }
 }
 
 export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '') => {
@@ -79,7 +81,14 @@ export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '') =
   on('session.id', () => ({ value: 'sess-1' }))
   on('session.version', () => ({ value: { version: '2.1.294', base: '2.1.294' } }))
   on('session.root', () => ({ value: '/home/me/Work/cc' }))
-  on('prompt.read', () => ({ value: { text: world.box.text, cursor: world.box.text.length } }))
+  on('prompt.read', async () => {
+    const held = world.heldRead
+    if (held !== undefined && !held.isHeld) {
+      held.isHeld = true
+      await held.gate
+    }
+    return { value: { text: world.box.text, cursor: world.box.text.length } }
+  })
   on('prompt.fill', ($, e) => {
     world.box.text = e.text
     return { isFilled: true }

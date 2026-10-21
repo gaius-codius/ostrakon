@@ -69,8 +69,8 @@ import {
 } from '../src/turns'
 import type { RunningTurn } from '../src/turns'
 import { HarvestRow, PocketRow, harvestOf, openerOf, pocketOf } from '../src/ui/band'
-import type { BandHandlers } from '../src/ui/band'
-import { HINT, MS, TEXT, TOAST, toneOf } from '../src/ui/look'
+import type { BandHandlers, Drawn } from '../src/ui/band'
+import { BAND_KEY, HINT, MS, TEXT, TOAST, toneOf } from '../src/ui/look'
 import type { Tone } from '../src/ui/look'
 import { CAPTURE_KEY, EDIT_KEY, MOVE_KEY, Pane, SEARCH_KEY, SEND_KEY, chromeRows, sheetPages, slotKey } from '../src/ui/pane'
 import type { Handlers, PaneView } from '../src/ui/pane'
@@ -129,6 +129,9 @@ let heldOverReset = ''
 // line now at that index is selected instead (SPEC §4.8).
 let lastCursorIndex = 0
 const pocketOptions = { isOn: true, max: 5 }
+// What the band drew last in the terminal: its keys, typed from the prompt, press what the person
+// sees. The desktop draws the band too, at its own width, so it doesn't count.
+let drawn: Drawn = null
 // Harvest (SPEC §8): off by default; on, each finished turn is reviewed for at most `max` proposals.
 const harvestOptions: { isOn: boolean; max: number; mode: HarvestMode } = { isOn: false, max: 3, mode: DEFAULT_HARVEST_MODE }
 // The turn facts (SPEC §10): the conversation's generation and sequence, the latest prompt's turn
@@ -754,19 +757,24 @@ const showSaved = async ($: EngineInterface) => {
 }
 
 // Fills the prompt with the held draft, anything typed there since, and the note; closes the pane
-// if it's open. `typed` is what the prompt held that isn't the person's draft (the band's digit).
-const fillPrompt = async ($: EngineInterface, text: string, ids: string[], typed?: string) => {
+// if it's open.
+const fillPrompt = async ($: EngineInterface, text: string, ids: string[]) => {
   const state = await read($, pane)
   const box = await $.prompt.read().catch(() => ({ text: '' }))
-  const draft = typed !== undefined && box.text.trim() === typed ? '' : box.text
-  const filled = await $.prompt.fill({ text: joined(state.stash, draft, text), mode: 'replace' }).catch(() => ({ isFilled: false }))
+  const filled = await $.prompt.fill({ text: joined(state.stash, box.text, text), mode: 'replace' }).catch(() => ({ isFilled: false }))
   if (!filled.isFilled) {
     toast($, TOAST.notFilled)
     return false
   }
+  await afterFill($, text, ids)
+  return true
+}
+
+// Once the prompt holds `text`: the held draft is spent, the person's submit carrying it marks
+// `ids` sent, and the pane closes if it's open.
+const afterFill = async ($: EngineInterface, text: string, ids: string[]) => {
   await setPane($, current => ({ ...current, stash: '', lastFill: { text, ids } }))
   if (await read($, isOpen)) await closePane($)
-  return true
 }
 
 const act = async ($: EngineInterface, action: Action) => {
@@ -1092,10 +1100,44 @@ const digit = async ($: EngineInterface, n: number) => {
 
 // A Pocket chip: the note goes into the prompt (SPEC §10); a chip never opens the pane.
 const pocketChip = async ($: EngineInterface, n: number, id: string) => {
+  const note = await openNote($, id)
+  if (note === undefined) return
+  if (await fillPrompt($, await pocketText($, note), [note.id])) toast($, TOAST.inPrompt(n))
+}
+
+const openNote = async ($: EngineInterface, id: string) => {
   const note = (await read($, notes))[id]
-  if (note?.status !== 'open') return
+  return note?.status === 'open' ? note : undefined
+}
+
+const pocketText = async ($: EngineInterface, note: Note) => {
   const ctx: Ctx = { now: await $.clock.now(), current: project, labels: labelsOf(projectsOf(Object.values(await read($, notes)))) }
-  if (await fillPrompt($, dispatchText(ctx, note), [note.id], String(n))) toast($, TOAST.inPrompt(n))
+  return dispatchText(ctx, note)
+}
+
+// `;` then a digit, typed into an empty prompt, presses the band's chip of that number (SPEC §10):
+// Pocket's fills the prompt with its note, the harvest's keeps its proposal, and `;0` keeps them
+// all. `shown` is what the band showed when the key was typed, so a key waiting its turn still
+// acts on the chip the person saw. Answers the prompt after the key, or undefined when the band
+// drew no such chip, so the digit goes in as typed.
+const pressBandKey = async ($: EngineInterface, shown: Drawn, n: number): Promise<{ text: string; cursor: number } | undefined> => {
+  if (shown === null) return undefined
+  const chip = shown.chips.find(candidate => candidate.n === n)
+  if (shown.kind === 'harvest') {
+    const ids = n === 0 ? shown.ids : chip ? [chip.id] : []
+    if (ids.length === 0) return undefined
+    await keep($, ids)
+    return { text: '', cursor: 0 }
+  }
+  if (!chip) return undefined
+  const note = await openNote($, chip.id)
+  // Gone since the band was drawn: the key does nothing, as a press of its chip would.
+  if (note === undefined) return { text: '', cursor: 0 }
+  const text = await pocketText($, note)
+  const filled = joined((await read($, pane)).stash, text)
+  await afterFill($, text, [note.id])
+  toast($, TOAST.inPrompt(n))
+  return { text: filled, cursor: filled.length }
 }
 
 // The proposals of the last turn still waiting, in the order they were made: none once another
@@ -1461,6 +1503,12 @@ export const register: Register = (on, options) => {
   // `//` typed into an empty prompt becomes `/jot ` (SPEC §4.4). Only a typed `/` after a lone `/`:
   // a paste, or `//` inside a draft, is left alone.
   on('prompt.edit', async ($, e, next) => {
+    // A typed digit after a lone `;` is a band key; a paste, or `;` inside a draft, is left alone.
+    if (e.key !== undefined && e.text === BAND_KEY && e.start === 1 && e.end === 1 && /^[0-9]$/.test(e.inputText)) {
+      const shown = drawn
+      const pressed = await serially(() => pressBandKey($, shown, Number(e.inputText)))
+      if (pressed !== undefined) return pressed
+    }
     const mark = { start: 0, end: 4, color: 'claude', bold: true } as const
     if (e.key !== undefined && e.text === '/' && e.inputText === '/' && e.start === 1 && e.end === 1) {
       await markJotDraft($, true)
@@ -1550,7 +1598,11 @@ export const register: Register = (on, options) => {
   // The band (SPEC §10): Pocket, or the last turn's proposals. Drawn under other mods' bands.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const below = await next(e)
-    if (e.props.hasSurvey) return below
+    const isTerminal = e.surface === 'terminal'
+    if (e.props.hasSurvey) {
+      if (isTerminal) drawn = null
+      return below
+    }
     const el = $.ui.resolve(e) as Elements['terminal']
     const { Box } = el
     const columns = e.props.bodyColumns
@@ -1569,20 +1621,14 @@ export const register: Register = (on, options) => {
     let row: JSX.Element
     if (proposals.length > 0) {
       const hasHint = (await read($, harvest))?.turnId === (await read($, harvestHint))
-      row = (
-        <HarvestRow
-          el={el}
-          proposals={proposals}
-          harvest={harvestOf(proposals, columns, opener)}
-          look={look}
-          hasHint={hasHint}
-          columns={columns}
-          handlers={handlers}
-        />
-      )
+      const shown = harvestOf(proposals, columns, opener)
+      if (isTerminal) drawn = { kind: 'harvest', chips: shown.chips, ids: proposals.map(note => note.id) }
+      row = <HarvestRow el={el} proposals={proposals} harvest={shown} look={look} hasHint={hasHint} columns={columns} handlers={handlers} />
     } else {
       const all = pocketOptions.isOn ? Object.values(await read($, notes)) : []
-      row = <PocketRow el={el} pocket={pocketOf(all, project.key, pocketOptions.max, columns, opener)} opener={opener} look={look} handlers={handlers} />
+      const pocket = pocketOf(all, project.key, pocketOptions.max, columns, opener)
+      if (isTerminal) drawn = { kind: 'pocket', chips: pocket.chips }
+      row = <PocketRow el={el} pocket={pocket} opener={opener} look={look} handlers={handlers} />
     }
     return (
       <Box flexDirection='column'>
