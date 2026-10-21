@@ -98,8 +98,19 @@ const Hits = ({ el, text, hits, isDim }: { el: E; text: string; hits: number[]; 
   )
 }
 
+// A row's focus target: a one-space Button in column 0 that the ring inverts. While the move
+// picker or the edit card has the ring, the rows draw a plain space instead. The terminal keeps
+// the ring at its place among the controls across a redraw, so a row added or dropped above them
+// (a poll, a sync) would otherwise leave the ring on a row: the picker closed and its arrow-key
+// choice gone, or the card's typing going to the list.
+const Target = ({ el, view, id, isDim, onPress }: { el: E; view: PaneView; id: string; isDim?: boolean; onPress: () => void }) => {
+  const { Button, Text } = el
+  const isHeld = view.pane.mode === 'move' || view.pane.mode === 'edit'
+  return isHeld ? <Text> </Text> : <Button key={id} plain dimColor={isDim} label=' ' onPress={onPress} />
+}
+
 const NoteRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; line: Extract<Line, { kind: 'note' }>; slot: number; handlers: Handlers }) => {
-  const { Box, Text, Button } = el
+  const { Box, Text } = el
   const { note } = line
   const { pane, ctx } = view
   const isSelected = (view.focus.kind === 'line' || view.focus.kind === 'move') && pane.cursor === note.id
@@ -113,7 +124,7 @@ const NoteRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; li
   const text = cut(oneLine(note.text), textWidth)
   return (
     <Box key={`row-${slot}`} width={view.width} backgroundColor={isSelected ? COLOUR.band : undefined}>
-      <Button key={slotKey(slot)} plain label=' ' onPress={() => handlers.pressSlot(slot)} />
+      <Target el={el} view={view} id={slotKey(slot)} onPress={() => handlers.pressSlot(slot)} />
       <Text>{' '.repeat(indent)}</Text>
       {number !== undefined ? (
         <Text color={isSelected ? undefined : COLOUR.accent} bold>
@@ -133,7 +144,7 @@ const NoteRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; li
 }
 
 const GroupRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; line: Extract<Line, { kind: 'group' }>; slot: number; handlers: Handlers }) => {
-  const { Box, Text, Button } = el
+  const { Box, Text } = el
   const isSelected = view.focus.kind === 'line' && view.pane.cursor === line.key
   // A heading reads apart from its notes: dot and dim name at the left edge, the notes indented
   // below. Only proposed and the current project are bold accent.
@@ -142,7 +153,7 @@ const GroupRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; l
   const mark = isProposed ? GLYPH.claude : line.project === null ? GLYPH.unfiledDot : GLYPH.dot
   return (
     <Box key={`row-${slot}`} width={view.width} backgroundColor={isSelected ? COLOUR.band : undefined}>
-      <Button key={slotKey(slot)} plain label=' ' onPress={() => handlers.pressSlot(slot)} />
+      <Target el={el} view={view} id={slotKey(slot)} onPress={() => handlers.pressSlot(slot)} />
       <Text color={isProposed ? COLOUR.accent : colourOf(line.project?.key ?? null, view.ctx.current.key, view.tone)}>{mark} </Text>
       <Text color={isAccent ? COLOUR.accent : undefined} bold={isAccent} dimColor={!isAccent}>
         {cut(groupLabel(view.ctx, line), WIDTH.label)}
@@ -167,11 +178,11 @@ const ProblemRow = ({
   slot: number
   handlers: Handlers
 }) => {
-  const { Box, Text, Button } = el
+  const { Box, Text } = el
   const isSelected = view.focus.kind === 'line' && view.pane.cursor === line.key
   return (
     <Box key={`row-${slot}`} width={view.width} backgroundColor={isSelected ? COLOUR.band : undefined}>
-      <Button key={slotKey(slot)} plain label=' ' onPress={() => handlers.pressSlot(slot)} />
+      <Target el={el} view={view} id={slotKey(slot)} onPress={() => handlers.pressSlot(slot)} />
       <Text color={COLOUR.problem} bold>
         {GLYPH.problem} {line.count} unreadable file{line.count === 1 ? '' : 's'}
       </Text>
@@ -180,11 +191,11 @@ const ProblemRow = ({
   )
 }
 
-const Sentinel = ({ el, id, glyph, count, handlers }: { el: E; id: string; glyph: string; count: number; handlers: Handlers }) => {
-  const { Box, Text, Button } = el
+const Sentinel = ({ el, view, id, glyph, count, handlers }: { el: E; view: PaneView; id: string; glyph: string; count: number; handlers: Handlers }) => {
+  const { Box, Text } = el
   return (
     <Box>
-      <Button key={id} plain dimColor label=' ' onPress={() => handlers.action(id === UP_KEY ? 'up' : 'down')} />
+      <Target el={el} view={view} id={id} isDim onPress={() => handlers.action(id === UP_KEY ? 'up' : 'down')} />
       <Text dimColor>
         {glyph} {count} more
       </Text>
@@ -439,7 +450,7 @@ const Rows = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
   const { page } = view
   return (
     <Box flexDirection='column' width={view.width}>
-      {page.above > 0 && <Sentinel el={el} id={UP_KEY} glyph={GLYPH.up} count={page.above} handlers={handlers} />}
+      {page.above > 0 && <Sentinel el={el} view={view} id={UP_KEY} glyph={GLYPH.up} count={page.above} handlers={handlers} />}
       {page.lines.map((line, slot) => {
         if (view.pane.mode === 'edit' && view.pane.edit && line.key === view.pane.edit.id) {
           return (
@@ -474,7 +485,7 @@ const Rows = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
         if (line.kind === 'group') return <GroupRow el={el} view={view} line={line} slot={slot} handlers={handlers} />
         return <ProblemRow el={el} view={view} line={line} slot={slot} handlers={handlers} />
       })}
-      {page.below > 0 && <Sentinel el={el} id={DOWN_KEY} glyph={GLYPH.down} count={page.below} handlers={handlers} />}
+      {page.below > 0 && <Sentinel el={el} view={view} id={DOWN_KEY} glyph={GLYPH.down} count={page.below} handlers={handlers} />}
     </Box>
   )
 }
