@@ -6,7 +6,7 @@ import {
   ageOf,
   cells,
   cut,
-  fitOneLine,
+  fitFooter,
   fitStatuses,
   footerPairs,
   fromField,
@@ -384,7 +384,8 @@ const Footer = ({ el, view }: { el: E; view: PaneView }) => {
   if (view.problems.length > 0 && focus.kind !== 'line')
     statuses.push([`${view.problems.length} unreadable file${view.problems.length === 1 ? '' : 's'}`, COLOUR.problem])
   if (view.syncStatus !== '') statuses.push([view.syncStatus, COLOUR.offline])
-  // One line: at most WIDTH.footerPairs actions, the legend if there's room, `i keys` on the right.
+  // One line: as many actions as fit, the legend before any past the first WIDTH.footerPairs, and
+  // `i keys` on the right.
   const all: [string, string][] = focus.kind === 'unfocused' ? TEXT.unfocused : footerPairs(view.keys)
   const keySheet = all.find(isSheetPair)
   // Statuses are cut, never wrapped, and leave room for `i keys` (two gaps: the spacer's and its own).
@@ -394,10 +395,9 @@ const Footer = ({ el, view }: { el: E; view: PaneView }) => {
     Math.min(Math.max(WIDTH.label, Math.floor(view.width / 2)), view.width - 2 - (keySheet ? 2 + cells(keySheet.join(' ')) : 0)),
   )
   const lead = shown.map(([text]) => text).join('  ')
-  const actions = all.filter(pair => !isSheetPair(pair)).slice(0, WIDTH.footerPairs)
-  if (view.showLegend && !view.isInline) actions.push([TEXT.legend, ''])
-  // The spacer before `i keys` takes one more gap than fitOneLine counts.
-  const fitted = fitOneLine(keySheet ? [...actions, keySheet] : actions, lead, view.width - 2)
+  const legend: [string, string] | undefined = view.showLegend && !view.isInline ? [TEXT.legend, ''] : undefined
+  // The spacer before `i keys` takes one more gap than fitFooter counts.
+  const fitted = fitFooter(all, legend, lead, view.width - 2, WIDTH.footerPairs)
   const pairs = fitted.filter(pair => !isSheetPair(pair))
   const Pair = ({ pair: [key, label] }: { pair: [string, string] }) =>
     key === TEXT.legend ? (
@@ -582,8 +582,14 @@ const Empty = ({ el, view, hasHub, hasHarvest }: { el: E; view: PaneView; hasHub
 const Capture = ({ el, view }: { el: E; view: PaneView }) => {
   const { Box, Text } = el
   const { capture } = view.pane
-  const keep = view.isInline ? WIDTH.savedInline : WIDTH.savedDocked
-  const draft = capture.draft.trim() === '' ? [] : draftLines(capture.draft, view.width, view.isInline ? 1 : WIDTH.previewLines)
+  const hasDraft = capture.draft.trim() !== ''
+  // Docked, the rows between capture's and the footer's, inside the padding. A short body keeps the
+  // hint and the newest save, then the draft's lines, then the earlier saves.
+  const room = view.bodyRows - topRows('capture', false) - (1 + FOOTER_ROWS) - 2
+  const newest = Math.min(1, capture.saved.length)
+  const draftRows = view.isInline ? 1 : Math.max(1, Math.min(WIDTH.previewLines, room - 1 - newest - 1))
+  const draft = hasDraft ? draftLines(capture.draft, view.width, draftRows) : []
+  const keep = view.isInline ? WIDTH.savedInline : Math.max(newest, Math.min(WIDTH.savedDocked, room - 1 - (hasDraft ? draft.length + 1 : 0)))
   return (
     <Box flexDirection='column' paddingY={view.isInline ? 0 : 1}>
       {draft.map(line => (
@@ -667,6 +673,13 @@ const Move = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
 // between (SPEC §4.5): the problems first, then the keys. Too short for a line inside the frame
 // (5 rows docked, 4 inline), it drops the frame rather than cover the footer.
 const sheetTop = (isInline: boolean) => (isInline ? 1 : 2)
+// The rows above what the mode shows: the search row, or capture's (framed docked), and a blank
+// docked. The bundle has neither.
+const topRows = (mode: PaneState['mode'], isInline: boolean) => {
+  if (mode === 'bundle') return 0
+  if (mode === 'capture') return isInline ? 1 : 3 + 1
+  return sheetTop(isInline)
+}
 const isSheetFramed = (bodyRows: number, isInline: boolean) => bodyRows - sheetTop(isInline) - FOOTER_ROWS - 2 >= 1
 export const sheetRoom = (bodyRows: number, isInline: boolean) =>
   Math.max(1, bodyRows - sheetTop(isInline) - FOOTER_ROWS - (isSheetFramed(bodyRows, isInline) ? 2 : 0))
@@ -756,24 +769,24 @@ export const Pane = ({
     pane.mode === 'move' && <Move el={el} view={view} handlers={handlers} />,
     showPreview && (view.preview ? <Preview el={el} view={view} note={view.preview} /> : <Box height={PREVIEW_ROWS} />),
   ]
-  // With the key sheet up the pane takes the whole body and the footer its last row, so the sheet,
-  // paged to the rows between, never covers the footer or runs past a short inline pane. What it
-  // sits over is cut at those rows: in a short body the rows and the preview run taller than the
-  // room, and squeezed the footer out.
+  // Docked, and inline with the key sheet up, the pane takes the whole body and the footer its last
+  // row, whether the list is full, short, has no match or is empty. What sits between is cut at the
+  // rows left there: in a short body the empty block, a long query, capture's saves or the rows
+  // under the sheet run taller than the room, and pushed the footer off the body. Inline otherwise,
+  // the pane is only as tall as what it shows.
   const isSheet = pane.mode === 'sheet'
-  const footerRows = view.isInline ? FOOTER_ROWS : 1 + FOOTER_ROWS
-  // Docked, the pane fills the body and the footer keeps its last row, whether the list is full,
-  // short, has no match or is empty. Inline, the pane is only as tall as what it shows.
+  const isFilled = isSheet || !view.isInline
+  const middleRows = Math.max(0, view.bodyRows - topRows(pane.mode, view.isInline) - (view.isInline ? FOOTER_ROWS : 1 + FOOTER_ROWS))
   return (
-    <Box flexDirection='column' width={view.width} height={isSheet ? view.bodyRows : undefined} minHeight={view.isInline ? undefined : view.bodyRows}>
+    <Box flexDirection='column' width={view.width} height={isFilled ? view.bodyRows : undefined}>
       {pane.mode === 'bundle' ? null : pane.mode === 'capture' ? (
         <CaptureRow el={el} view={view} handlers={handlers} />
       ) : (
         <SearchRow el={el} view={view} handlers={handlers} />
       )}
       {pane.mode !== 'bundle' && !view.isInline && <Box height={1} />}
-      {isSheet ? (
-        <Box flexDirection='column' flexShrink={0} height={Math.max(0, view.bodyRows - sheetTop(view.isInline) - footerRows)} overflow='hidden'>
+      {isFilled ? (
+        <Box flexDirection='column' flexShrink={0} height={middleRows} overflow='hidden'>
           <Box flexDirection='column' flexShrink={0}>
             {middle}
           </Box>
@@ -781,7 +794,6 @@ export const Pane = ({
       ) : (
         middle
       )}
-      <Box flexGrow={1} />
       <Footer el={el} view={view} />
       {isSheet && <KeySheet el={el} view={view} />}
       <ActionLayer el={el} view={view} handlers={handlers} />

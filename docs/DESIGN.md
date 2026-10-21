@@ -1,6 +1,6 @@
 # Ostrakon design system
 
-Version: 3.0.0
+Version: 3.1.0
 
 What the terminal mod (the pane, the band and the prompt hint, in `plugin/`) and the phone (`server/public/`) must agree on: colour roles, the project palette, the phone's tokens, symbols, fixed copy, motion and the accessibility bar. [`SPEC.md`](SPEC.md) describes behaviour and points here for these values instead of repeating them. The code holds the values: `plugin/src/ui/look.ts` for the terminal, `style.css`, `app.js` and `index.html` for the phone.
 
@@ -269,7 +269,7 @@ Things that move: the phone's swipe, sheets, drawers and the editor (rise over a
 | Width | Draw to `bodyColumns - 1`. Band chips shorten (to `WIDTH.chipMin`) before they drop into `+N`; the opener and `+N` stay. |
 | Narrow empty pane | The shard goes first when the descriptions would be cut beside it. |
 | Narrow harvest row | Title shortens to `◆`; then, with no room for a chip: one column apart, then `✎` without the project, then no `◆`. |
-| Short pane | The docked preview drops when the body can't hold it and three rows besides (under 15 rows); the key sheet drops its frame when no line fits inside it. |
+| Short pane | The docked preview drops when the body can't hold it and three rows besides (under 15 rows); the key sheet drops its frame when no line fits inside it. Docked, what sits between the search row and the footer is cut at the rows left there, so the footer keeps the last row. |
 
 <!-- check: constants -->
 | Constant | Value | Rule |
@@ -278,7 +278,7 @@ Things that move: the phone's swipe, sheets, drawers and the editor (rise over a
 | `look.ts WIDTH.chipMin` | 10 | labels shorten to this before chips drop |
 | `look.ts WIDTH.keySheet` | 46 | the key sheet's width, at most |
 | `look.ts WIDTH.previewLines` | 6 | preview text lines |
-| `look.ts WIDTH.footerPairs` | 4 | key pairs in the footer, at most |
+| `look.ts WIDTH.footerPairs` | 4 | key pairs in the footer kept ahead of the legend; more show when the width allows |
 | `look.ts TEXT.harvestHintTimes` | 3 | harvests that show the hint line |
 
 ## 10. Not covered
@@ -288,6 +288,12 @@ Keys, layout and behaviour are in [`SPEC.md`](SPEC.md). The terminal's spacing i
 ## 11. Changelog
 
 Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one or more `- Change:` lines and one or more `- Why:` lines. The newest entry ends with `Fingerprint: <hash>` of the design values in the code (`bun tools/check-design.ts --fingerprint` prints it). Versions: major when a meaning changes or something goes (a glyph means something else, a colour role moves); minor when something is added; patch for a value tweak or a doc fix. Entries are never removed.
+
+### 3.1.0 — 2026-10-22
+- Change: The footer shows as many key pairs as the width takes, not four at most: on a row, `m move` and `y copy` follow the note's own four, then `v pick`, `z fold` and `h history`. The legend stays ahead of the pairs past the first four.
+- Change: Docked, what sits between the search row and the footer is cut at the rows left there, so a short body keeps the footer on its last row in every state.
+- Why: A wide pane left most of the footer empty while the keys it could show were only in the key sheet. In a short body the empty block, a long query or capture's saves pushed the footer off the body.
+Fingerprint: da3fa407fa5f
 
 ### 3.0.0 — 2026-10-22
 - Change: The `/jot` hint tail reads `✎ ⏎ saves to cc`; `Claude won't see it` is gone. Capture's line reads `⏎ saves to cc` (was `Notes save to cc. Keep typing for the next one.`), and the bundle view drops `The picked notes are marked sent once the prompt goes in. Nothing is removed before.`

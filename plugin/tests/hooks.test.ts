@@ -344,14 +344,15 @@ test('the key sheet pages to fit the inline body, j and k turning the pages roun
   const ui = await $.ui.mount({ plugin: 'ostrakon', surface: 'terminal', ...PANE, props })
   await ui.input({ key: 'q', text: '', kind: 'submit' })
   await ui.press({ key: 'key-i' })
-  // 11 rows less the search row, the footer and the frame: 7 a page, so 19 keys take 3.
-  expect(await ui.find({ type: 'Text', text: /^jump to a row$/ })).toBeDefined()
+  // 11 rows less the search row, the footer and the frame: 7 a page, so 19 keys take 3. Opened on
+  // a row, its own seven keys (copy the last but one) are the first page.
+  expect(await ui.find({ type: 'Text', text: /^copy$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ close keys$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ more 1\/3$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^copy$/ })).toBeUndefined()
-  await ui.press({ key: 'key-j' })
-  expect(await ui.find({ type: 'Text', text: /^copy$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^jump to a row$/ })).toBeUndefined()
+  await ui.press({ key: 'key-j' })
+  expect(await ui.find({ type: 'Text', text: /^jump to a row$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^copy$/ })).toBeUndefined()
   await ui.press({ key: 'key-k' })
   await ui.press({ key: 'key-k' })
   expect(await ui.find({ type: 'Text', text: /^ more 3\/3$/ })).toBeDefined()
@@ -422,6 +423,80 @@ test("docked, the empty pane's footer keeps the body's last row too", async ($, 
   const ui = await mountPane($)
   expect(await ui.find({ type: 'Text', text: /^Nothing pending in cc\.$/ })).toBeDefined()
   expect(await footerRow(ui)).toBe(PANE.props.scroll.bodyRows - 1)
+  await ui.unmount()
+})
+
+// Redraws the pane docked at `bodyRows` by `bodyColumns`.
+const dockAt = async (ui: Awaited<ReturnType<typeof mountPane>>, bodyRows: number, bodyColumns: number = PANE.props.bodyColumns) => {
+  const props = { ...PANE.props, bodyColumns, scroll: { offset: 0, bodyRows } }
+  await ui.redraw(props)
+  await ui.redraw(props)
+}
+// Rows what sits between the search row and the footer would take past the room it's cut to.
+const spill = async (ui: Awaited<ReturnType<typeof mountPane>>) => {
+  const [root] = await ui.findAll({ type: 'Box' })
+  const middle = ((root?.children ?? []) as Drawn[]).find(child => child.props?.overflow === 'hidden')
+  return rowsOf(middle?.children?.[0]) - Number(middle?.props?.height ?? 0)
+}
+
+test('docked, the footer fits as many key pairs as the width allows, none cut', async ($, on) => {
+  await startSession($, on, fixture())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  const shown = async (bodyColumns: number) => {
+    await dockAt(ui, 37, bodyColumns)
+    const labels = [' to prompt', ' send', ' edit', ' archive', ' move', ' copy', ' pick', ' fold', ' history']
+    const found = await Promise.all(labels.map(async label => (await ui.find({ type: 'Text', text: label })) !== undefined))
+    return labels.filter((_, i) => found[i]).map(label => label.trim())
+  }
+  // The pane is a column narrower than the body, the line two narrower than the pane.
+  expect(await shown(101)).toEqual(['to prompt', 'send', 'edit', 'archive', 'move', 'copy', 'pick', 'fold', 'history'])
+  expect(await shown(65)).toEqual(['to prompt', 'send', 'edit', 'archive', 'move', 'copy'])
+  expect(await shown(57)).toEqual(['to prompt', 'send', 'edit', 'archive', 'move'])
+  expect(await shown(41)).toEqual(['to prompt', 'send', 'edit'])
+  expect(await ui.find({ type: 'Text', text: ' keys' })).toBeDefined()
+  await ui.unmount()
+})
+
+test("docked at short heights, the footer keeps the body's last row with notes, no match or capture", async ($, on) => {
+  await startSession($, on, fixture())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  const everyHeight = async (check?: (bodyRows: number) => Promise<void>) => {
+    for (let bodyRows = 8; bodyRows <= 17; bodyRows += 1) {
+      await dockAt(ui, bodyRows)
+      expect(await footerRow(ui)).toBe(bodyRows - 1)
+      await check?.(bodyRows)
+    }
+  }
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await everyHeight()
+  await ui.input({ key: 'q', text: Array.from({ length: 40 }, (_, i) => `nomatch${i}`).join(' '), kind: 'change' })
+  await everyHeight()
+  await dockAt(ui, 37)
+  await ui.press({ key: 'key-pane:next' })
+  for (const text of ['first idea', 'second idea', 'third idea']) await ui.input({ key: 'capture', text, kind: 'submit' })
+  await ui.input({ key: 'capture', text: Array.from({ length: 120 }, (_, i) => `word${i}`).join(' '), kind: 'change' })
+  // From 14 rows capture keeps its hint, the newest save and the draft's end, nothing cut.
+  await everyHeight(async bodyRows => {
+    if (bodyRows < 14) return
+    expect(await spill(ui)).toBeLessThanOrEqual(0)
+    expect((await texts(ui)).some(text => /saves to/.test(text))).toBe(true)
+    expect(await ui.find({ type: 'Text', text: /third idea/ })).toBeDefined()
+    expect((await texts(ui)).some(text => /word119$/.test(text))).toBe(true)
+  })
+  await ui.unmount()
+})
+
+test("docked at short heights, the empty pane's footer keeps the body's last row", async ($, on) => {
+  await startSession($, on, new MemDir())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  for (let bodyRows = 8; bodyRows <= 17; bodyRows += 1) {
+    await dockAt(ui, bodyRows, 72)
+    expect(await footerRow(ui)).toBe(bodyRows - 1)
+  }
   await ui.unmount()
 })
 
