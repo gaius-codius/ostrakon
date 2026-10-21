@@ -279,6 +279,8 @@ deleted: false                       # tombstone, only set by purge
 ---
 check why the cache test is flaky on CI. started after the redis bump, only on the arm runners
 ```
+- **Project key:** the `origin` remote, normalized, so a project is the same on every machine. A worktree is its main checkout's project (the engine's repo root is the main working tree's). A folder with no remote falls back to `path:<its root>`; once it has a remote, a session there moves the notes kept under that path to the remote's project, so the folder isn't two projects. The move is an ordinary change that syncs like any other, made by the poll only after every sync (hub, mirror) has pulled in that session, so a change made elsewhere meanwhile isn't undone by this machine's older copy.
+  - **Known issue, kept by choice:** a `path:` key is only a path, so the same path on two machines is one project, and when it gains a remote on one machine, notes made under that path on the other move too. Telling them apart would need a record of which machine made each note. Revisit if folder paths are shared across machines.
 - **Flat keys:** the project and context are written as flat keys because Obsidian's Properties shows nested blocks as raw JSON. Older nested `project:`/`context:` blocks are still read.
 - **Parsing:** a strict, small YAML subset with its own parser and serializer (no dependency). An unparseable file is **skipped and reported**, never overwritten. Keys this mod doesn't own are kept verbatim.
 - **Writes** go to a temp file of their own, then `mv` puts it in place in one step. The file is read back after the rename; if another writer replaced it meanwhile, it's re-read on the next poll.

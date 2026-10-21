@@ -56,7 +56,12 @@ export type World = {
   heldRead?: { gate: Promise<void>; isHeld?: boolean }
 }
 
-export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '') => {
+// Where the session runs, as the engine answers: the repo (its main checkout's root for a
+// worktree) and the session's root.
+export type Where = { repo: { root: string; remote: string | null } | null; root: string }
+const IN_CC: Where = { repo: { root: '/home/me/Work/cc', remote: 'git@github.com:me/cc.git' }, root: '/home/me/Work/cc' }
+
+export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '', where: Where = IN_CC) => {
   const engine = $
   const world: World = { box: { text: draft }, toasts: [], submitted: [], opened: 0, closed: 0, focused: [], tools: [] }
   const clock = mock.clock(on, { now: Date.parse('2026-10-09T12:00:00.000Z') })
@@ -77,10 +82,10 @@ export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '') =
     world.tools.push({ ...e, registeredAs: tool })
     return { value: { tool } }
   })
-  on('session.repo', () => ({ value: { root: '/home/me/Work/cc', remote: 'git@github.com:me/cc.git', name: 'cc', internal: false } }))
+  on('session.repo', () => ({ value: where.repo && { ...where.repo, name: where.repo.root.split('/').pop() ?? '', internal: false } }))
   on('session.id', () => ({ value: 'sess-1' }))
   on('session.version', () => ({ value: { version: '2.1.294', base: '2.1.294' } }))
-  on('session.root', () => ({ value: '/home/me/Work/cc' }))
+  on('session.root', () => ({ value: where.root }))
   on('prompt.read', async () => {
     const held = world.heldRead
     if (held !== undefined && !held.isHeld) {

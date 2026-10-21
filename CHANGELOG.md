@@ -10,6 +10,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 - The band's notes are pulled into the prompt with two keys: type `;` and the note's number (`;2`) in an empty prompt. A lone number no longer does anything, so it answers Claude's numbered questions again. After a turn, `;1` keeps a proposal and `;0` keeps them all. To start a prompt with `;` and a digit, paste it.
 
+### Fixed
+
+- A folder that gets a git remote is no longer two projects: the notes saved there before the remote move to the remote's project once a session there has synced.
+
 ## [0.6.0] - 2026-10-14
 
 ### Added
