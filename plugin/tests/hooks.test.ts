@@ -487,6 +487,42 @@ test("m offers every place but the note's own, starting on the first", async ($,
   await ui.unmount()
 })
 
+// The keys of the controls the ring stops on, in the order it visits them: the action layer, a
+// `display: 'none'` Box, isn't one.
+type Drawn = { type: string; props?: Record<string, unknown>; children?: unknown[] }
+const ringOf = (node: unknown): string[] => {
+  if (typeof node !== 'object' || node === null) return []
+  const { type, props, children } = node as Drawn
+  if (type === 'Box' && props?.display === 'none') return []
+  if (type === 'Button' || type === 'Input' || type === 'Select') return [String(props?.key)]
+  return (children ?? []).flatMap(ringOf)
+}
+
+// The terminal keeps the ring at its place in this order across a redraw: a row added above the
+// move picker or the edit card would leave the ring on that row, the picker closed and its
+// arrow-key choice gone, or the card's typing going to the list.
+for (const [press, control] of [
+  ['key-m', 'move'],
+  ['key-e', 'edit'],
+] as const) {
+  test(`a note arriving above the ${control} control leaves it at its place in the ring`, async ($, on) => {
+    const dir = fixture()
+    const { clock } = await startSession($, on, dir)
+    await run($, 'jot', '')
+    const ui = await mountPane($)
+    await ui.input({ key: 'q', text: '', kind: 'submit' })
+    await ui.press({ key: press })
+    const before = ringOf(await ui.drawn())
+    expect(before).toContain(control)
+    put(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH04', 'a newer one from the phone', CC, 1)
+    await clock.advance(2100)
+    expect(await ui.find({ type: 'Text', text: /a newer one from the phone/ })).toBeDefined()
+    const after = ringOf(await ui.drawn())
+    expect(after.indexOf(control)).toBe(before.indexOf(control))
+    await ui.unmount()
+  })
+}
+
 test('a narrow docked empty pane drops the shard before cutting the ways in', async ($, on) => {
   await startSession($, on, new MemDir())
   await run($, 'jot', '')
