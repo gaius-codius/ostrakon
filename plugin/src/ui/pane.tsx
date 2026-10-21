@@ -61,6 +61,7 @@ export const slotKey = (slot: number) => `slot-${slot}`
 export const UP_KEY = 'more-up'
 export const DOWN_KEY = 'more-down'
 export const LAYER_PREFIX = 'key-'
+export const FOOTER_KEY = 'footer'
 
 const markerOf = (note: Note, pane: PaneState): [string, string | undefined] => {
   if (pane.picks.length > 0) return pane.picks.includes(note.id) ? [GLYPH.picked, COLOUR.accent] : [GLYPH.unpicked, COLOUR.history]
@@ -391,7 +392,7 @@ const Footer = ({ el, view }: { el: E; view: PaneView }) => {
       </Text>
     )
   return (
-    <Box flexDirection='column' width={view.width}>
+    <Box key={FOOTER_KEY} flexDirection='column' width={view.width} flexShrink={0}>
       {!view.isInline && <Box height={1} />}
       <Box columnGap={2} width={view.width} height={FOOTER_ROWS}>
         {shown.map(([text, colour]) => (
@@ -500,14 +501,16 @@ const NoMatch = ({ el, view }: { el: E; view: PaneView }) => {
   // The field shows the query untrimmed, so its spaces count toward the cut. A body too short for
   // the preview takes one line, as inline, so the footer stays on screen.
   const rows = !view.isInline && hasPreview(view) ? WIDTH.previewLines : 1
-  const draft = cells(view.pane.query) > searchRoom(view) ? draftLines(query, view.width, rows) : []
+  // Indented one, past the rows' focus column, as the note rows are.
+  const width = view.width - 1
+  const draft = cells(view.pane.query) > searchRoom(view) ? draftLines(query, width, rows) : []
   return (
-    <Box flexDirection='column' paddingY={view.isInline ? 0 : 1}>
+    <Box flexDirection='column' paddingY={view.isInline ? 0 : 1} paddingLeft={1}>
       {draft.map(line => (
         <Text>{line === '' ? ' ' : line}</Text>
       ))}
       {draft.length > 0 && !view.isInline && <Box height={1} />}
-      <Text dimColor>{cut(TEXT.noMatch(view.ctx.current.name), view.width)}</Text>
+      <Text dimColor>{cut(TEXT.noMatch(view.ctx.current.name), width)}</Text>
     </Box>
   )
 }
@@ -742,8 +745,10 @@ export const Pane = ({
   // room, and squeezed the footer out.
   const isSheet = pane.mode === 'sheet'
   const footerRows = view.isInline ? FOOTER_ROWS : 1 + FOOTER_ROWS
+  // Docked, the pane fills the body and the footer keeps its last row, whether the list is full,
+  // short, has no match or is empty. Inline, the pane is only as tall as what it shows.
   return (
-    <Box flexDirection='column' width={view.width} height={isSheet ? view.bodyRows : undefined}>
+    <Box flexDirection='column' width={view.width} height={isSheet ? view.bodyRows : undefined} minHeight={view.isInline ? undefined : view.bodyRows}>
       {pane.mode === 'bundle' ? null : pane.mode === 'capture' ? (
         <CaptureRow el={el} view={view} handlers={handlers} />
       ) : (
@@ -759,6 +764,7 @@ export const Pane = ({
       ) : (
         middle
       )}
+      <Box flexGrow={1} />
       <Footer el={el} view={view} />
       {isSheet && <KeySheet el={el} view={view} />}
       <ActionLayer el={el} view={view} handlers={handlers} />

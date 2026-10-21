@@ -21,6 +21,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 - The preview keeps the age when the path is long, and a long mirror problem leaves the queued count and the keys on the footer.
 - With no notes, the band shows the project's whole name.
 - The `pocket` setting's description names `;` and the digit.
+- Docked, the pane's footer stays on the body's last row, with a short list, no match or no notes, instead of moving up under them. The no-match line is indented like the note rows.
 - A folder that gets a git remote is no longer two projects: the notes saved there before the remote move to the remote's project once a session there has synced.
 
 ## [0.6.0] - 2026-10-14
