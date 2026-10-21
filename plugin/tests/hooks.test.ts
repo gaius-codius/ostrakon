@@ -2,6 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
 import { MemDir } from './memdir'
+import { FOOTER_KEY } from '../src/ui/pane'
 import { COLOUR, GLYPH, JOT_CONTEXT } from '../src/ui/look'
 import { CC, INFRA, PANE, mountPane, noteIn, put, run, startSession, texts } from './world'
 
@@ -361,6 +362,62 @@ test('the key sheet pages to fit the inline body, j and k turning the pages roun
   expect(await ui.find({ type: 'Text', text: /^ close keys$/ })).toBeUndefined()
   await ui.press({ key: 'key-i' })
   expect(await ui.find({ type: 'Text', text: /^ more 1\/3$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+// Rows a drawn element takes, for the column layouts the pane's states draw: a Text is a row, a
+// Box its fixed height, or its rows (summed down a column, the tallest across a row) and padding.
+type Drawn = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
+const rowsOf = (node: unknown): number => {
+  if (typeof node !== 'object' || node === null) return 0
+  const { type, props = {}, children = [] } = node as Drawn
+  if (type === 'Text' || type === 'Button' || type === 'Input') return 1
+  if (props.display === 'none' || props.position === 'absolute') return 0
+  if (typeof props.height === 'number') return props.height
+  const inner = children.map(rowsOf)
+  const content = props.flexDirection === 'column' ? inner.reduce((sum, rows) => sum + rows, 0) : Math.max(0, ...inner)
+  const pad = 2 * Number(props.paddingY ?? 0) + (props.borderStyle !== undefined ? 2 : 0)
+  return Math.max(content + pad, Number(props.minHeight ?? 0))
+}
+// The footer's row in the pane: what's above it, with the rows a minHeight leaves to a flexGrow.
+const footerRow = async (ui: Awaited<ReturnType<typeof mountPane>>) => {
+  const [root] = await ui.findAll({ type: 'Box' })
+  const children = (root?.children ?? []) as Drawn[]
+  const at = children.findIndex(child => child.key === FOOTER_KEY)
+  const above = children
+    .slice(0, at)
+    .map(rowsOf)
+    .reduce((sum, rows) => sum + rows, 0)
+  const total = children.map(rowsOf).reduce((sum, rows) => sum + rows, 0)
+  const grows = children.slice(0, at).some(child => Number(child.props?.flexGrow ?? 0) > 0)
+  const spare = grows ? Math.max(0, Number(root?.props.minHeight ?? 0) - total) : 0
+  return above + spare + rowsOf(children[at]) - 1
+}
+
+test("docked, the footer keeps the body's last row with notes and with no match", async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  const last = PANE.props.scroll.bodyRows - 1
+  expect(await footerRow(ui)).toBe(last)
+  await ui.input({ key: 'q', text: 'kubernetes', kind: 'change' })
+  expect(await footerRow(ui)).toBe(last)
+  // The no-match line is indented one, as the note rows are.
+  const boxes = await ui.findAll({ type: 'Box' })
+  const noMatch = boxes.find(box =>
+    (box.children as Drawn[]).some(child => child.type === 'Text' && /^No notes match/.test(String((child.children ?? []).join('')))),
+  )
+  expect(noMatch?.props.paddingLeft).toBe(1)
+  await ui.unmount()
+})
+
+test("docked, the empty pane's footer keeps the body's last row too", async ($, on) => {
+  await startSession($, on, new MemDir())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  expect(await ui.find({ type: 'Text', text: /^Nothing pending in cc\.$/ })).toBeDefined()
+  expect(await footerRow(ui)).toBe(PANE.props.scroll.bodyRows - 1)
   await ui.unmount()
 })
 

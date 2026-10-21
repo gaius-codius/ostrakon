@@ -233,7 +233,7 @@ One blank row, then one line: at most four key/label pairs for the focus (key bo
 - A row is a keyed `Box` whose focus target is a one-space `plain` Button in column 0; focus inverts it into the selection bar. Rows are keyed by *slot in the window*, not by note, so paging doesn't move the ring.
 - Keys with no visible control (letter actions, digits, borrowed chords) are Buttons in an **action layer**, a `display: 'none'` Box drawn last. A `ui.focus` hook redirects any move onto it.
 - While a row, the bundle or the key sheet holds the ring, the layer also answers every other letter and digit by doing nothing, because an unanswered printable key would go to the prompt and take the keyboard with it.
-- Docked, the preview and footer have fixed heights, so the window never changes size as the selection moves. In a body too short for the preview and three rows besides, the preview goes, as inline, so the footer stays on screen.
+- Docked, the preview and footer have fixed heights, so the window never changes size as the selection moves. The pane fills the body and the footer keeps its last row, whether the list is full, short, has no match or is empty. In a body too short for the preview and three rows besides, the preview goes, as inline, so the footer stays on screen.
 - Each open draws exactly one `autoFocus` element. Every in-pane view change calls `$.ui.focus` on its target (search → first result, list toggle → selected row, capture, edit, bundle → `[ send ]`, back out → the row it came from, fold → the header).
 
 ---
