@@ -365,9 +365,11 @@ test('the key sheet pages to fit the inline body, j and k turning the pages roun
   await ui.unmount()
 })
 
+// An element as the tests read the drawn tree.
+type Drawn = { type: string; props?: Record<string, unknown>; children?: unknown[] }
+
 // Rows a drawn element takes, for the column layouts the pane's states draw: a Text is a row, a
 // Box its fixed height, or its rows (summed down a column, the tallest across a row) and padding.
-type Drawn = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
 const rowsOf = (node: unknown): number => {
   if (typeof node !== 'object' || node === null) return 0
   const { type, props = {}, children = [] } = node as Drawn
@@ -548,7 +550,6 @@ test("m offers every place but the note's own, starting on the first", async ($,
 
 // The keys of the controls the ring stops on, in the order it visits them: the action layer, a
 // `display: 'none'` Box, isn't one.
-type Drawn = { type: string; props?: Record<string, unknown>; children?: unknown[] }
 const ringOf = (node: unknown): string[] => {
   if (typeof node !== 'object' || node === null) return []
   const { type, props, children } = node as Drawn
