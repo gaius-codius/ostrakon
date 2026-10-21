@@ -345,7 +345,8 @@ const Preview = ({ el, view, note }: { el: E; view: PaneView; note: Note }) => {
   const lines = wrap(isEditing ? fromField(edit.draft) : note.text, width)
   let shown = lines.slice(0, WIDTH.previewLines)
   if (isEditing) shown = draftLines(fromField(edit.draft), width, WIDTH.previewLines)
-  else if (lines.length > WIDTH.previewLines) shown[shown.length - 1] = cut(`${shown[shown.length - 1] ?? ''} `, width).replace(/ ?$/, GLYPH.more)
+  // A last line that fills the width gives up its end to the … rather than run past it.
+  else if (lines.length > WIDTH.previewLines) shown[shown.length - 1] = cut(`${shown[shown.length - 1] ?? ''}${GLYPH.more}`, width)
   return (
     <Box flexDirection='column' width={view.width} height={PREVIEW_ROWS} paddingLeft={TEXT_COLUMN}>
       <Box height={1} />

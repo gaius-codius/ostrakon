@@ -477,6 +477,28 @@ test("docked, the preview's bar starts in the note text's column, with no blank 
   await ui.unmount()
 })
 
+test('docked and narrow, a preview cut at its sixth line still fits its row', async ($, on) => {
+  const dir = new MemDir()
+  // Seven lines that each fill the preview's 30 cells at 40 columns.
+  put(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH01', Array.from({ length: 7 }, (_, i) => `line${i} abcdefghij abcdefghijklm`).join('\n'), CC, 1)
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  const props = { ...PANE.props, bodyColumns: 40 }
+  await ui.redraw(props)
+  await ui.redraw(props)
+  const boxes = (await ui.findAll({ type: 'Box' })) as Drawn[]
+  const preview = boxes.find(box => box.props?.height === PREVIEW_ROWS && (box.children ?? []).some(child => textOf(child).startsWith(GLYPH.quote)))
+  const room = Number(preview?.props?.width) - TEXT_COLUMN
+  const lines = (preview?.children ?? []).map(textOf).filter(text => text.startsWith(GLYPH.quote))
+  expect(room).toBe(32)
+  expect(lines[0]).toBe(`${GLYPH.quote} line0 abcdefghij abcdefghijklm`)
+  for (const line of lines) expect(cells(line)).toBeLessThanOrEqual(room)
+  expect(lines[5]).toBe(`${GLYPH.quote} line5 abcdefghij abcdefghijkl${GLYPH.more}`)
+  await ui.unmount()
+})
+
 test('at the shortest heights the key sheet drops its frame and stays off the footer', async ($, on) => {
   const dir = fixture()
   await startSession($, on, dir)
