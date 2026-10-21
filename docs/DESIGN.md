@@ -1,6 +1,6 @@
 # Ostrakon design system
 
-Version: 2.0.0
+Version: 3.0.0
 
 What the terminal mod (the pane, the band and the prompt hint, in `plugin/`) and the phone (`server/public/`) must agree on: colour roles, the project palette, the phone's tokens, symbols, fixed copy, motion and the accessibility bar. [`SPEC.md`](SPEC.md) describes behaviour and points here for these values instead of repeating them. The code holds the values: `plugin/src/ui/look.ts` for the terminal, `style.css`, `app.js` and `index.html` for the phone.
 
@@ -195,7 +195,7 @@ Strings the surfaces or the docs depend on, each checked word for word in every 
 | `From Claude` | server/public/app.js | what the phone's `◆` reads as |
 | `Proposed by Claude` | server/public/app.js, docs/SPEC.md | the phone's heading for proposals |
 | `keep all` | plugin/src/ui/look.ts | the harvest band's `;0 keep all` |
-| `Claude won't see it` | plugin/src/ui/look.ts, docs/SPEC.md | the hint tail while a `/jot` draft is typed |
+| `saves to` | plugin/src/ui/look.ts, docs/SPEC.md | the hint tail while a `/jot` draft is typed, and capture's line: `⏎ saves to <project>` |
 | `saved to` | plugin/src/ui/look.ts, docs/SPEC.md | the hint tail after a save: `✓ saved to <project>` |
 | `Archived · u undo` | plugin/src/ui/look.ts, docs/SPEC.md | the pane's archive toast |
 | `Please look at these notes from my ostrakon:` | plugin/src/ui/look.ts, docs/SPEC.md | the bundle's first line |
@@ -288,6 +288,11 @@ Keys, layout and behaviour are in [`SPEC.md`](SPEC.md). The terminal's spacing i
 ## 11. Changelog
 
 Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one or more `- Change:` lines and one or more `- Why:` lines. The newest entry ends with `Fingerprint: <hash>` of the design values in the code (`bun tools/check-design.ts --fingerprint` prints it). Versions: major when a meaning changes or something goes (a glyph means something else, a colour role moves); minor when something is added; patch for a value tweak or a doc fix. Entries are never removed.
+
+### 3.0.0 — 2026-10-22
+- Change: The `/jot` hint tail reads `✎ ⏎ saves to cc`; `Claude won't see it` is gone. Capture's line reads `⏎ saves to cc` (was `Notes save to cc. Keep typing for the next one.`), and the bundle view drops `The picked notes are marked sent once the prompt goes in. Nothing is removed before.`
+- Why: Claude does see a `/jot`: the engine keeps the command in the transcript, and QA had Claude quote one back. The other two lines explained what the product does, which §6 rules out; the footer already has the keys.
+Fingerprint: da3fa407fa5f
 
 ### 2.0.0 — 2026-10-21
 - Change: The band's chips read `;1 label` instead of `1: label`, and keep all reads `;0 keep all`: the key is a `;` and the digit, drawn by us in the accent (as the pane's row numbers), and the chip's Button takes no hotkey. The harvest hint reads `;1–;3 keep one · ;0 keep all · …`.

@@ -455,7 +455,7 @@ export const keysFor = (focus: Focus): Key[] => {
       if (line.kind === 'problem') return [{ action: 'details', shown: ['⏎', 'details'] }, k('search', 'f', 'search'), ...always]
       if (line.kind === 'group') {
         return [
-          k('fold', 'z', 'fold'),
+          k('fold', 'z', line.isFolded ? 'unfold' : 'fold'),
           k('history', 'h', 'history'),
           k('search', 'f', 'search'),
           k('keys', 'i', 'keys'),
@@ -473,7 +473,7 @@ export const keysFor = (focus: Focus): Key[] => {
           k('history', 'h', 'hide history'),
           k('fold', 'z', 'fold'),
           k('search', 'f', 'search'),
-          k('keys', 'i', 'keys', false),
+          k('keys', 'i', 'keys'),
           ...always,
         ]
       }

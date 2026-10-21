@@ -16,7 +16,7 @@
     "pocket": {
       "type": "boolean",
       "title": "Pocket",
-      "description": "Show this project's open notes as numbered chips above the prompt (a digit in an empty prompt pulls one in). Off keeps only the ✎.",
+      "description": "Show this project's open notes as numbered chips above the prompt (`;` then its digit in an empty prompt pulls one in). Off keeps only the ✎.",
       "default": true
     },
     "pocketMax": {

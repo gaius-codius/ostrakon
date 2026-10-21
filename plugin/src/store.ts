@@ -23,8 +23,13 @@ import { ulid } from './ulid'
 
 // What the store needs from the engine. The hooks module builds it from $ (a mod may only pass $
 // to functions in its own file); tests build it over an in-memory directory.
+// The machine's own files (memos, locks, sync caches, the doctor's report): ~/.cache/ostrakon, or
+// OSTRAKON_CACHE, which keeps a test session's apart from the person's.
+export const cacheDirOf = (env: { home?: string; cache?: string }) =>
+  (env.cache || `${(env.home ?? '').replace(/\/+$/, '')}/.cache/ostrakon`).replace(/\/+$/, '')
+
 export type StoreIO = {
-  env: { dir?: string; home?: string }
+  env: { dir?: string; home?: string; cache?: string }
   read: (path: string) => Promise<string>
   write: (path: string, text: string) => Promise<void>
   list: (dir: string) => Promise<readonly { name: string; kind: string; size: number; mtimeMs: number }[]>
@@ -193,7 +198,7 @@ export const storeKit = (notesDir?: string, layout: Layout = {}, hooks: StoreHoo
   }
 
   // The memory file names its folder, so two folders whose names hash alike never share one.
-  const memoPath = (io: StoreIO) => `${(io.env.home ?? '').replace(/\/+$/, '')}/.cache/ostrakon/seen-${hashOf(dirOf(io))}.json`
+  const memoPath = (io: StoreIO) => `${cacheDirOf(io.env)}/seen-${hashOf(dirOf(io))}.json`
 
   const memoOn = async (io: StoreIO): Promise<Memo> => {
     const empty: Memo = { v: MEMO_VERSION, dir: dirOf(io), isUsed: false, files: {} }
@@ -372,8 +377,7 @@ export const storeKit = (notesDir?: string, layout: Layout = {}, hooks: StoreHoo
   // this process and its start time. A lock is only ever taken from an owner that has exited, and
   // a process that has exited can't resume a rename, so an owner's check before its rename is
   // enough. Taking a lock over happens under a short guard directory, one recoverer at a time.
-  const lockRoot = (io: StoreIO) =>
-    `${(io.env.home ?? '').replace(/\/+$/, '')}/.cache/ostrakon/locks${layout.lockSpace ? `/${layout.lockSpace}.${hashOf(dirOf(io))}` : ''}`
+  const lockRoot = (io: StoreIO) => `${cacheDirOf(io.env)}/locks${layout.lockSpace ? `/${layout.lockSpace}.${hashOf(dirOf(io))}` : ''}`
 
   const ownerOf = async (io: StoreIO, path: string) => {
     const text = await io.read(`${path}/owner`).catch(() => undefined)

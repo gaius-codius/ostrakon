@@ -292,9 +292,13 @@ const metaParts = (view: PaneView, note: Note) => {
   }
 }
 
-const metaOf = (view: PaneView, note: Note) => {
+// Within `width` cells: a long path is cut, then dropped, before the age is.
+const metaOf = (view: PaneView, note: Note, width: number) => {
   const { who, path, branch, age } = metaParts(view, note)
-  return [who, path, branch, age].filter(Boolean).join(' · ')
+  const rest = [who, branch, age].filter(Boolean).join(' · ')
+  const room = width - cells(rest) - cells(' · ')
+  if (room < 8) return cut(rest, width)
+  return [who, cut(path, room), branch, age].filter(Boolean).join(' · ')
 }
 
 // Docked, the preview and the footer keep fixed heights, so the rows' window never changes size
@@ -336,7 +340,7 @@ const Preview = ({ el, view, note }: { el: E; view: PaneView; note: Note }) => {
         </Text>
       ))}
       <Text dimColor>
-        {GLYPH.quote} {cut(metaOf(view, note), width)}
+        {GLYPH.quote} {metaOf(view, note, width)}
       </Text>
     </Box>
   )
@@ -355,7 +359,11 @@ const Footer = ({ el, view }: { el: E; view: PaneView }) => {
   const all: [string, string][] = focus.kind === 'unfocused' ? TEXT.unfocused : footerPairs(view.keys)
   const keySheet = all.find(([key]) => key === 'i')
   // Statuses are cut, never wrapped, and leave room for `i keys` (two gaps: the spacer's and its own).
-  const shown = fitStatuses(statuses, view.width - 2 - (keySheet ? 2 + cells(keySheet.join(' ')) : 0))
+  // They take at most half the line, so a long one (a mirror's path) leaves the keys a place.
+  const shown = fitStatuses(
+    statuses,
+    Math.min(Math.max(WIDTH.label, Math.floor(view.width / 2)), view.width - 2 - (keySheet ? 2 + cells(keySheet.join(' ')) : 0)),
+  )
   const lead = shown.map(([text]) => text).join('  ')
   const actions = all.filter(([key]) => key !== 'i').slice(0, WIDTH.footerPairs)
   if (view.showLegend && !view.isInline) actions.push([TEXT.legend, ''])
@@ -602,7 +610,6 @@ const Bundle = ({ el, view, handlers, rows }: { el: E; view: PaneView; handlers:
         ))}
       </Box>
       {!view.isInline && <Box height={1} />}
-      {!view.isInline && <Text dimColor>{TEXT.bundleNote}</Text>}
       <Box gap={2}>
         <Button key={SEND_KEY} variant='primary' label='send' onPress={() => handlers.action('send')} />
       </Box>
@@ -612,10 +619,15 @@ const Bundle = ({ el, view, handlers, rows }: { el: E; view: PaneView; handlers:
 
 const Move = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handlers }) => {
   const { Box, Select } = el
-  const options = [...view.projects.map(project => ({ value: project.key, label: labelOf(view.ctx, project) })), { value: 'unfiled', label: 'unfiled' }]
+  const all = [...view.projects.map(project => ({ value: project.key, label: labelOf(view.ctx, project) })), { value: 'unfiled', label: 'unfiled' }]
+  // Where the note is now isn't offered, and the picker starts on the first place it can go.
+  const moving = view.lines.find(line => line.key === view.pane.moving)
+  const now = moving?.kind === 'note' ? (moving.note.project?.key ?? 'unfiled') : undefined
+  const elsewhere = all.filter(option => option.value !== now)
+  const options = elsewhere.length > 0 ? elsewhere : all
   return (
     <Box width={view.width}>
-      <Select key={MOVE_KEY} label='move to' options={options} onSelect={value => handlers.moveTo(value)} />
+      <Select key={MOVE_KEY} label='move to' options={options} value={options[0]?.value} onSelect={value => handlers.moveTo(value)} />
     </Box>
   )
 }

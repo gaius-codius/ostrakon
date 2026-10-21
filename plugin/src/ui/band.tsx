@@ -37,8 +37,9 @@ const GAP = 3
 // A chip draws `;n label`.
 const chipWidth = (label: string) => 3 + cells(label)
 
-// The opener at the front of the row: ✎ and the project, plain and dim.
-export const openerOf = (projectName: string) => `${GLYPH.capture} ${cut(projectName, WIDTH.project)}`
+// The opener at the front of the row: ✎ and the project, plain and dim. Cut to `width` cells,
+// WIDTH.project beside chips.
+export const openerOf = (projectName: string, width: number = WIDTH.project) => `${GLYPH.capture} ${cut(projectName, Math.max(1, width))}`
 
 // Cuts at the last word that fits `width` cells, unless that leaves fewer than `least`; then mid-word.
 export const wordCut = (text: string, width: number, least: number) => {

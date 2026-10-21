@@ -2,7 +2,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import type { Note, NoteProject } from '../types'
 import type { Ctx, Focus, Line } from '../src/model'
-import { COLOUR, TEXT, colourOf, toneOf } from '../src/ui/look'
+import { COLOUR, TEXT, WIDTH, colourOf, toneOf } from '../src/ui/look'
 import {
   ageOf,
   bundleText,
@@ -158,7 +158,7 @@ describe('model', () => {
       if (focus.kind === 'search') expect(keys.some(key => key.hotkey !== undefined)).toBe(false)
     }
     const history = footerPairs(keysFor(focuses[4] as Focus)).map(([key]) => key)
-    expect(history).toEqual(['u', 'h', 'z', 'f'])
+    expect(history).toEqual(['u', 'h', 'z', 'f', 'i'])
     const picked = footerPairs(keysFor(focuses[3] as Focus)).map(([key]) => key)
     expect(picked.slice(0, 3)).toEqual(['b', 'v', 'x'])
     // Nothing picked, the note's own actions take the four footer places, archive among them.
@@ -184,6 +184,25 @@ describe('model', () => {
     expect(sheet).toHaveLength(TEXT.keySheet.length)
     expect(new Set(sheet).size).toBe(TEXT.keySheet.length)
     expect(sheetLines(TEXT.keySheet, [])).toEqual(TEXT.keySheet)
+    const proposal = note('p', CC, 1, { status: 'proposed', by: 'claude' })
+    const proposed: Focus = { kind: 'line', line: { kind: 'note', key: proposal.id, note: proposal, group: 'proposed', hits: [] }, picks: 0 }
+    expect(ownKeys(keysFor(proposed))).toEqual(['a', 'r', 't'])
+    expect(
+      sheetLines(TEXT.keySheet, ownKeys(keysFor(proposed)))
+        .slice(0, 2)
+        .map(([key]) => key),
+    ).toEqual(['a / r', '⏎ / t'])
+    for (const [key, label] of TEXT.keySheet) expect(cells(key) <= WIDTH.sheetKey && cells(label) <= WIDTH.keySheet - WIDTH.sheetKey).toBe(true)
+  })
+
+  test("a folded group's footer offers to unfold it", () => {
+    const group = (isFolded: boolean): Focus => ({
+      kind: 'line',
+      line: { kind: 'group', key: 'group:x', group: 'x', project: CC, isFolded, count: 0 },
+      picks: 0,
+    })
+    expect(footerPairs(keysFor(group(false)))[0]).toEqual(['z', 'fold'])
+    expect(footerPairs(keysFor(group(true)))[0]).toEqual(['z', 'unfold'])
   })
 
   test('wrapping counts terminal cells: wide characters take two and are never split', () => {

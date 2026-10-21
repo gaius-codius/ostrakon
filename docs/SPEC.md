@@ -88,7 +88,7 @@ Claude Code's mods interface has rules and limits that aren't obvious from its A
 - Writing inside the plugin folder triggers hot reloads, so keep data outside it.
 - There are no file-change events, so poll `$.fs.stat` mtimes.
 - `$.session.root()` is the project root; `$.session.repo()` returns `{ root, remote }`, and the remote is the project key that is the same on every machine.
-- `$.env.get('NAME')` takes literal names; `OSTRAKON_DIR` points a session at fixture data.
+- `$.env.get('NAME')` takes literal names; `OSTRAKON_DIR` points a session at fixture data, and `OSTRAKON_CACHE` moves its machine files (memos, locks, sync caches, the doctor's report) out of `~/.cache/ostrakon`.
 
 ---
 
@@ -145,7 +145,7 @@ you · ~/Work/cc · main · 12m ago                                      ← met
 ctrl+s scope  ctrl+n new  ctrl+q close                               ← footer
 ```
 - **Rows** are one line under their group header, indented two columns: selection bar, the row's number in the window (1–9, then `·`), a marker (`◆`, `▪`, `●`/`○`, `↗`), the text with search hits highlighted, then the age (`now`, `12m`, `3h`, `2d`, `5w`, `1y`).
-- **Preview** (docked only): the selected note's text, capped at 6 lines, then a meta line `who · path · branch · age ago`, all behind a dim `▎` bar.
+- **Preview** (docked only): the selected note's text, capped at 6 lines, then a meta line `who · path · branch · age ago`, all behind a dim `▎` bar. A long path is cut, then dropped, before the age is.
 - **Ordering:** groups as in §4.3, with or without a query. Within a group: by rank with a query, otherwise newest `updated` first, ties by id. Ranking is a fuzzy subsequence score with bonuses for word starts, the current project and recency. Query tokens: `@infra`, `is:sent`, `is:archived`, `by:claude`.
 - **Scope** is explicit state, shown at the right of the search row. The pane opens on this project; the first typed character switches to all, and clearing the query switches back, unless the person chose a scope with `ctrl+s`. Choosing all is remembered across sessions (`$.store`).
 - **No match:** dim, `No notes match. ⏎ saves it to cc.` Enter saves the query as a note. The field drops its `⏎ to list`, which would be wrong here. A query too long for the field shows above that line, wrapped, as capture's draft does: up to 6 lines docked, its last line inline or in a body too short for the preview; one that fits isn't repeated. A storage problem's row stays above it.
@@ -159,7 +159,7 @@ ctrl+s scope  ctrl+n new  ctrl+q close                               ← footer
 ### 4.4 Capture, `//` and the draft stash
 - **In the pane:** `n` on a row or `ctrl+n` turns the search row into the capture row (`✎ new note`, the text, the target project at the right). Enter saves and stays in capture; Enter on an empty line returns to search; `ctrl+s` cycles the target project. The draft shows whole underneath, wrapped. A failed save keeps the text and shows `Couldn't save: <reason>`.
 - **From the prompt:** a prompt that becomes exactly `//` is rewritten to `/jot ` (cursor at the end). `/jot` runs at once even mid-turn. `/jot` is painted in the accent and bold, the note after it italic. `/jot text` saves to this project; `/jot` alone opens the pane on search, where Enter on a query that matches nothing saves it as a note and `ctrl+n` turns to capture. To send a literal `//` prompt, start with a space or paste it: only one typed `/` after a lone `/` triggers the rewrite.
-- **Hint line:** the dim line under the prompt gets a tail after ` · `. While the draft leads with `/jot `: `✎ ⏎ saves to cc, Claude won't see it`. For a few seconds after a save from the prompt ([DESIGN.md §7](DESIGN.md#7-motion)) (or a search with no match, saved from the pane): `✓ saved to cc`, in place of a toast. A failed save still says `Couldn't save: <reason>`.
+- **Hint line:** the dim line under the prompt gets a tail after ` · `. While the draft leads with `/jot `: `✎ ⏎ saves to cc`. A `/jot` draws no output row, but Claude still reads the command in its transcript, so the mod adds one line for Claude only: the note is the person's, saved, and needs nothing from it. For a few seconds after a save from the prompt ([DESIGN.md §7](DESIGN.md#7-motion)) (or a search with no match, saved from the pane): `✓ saved to cc`, in place of a toast. A failed save still says `Couldn't save: <reason>`.
 - **Draft stash.** Every open that asks for focus (`ctrl+x s`, `/jot`) first reads the prompt. If it holds a draft, the draft is kept in `$.state` as the *stash*, the prompt is emptied, and the pane opens focused. Exactly one exit then decides what the prompt holds, and clears the stash:
 
 | Exit | Prompt afterwards |
@@ -188,7 +188,7 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 | `e` | edit inline (§4.7) |
 | `d` | archive (`u` undoes) |
 | `u` | on a history row: restore to open. Otherwise undo this session's last mutation (archive, edit, restore, pick-clear, move). A send can't be undone |
-| `m` | move to a project (or `unfiled`) |
+| `m` | move to a project (or `unfiled`); the note's own isn't offered |
 | `y` | copy the full text |
 | `h` | history on/off |
 | `z` | fold or unfold the group |
@@ -207,7 +207,7 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 - `ctrl+n` → `pane:next`
 
 ### 4.6 Contextual footer
-One blank row, then one line: at most four key/label pairs for the focus (key bold, label dim, two spaces between) and `i keys` on the right; pairs drop from the right until the line fits. On a row with nothing picked, the note's own actions take the four places (`t to prompt  s send  e edit  d archive`); `v` pick is answered and listed in the key sheet. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning); a status too long for the line is cut with `…`, leaving room for `i keys`. The legend `◆ from Claude` trails while a `◆` row is drawn.
+One blank row, then one line: at most four key/label pairs for the focus (key bold, label dim, two spaces between) and `i keys` on the right; pairs drop from the right until the line fits. On a row with nothing picked, the note's own actions take the four places (`t to prompt  s send  e edit  d archive`); `v` pick is answered and listed in the key sheet. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning); a status takes at most half the line (a problem's text is cut first, so `· 3 queued` stays) and is cut with `…`, leaving room for `i keys`. The legend `◆ from Claude` trails while a `◆` row is drawn.
 
 **The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`.
 
@@ -270,9 +270,9 @@ project: cc                          # the project's name, or null for none
 projectKey: github.com/example/cc    # normalized git remote; falls back to "path:/home/user/work/cc"
 projectPath: /home/user/work/cc      # display only; differs per machine
 sessionId: 0463fee3-…                # context, all optional
-branch: main
+branch: main                         # read and shown if present; not written (the engine gives no branch)
 turnId: …
-harvestOf: "fix auth tests"          # turn summary for harvested notes
+harvestOf: "fix auth tests"          # read if present; not written
 sentSessionId: 32896f8f-…            # where a sent note went (§5)
 sentAt: null
 deleted: false                       # tombstone, only set by purge
@@ -414,7 +414,7 @@ A machine that stays on, with Bun installed, systemd (for the unit in `server/`)
 - **While a turn runs** (`e.props.isWorking`) the whole row draws dim; the keys still work.
 - **Fresh chip:** a note the person just saved (`/jot text`, the pane) stands out for a moment ([DESIGN.md §7](DESIGN.md#7-motion)): its chip at full strength, the other chips dim. A Button label takes no bold or colour.
 - **Keys from an empty prompt:** type `;2`. Note 2 is filled into the prompt at once (prefixed per §4.5, after the stash if one is held, §4.4) and a toast says `note 2 in your prompt · ⏎ to send`. Submitting marks it `sent` (§5). A chip never opens the pane. Only a typed digit right after a lone `;` counts: a lone digit, a pasted `;2` (or both keys arriving in one write, which the engine can't tell from a paste), `;` inside a draft, or a digit with no chip goes in as typed, so to send a prompt that starts with `;2`, paste it. The keys press the chips the terminal's band showed when the key was typed, even if it redraws before the key's turn comes.
-- **Zero notes:** the opener alone. `pocket: false` keeps only the opener.
+- **Zero notes:** the opener alone, with the project's name whole up to 24 columns. `pocket: false` keeps only the opener.
 - **Composition:** draw `await next(e)` first, inside a column Box, then the chip row.
 - **Harvest** takes the chip row's place while the last turn has proposals:
   - One line: the opener, `◆ from this turn` in bold, the proposals as numbered chips, `+N`, then `;0 keep all`. `;n` keeps that proposal, `;0` keeps them all (those in `+N` too), and either empties the prompt. Too narrow for a chip beside the title, the title shortens to `◆`; too narrow for any chip, the row closes up to fit: one column apart, then `✎` without the project, then no `◆`. Under the first 3 harvests ever (counted in `$.store`, once per turn) a dim second line: `;1–;3 keep one · ;0 keep all · the rest wait in the pane under “proposed”`.
