@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
+import type { PromptEditInput, PromptEditResult } from 'claude-code'
 
 import { serializeNote } from '../src/frontmatter'
 import { MemDir } from './memdir'
@@ -70,14 +71,44 @@ const dims = async (ui: Band) =>
 
 const composer = ($: Engine, text: string) => $.prompt.submit({ text, wait: false, origin: { kind: 'composer' } })
 
+// The band's keys as drawn, in order: `;1`, `;2`, … and `;0` for keep all.
+const keys = async (ui: Band) =>
+  (await ui.findAll({ type: 'Text' })).map(found => String((found as { text?: unknown }).text ?? '')).filter(text => /^;\d$/.test(text))
+
+// The editor beneath the mod splices the edit in, as core does.
+const editor = (on: Parameters<typeof startSession>[1]) => {
+  on('prompt.edit', ($, e) => ({ text: `${e.text.slice(0, e.start)}${e.inputText}${e.text.slice(e.end)}`, cursor: e.start + e.inputText.length }))
+}
+// A key typed at the end of the draft (a paste carries no key). The kit's $ raises prompt.edit,
+// though its type leaves it out.
+type Edit = (e: PromptEditInput) => Promise<PromptEditResult>
+const type = ($: Engine, text: string, inputText: string, isPasted = false) =>
+  ($.prompt as unknown as { edit: Edit }).edit({
+    origin: { kind: 'composer' },
+    ...(isPasted ? {} : { key: { key: inputText } }),
+    text,
+    cursor: text.length,
+    start: text.length,
+    end: text.length,
+    inputText,
+  })
+
 test("the band draws the opener, then this project's open notes as numbered chips, newest first", async ($, on) => {
   await startSession($, on, fixture())
   const ui = await mountBand($)
   expect(await buttons(ui)).toEqual([
     { key: 'band-open', label: '✎ cc', hotkey: undefined },
-    { key: 'band-chip-1', label: 'check why the cache…', hotkey: '1' },
-    { key: 'band-chip-2', label: 'rename the store helpers', hotkey: '2' },
+    { key: 'band-chip-1', label: 'check why the cache…', hotkey: undefined },
+    { key: 'band-chip-2', label: 'rename the store helpers', hotkey: undefined },
   ])
+  await ui.unmount()
+})
+
+test('each chip draws its key, a ; then its digit, and takes no hotkey: a lone digit in the prompt answers Claude', async ($, on) => {
+  await startSession($, on, fixture())
+  const ui = await mountBand($)
+  expect(await keys(ui)).toEqual([';1', ';2'])
+  expect((await buttons(ui)).every(button => button.hotkey === undefined)).toBe(true)
   await ui.unmount()
 })
 
@@ -95,9 +126,9 @@ test('with a survey up the band draws only what the hook below gave', async ($, 
   await ui.unmount()
 })
 
-test('chip 2 with a lone 2 in the prompt puts exactly the note there, and the submit marks it sent', async ($, on) => {
+test('chip 2 pressed with an empty prompt puts exactly the note there, and the submit marks it sent', async ($, on) => {
   const dir = fixture()
-  const { world, clock } = await startSession($, on, dir, '2')
+  const { world, clock } = await startSession($, on, dir)
   const ui = await mountBand($)
   await ui.press({ key: 'band-chip-2' })
   await clock.advance(10)
@@ -114,6 +145,59 @@ test('chip 2 with a lone 2 in the prompt puts exactly the note there, and the su
   await ui.unmount()
 })
 
+test(';2 typed into an empty prompt puts exactly note 2 there, and the submit marks it sent', async ($, on) => {
+  editor(on)
+  const dir = fixture()
+  const { world } = await startSession($, on, dir)
+  const ui = await mountBand($)
+  expect((await type($, '', ';')).text).toBe(';')
+  const typed = await type($, ';', '2')
+  expect(typed).toEqual({ text: 'rename the store helpers', cursor: 24 })
+  expect(world.toasts).toContain('note 2 in your prompt · ⏎ to send')
+  expect(noteIn(dir, TWO).status).toBe('open')
+
+  await composer($, typed.text)
+  expect(noteIn(dir, TWO).status).toBe('sent')
+  expect(noteIn(dir, ONE).status).toBe('open')
+  await ui.unmount()
+})
+
+test('a lone digit, a ; inside a draft, a pasted ;2 or a digit with no chip goes into the prompt as typed', async ($, on) => {
+  editor(on)
+  const { world } = await startSession($, on, fixture())
+  const ui = await mountBand($)
+  expect((await type($, '', '2')).text).toBe('2')
+  expect((await type($, 'pick;', '2')).text).toBe('pick;2')
+  expect((await type($, '', ';2', true)).text).toBe(';2')
+  expect((await type($, ';', '7')).text).toBe(';7')
+  expect((await type($, ';', 'a')).text).toBe(';a')
+  expect(world.toasts).toEqual([])
+  await ui.unmount()
+})
+
+test('with Pocket off, ;1 goes into the prompt as typed', { options: { pocket: false } }, async ($, on) => {
+  editor(on)
+  await startSession($, on, fixture())
+  const ui = await mountBand($)
+  expect((await type($, ';', '1')).text).toBe(';1')
+  await ui.unmount()
+})
+
+test('the keys follow the band: a note archived elsewhere leaves it, and its key no longer fills the prompt', async ($, on) => {
+  editor(on)
+  const dir = fixture()
+  const { world, clock } = await startSession($, on, dir)
+  const ui = await mountBand($)
+  // Another session archives chip 2's note; the next poll reads it and the band redraws.
+  dir.put(`/data/notes/${TWO}.md`, dir.get(`/data/notes/${TWO}.md`)?.replace('status: open', 'status: archived') ?? '')
+  await clock.advance(2000)
+  expect(await keys(ui)).toEqual([';1'])
+  expect((await type($, ';', '2')).text).toBe(';2')
+  expect((await type($, ';', '1')).text).toBe('check why the cache test is flaky')
+  expect(world.toasts).toEqual(['note 1 in your prompt · ⏎ to send'])
+  await ui.unmount()
+})
+
 test('a draft other than the digit stays, with the note after a blank line', async ($, on) => {
   const { world, clock } = await startSession($, on, fixture(), 'my draft')
   const ui = await mountBand($)
@@ -125,7 +209,7 @@ test('a draft other than the digit stays, with the note after a blank line', asy
 
 test('a turn that starts inside the submit, before the note is marked sent, still ends with the note sent', async ($, on) => {
   const dir = fixture()
-  const { world, clock } = await startSession($, on, dir, '1')
+  const { world, clock } = await startSession($, on, dir)
   const ui = await mountBand($)
   await ui.press({ key: 'band-chip-1' })
   await clock.advance(10)
@@ -154,21 +238,21 @@ test('after a turn that proposed notes the band shows the harvest row instead of
   expect(await ui.find({ type: 'Text', text: '◆ from this turn' })).toBeDefined()
   expect(await buttons(ui)).toEqual([
     { key: 'band-open', label: '✎ cc', hotkey: undefined },
-    { key: 'band-chip-1', label: 'follow up on the…', hotkey: '1' },
-    { key: 'band-chip-2', label: 'document the store…', hotkey: '2' },
-    { key: 'band-keep-all', label: 'keep all', hotkey: '0' },
+    { key: 'band-chip-1', label: 'follow up on the…', hotkey: undefined },
+    { key: 'band-chip-2', label: 'document the store…', hotkey: undefined },
+    { key: 'band-keep-all', label: 'keep all', hotkey: undefined },
   ])
   await ui.unmount()
 })
 
 test('a harvest row too narrow for a chip closes up to fit: one column apart, the opener without the project', async ($, on) => {
   const { ui } = await harvested($, on)
-  // `✎ ◆ +2 0: keep all` is 18 cells.
+  // `✎ ◆ +2 ;0 keep all` is 18 cells.
   await ui.redraw({ ...BAND.props, bodyColumns: 18 })
   expect(await buttons(ui)).toEqual([
     { key: 'band-open', label: '✎', hotkey: undefined },
     { key: 'band-more', label: '+2', hotkey: undefined },
-    { key: 'band-keep-all', label: 'keep all', hotkey: '0' },
+    { key: 'band-keep-all', label: 'keep all', hotkey: undefined },
   ])
   expect(await ui.find({ type: 'Text', text: '◆' })).toBeDefined()
   expect((await ui.findAll({ type: 'Box' })).map(box => (box.props as { gap?: number }).gap)).toContain(1)
@@ -186,13 +270,43 @@ test('proposals made before the turn started are not its harvest', async ($, on)
   await ui.unmount()
 })
 
-test('pressing a harvest digit keeps that note, the other stays proposed', async ($, on) => {
+test('pressing a harvest chip keeps that note, the other stays proposed', async ($, on) => {
   const { dir, ui, world, clock } = await harvested($, on)
   await ui.press({ key: 'band-chip-1' })
   await clock.advance(10)
   expect(noteIn(dir, PROPOSED).status).toBe('open')
   expect(noteIn(dir, PROPOSED_TOO).status).toBe('proposed')
   expect(world.toasts).toContain('Kept')
+  await ui.unmount()
+})
+
+test(';1 typed into an empty prompt keeps that proposal and empties the prompt; ;0 keeps the rest', async ($, on) => {
+  editor(on)
+  const { dir, ui, world } = await harvested($, on)
+  expect(await keys(ui)).toEqual([';1', ';2', ';0'])
+  expect(await type($, ';', '1')).toEqual({ text: '', cursor: 0 })
+  expect(noteIn(dir, PROPOSED).status).toBe('open')
+  expect(noteIn(dir, PROPOSED_TOO).status).toBe('proposed')
+  expect(world.toasts).toContain('Kept')
+  await ui.redraw(BAND.props)
+  expect(await type($, ';', '0')).toEqual({ text: '', cursor: 0 })
+  expect(noteIn(dir, PROPOSED_TOO).status).toBe('open')
+  // With the harvest kept, Pocket is back: its keys fill the prompt.
+  await ui.redraw(BAND.props)
+  expect((await type($, ';', '9')).text).toBe(';9')
+  await ui.unmount()
+})
+
+test(';0 keeps every proposal, those counted in +N too', async ($, on) => {
+  editor(on)
+  const { dir, ui } = await harvested($, on)
+  // `✎ ◆ +2 ;0 keep all`: no chip fits, both proposals wait in +N.
+  await ui.redraw({ ...BAND.props, bodyColumns: 18 })
+  expect(await keys(ui)).toEqual([';0'])
+  expect((await type($, ';', '1')).text).toBe(';1')
+  expect(await type($, ';', '0')).toEqual({ text: '', cursor: 0 })
+  expect(noteIn(dir, PROPOSED).status).toBe('open')
+  expect(noteIn(dir, PROPOSED_TOO).status).toBe('open')
   await ui.unmount()
 })
 
@@ -235,7 +349,7 @@ test("the harvest is this turn's: Claude's, this project's, by turn id (a note w
   propose(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH0A', 'before the turn began', { created: '2020-01-01T00:00:00.000Z' })
   await $.turn.complete(TURN_DONE)
   const ui = await mountBand($)
-  expect((await buttons(ui)).filter(button => button.hotkey !== undefined && button.hotkey !== '0').map(button => button.label)).toEqual(['in this turn'])
+  expect((await buttons(ui)).filter(button => button.key?.startsWith('band-chip-')).map(button => button.label)).toEqual(['in this turn'])
   await ui.unmount()
 })
 
@@ -547,10 +661,10 @@ test('a slow sent write that turns start during still ends with the note sent', 
   await ui.unmount()
 })
 
-test('while a turn runs every chip, +N and the opener draw dim, and the digits still press', async ($, on) => {
+test('while a turn runs every chip, +N and the opener draw dim, and the chips still press', async ($, on) => {
   const dir = fixture()
   for (const i of [5, 6, 7, 8, 9, 10]) put(dir, `01JA7K2M3Q9X4ZB6C8D0EFG${String(i).padStart(3, '0')}`, `another note ${i}`, CC, 100 + i)
-  const { world, clock } = await startSession($, on, dir, '2')
+  const { world, clock } = await startSession($, on, dir)
   const ui = await mountBand($, { isWorking: true }, 80)
   const dim = await dims(ui)
   expect(Object.keys(dim)).toContain('band-more')
@@ -573,7 +687,7 @@ test('a note just saved stands out in the pocket for MS.fresh: its chip at full 
   const ui = await mountBand($)
   await run($, 'jot', 'buy milk')
   await ui.redraw(BAND.props)
-  expect(await buttons(ui)).toContainEqual({ key: 'band-chip-1', label: 'buy milk', hotkey: '1' })
+  expect(await buttons(ui)).toContainEqual({ key: 'band-chip-1', label: 'buy milk', hotkey: undefined })
   expect(await dims(ui)).toEqual({ 'band-open': true, 'band-chip-1': false, 'band-chip-2': true, 'band-chip-3': true })
   await clock.advance(MS.fresh)
   await ui.redraw(BAND.props)
@@ -600,7 +714,7 @@ test('the harvest row is one line, with the hint under it for the first three ha
   const dir = fixture()
   await startSession($, on, dir)
   const ui = await mountBand($)
-  const hasHint = async () => (await ui.find({ type: 'Text', text: /keep one · 0 keep all/ })) !== undefined
+  const hasHint = async () => (await ui.find({ type: 'Text', text: /keep one · ;0 keep all/ })) !== undefined
   for (const i of [1, 2, 3, 4]) {
     await $.turn.start({ text: `go ${i}`, turnId: `turn-${i}` })
     propose(dir, `01JA7K2M3Q9X4ZB6C8D0EFGH1${i}`, `proposal ${i}`, { turnId: `turn-${i}` })
@@ -614,5 +728,42 @@ test('the harvest row is one line, with the hint under it for the first three ha
     await ui.redraw(BAND.props)
     expect(await hasHint()).toBe(i <= 3)
   }
+  await ui.unmount()
+})
+
+test('a key waiting behind another acts on the chip shown when it was typed, though the band redrew meanwhile', async ($, on) => {
+  editor(on)
+  const dir = fixture()
+  const { world, clock } = await startSession($, on, dir)
+  const ui = await mountBand($)
+  // Holds a chip press inside the lock (at its read of the prompt), so a key typed meanwhile waits.
+  let open = () => {}
+  const held: NonNullable<typeof world.heldRead> = { gate: new Promise<void>(resolve => (open = resolve)) }
+  world.heldRead = held
+  const press = ui.press({ key: 'band-chip-2' })
+  for (let i = 0; i < 1000 && !held.isHeld; i++) await Promise.resolve()
+  expect(held.isHeld).toBe(true)
+  // Typed while chip 1 is the cache note; it waits behind the press.
+  const typed = type($, ';', '1')
+  // Another session archives the cache note: the band redraws, and chip 1 is now another note.
+  dir.put(`/data/notes/${ONE}.md`, dir.get(`/data/notes/${ONE}.md`)?.replace('status: open', 'status: archived') ?? '')
+  await clock.advance(2000)
+  expect(await keys(ui)).toEqual([';1'])
+  open()
+  await press
+  // The key meant the cache note, which is gone: nothing goes in, rather than the note now at 1.
+  expect(await typed).toEqual({ text: '', cursor: 0 })
+  await ui.unmount()
+})
+
+test("the desktop's band, at its own width or under a survey, doesn't change what the terminal's keys press", async ($, on) => {
+  editor(on)
+  await startSession($, on, fixture())
+  const ui = await mountBand($)
+  for (const props of [{ bodyColumns: 20 }, { hasSurvey: true }]) {
+    const desktop = await $.ui.mount({ plugin: 'ostrakon', surface: 'desktop', ...BAND, props: { ...BAND.props, ...props } })
+    await desktop.unmount()
+  }
+  expect((await type($, ';', '2')).text).toBe('rename the store helpers')
   await ui.unmount()
 })

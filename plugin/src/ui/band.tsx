@@ -2,7 +2,7 @@ import type { Elements } from 'claude-code'
 
 import type { Note } from '../../types'
 import { cells, cut, oneLine } from '../model'
-import { CHORD, COLOUR, GLYPH, TEXT, WIDTH } from './look'
+import { CHORD, COLOUR, GLYPH, TEXT, WIDTH, bandKey } from './look'
 
 // The band above the prompt (SPEC §10): Pocket at rest, the harvest row while a turn's proposals
 // wait. Pure: it gets the elements, the computed rows and the handlers.
@@ -24,13 +24,17 @@ export type Chip = { n: number; id: string; label: string }
 // The chips that fit, and how many notes didn't get one.
 export type Chips = { chips: Chip[]; more: number }
 
+// What the band drew last, for its keys typed from the prompt (SPEC §10): Pocket's chips, or the
+// harvest's and every proposal it offers (`;0` keeps those in `+N` too). Null with no row drawn.
+export type Drawn = { kind: 'pocket'; chips: Chip[] } | { kind: 'harvest'; chips: Chip[]; ids: string[] } | null
+
 export const OPEN_KEY = 'band-open'
 export const MORE_KEY = 'band-more'
 export const KEEP_ALL_KEY = 'band-keep-all'
 export const chipKey = (n: number) => `band-chip-${n}`
 
 const GAP = 3
-// A plain Button draws `n: label`.
+// A chip draws `;n label`.
 const chipWidth = (label: string) => 3 + cells(label)
 
 // The opener at the front of the row: ✎ and the project, plain and dim.
@@ -99,7 +103,7 @@ export const pocketOf = (notes: Note[], projectKey: string, max: number, columns
 
 export type Harvest = Chips & { title: string; opener: string; gap: number }
 
-// The harvest row, one line: the opener, the title and `0: keep all` always stay; proposals that
+// The harvest row, one line: the opener, the title and `;0 keep all` always stay; proposals that
 // don't fit wait in the pane, counted in a `+N` that opens it. Too narrow for a chip beside the
 // title, the title shortens to the ◆. Too narrow for any chip, the row closes up to fit: one
 // column apart, then the opener without the project, then no title.
@@ -111,9 +115,9 @@ export const harvestOf = (proposals: Note[], columns: number, opener: string): H
   const short = TEXT.harvestShort
   const narrow = fit(proposals, 9, columns, WIDTH.harvestChip, fixed(short), false)
   if (narrow.chips.length > 0) return { ...narrow, title: short, opener, gap: GAP }
-  // Each part and the gap before it; `0: keep all` is a Button's `0: label`.
+  // Each part and the gap before it; `;0 keep all` is drawn as a chip.
   const width = (row: { opener: string; title: string; gap: number }) =>
-    [row.opener, row.title, narrow.more > 0 ? `+${narrow.more}` : '', `0: ${TEXT.keepAll}`]
+    [row.opener, row.title, narrow.more > 0 ? `+${narrow.more}` : '', `${bandKey(0)} ${TEXT.keepAll}`]
       .filter(part => part !== '')
       .reduce((sum, part) => sum + row.gap + cells(part), -row.gap)
   const rows = [
@@ -136,23 +140,39 @@ const More = ({ el, more, handlers }: { el: E; more: number; handlers: BandHandl
   return more > 0 ? <Button key={MORE_KEY} plain dimColor label={`+${more}`} onPress={() => handlers.open()} /> : null
 }
 
+// A chip: its key in the accent, as the pane's row numbers, then a plain Button with the label. The
+// key is typed from the prompt (SPEC §10), so the Button takes no hotkey: the engine would press a
+// band hotkey on a lone digit in the prompt, the answer to a numbered question.
+const Keyed = ({ el, n, id, label, isDim, onPress }: { el: E; n: number; id: string; label: string; isDim: boolean; onPress: () => void }) => {
+  const { Box, Text, Button } = el
+  return (
+    <Box gap={1}>
+      <Text color={COLOUR.accent} dimColor={isDim}>
+        {bandKey(n)}
+      </Text>
+      <Button key={id} plain dimColor={isDim} label={label} onPress={onPress} />
+    </Box>
+  )
+}
+
 const Open = ({ el, opener, handlers }: { el: E; opener: string; handlers: BandHandlers }) => {
   const { Button } = el
   return <Button key={OPEN_KEY} plain dimColor action={CHORD.toggle.action} label={opener} onPress={() => handlers.open()} />
 }
 
 export const PocketRow = ({ el, pocket, opener, look, handlers }: { el: E; pocket: Chips; opener: string; look: Look; handlers: BandHandlers }) => {
-  const { Box, Button } = el
+  const { Box } = el
   return (
     <Box gap={GAP}>
       <Open el={el} opener={opener} handlers={handlers} />
       {pocket.chips.map(chip => (
-        <Button
+        <Keyed
           key={chipKey(chip.n)}
-          plain
-          dimColor={isDim(look, pocket.chips, chip.id)}
-          hotkey={String(chip.n)}
+          el={el}
+          n={chip.n}
+          id={chipKey(chip.n)}
           label={chip.label}
+          isDim={isDim(look, pocket.chips, chip.id)}
           onPress={() => handlers.chip(chip.n, chip.id)}
         />
       ))}
@@ -161,7 +181,7 @@ export const PocketRow = ({ el, pocket, opener, look, handlers }: { el: E; pocke
   )
 }
 
-// The proposals Claude left in the last turn: a digit keeps that one, 0 keeps them all (those in
+// The proposals Claude left in the last turn: `;n` keeps that one, `;0` keeps them all (those in
 // `+N` too). The dim line under it says so for the first few harvests only.
 export const HarvestRow = ({
   el,
@@ -180,7 +200,7 @@ export const HarvestRow = ({
   columns: number
   handlers: BandHandlers
 }) => {
-  const { Box, Text, Button } = el
+  const { Box, Text } = el
   const ids = proposals.map(note => note.id)
   return (
     <Box flexDirection='column'>
@@ -192,10 +212,18 @@ export const HarvestRow = ({
           </Text>
         )}
         {harvest.chips.map(chip => (
-          <Button key={chipKey(chip.n)} plain dimColor={look.isWorking} hotkey={String(chip.n)} label={chip.label} onPress={() => handlers.keep(chip.id)} />
+          <Keyed
+            key={chipKey(chip.n)}
+            el={el}
+            n={chip.n}
+            id={chipKey(chip.n)}
+            label={chip.label}
+            isDim={look.isWorking}
+            onPress={() => handlers.keep(chip.id)}
+          />
         ))}
         <More el={el} more={harvest.more} handlers={handlers} />
-        <Button key={KEEP_ALL_KEY} plain dimColor={look.isWorking} hotkey='0' label={TEXT.keepAll} onPress={() => handlers.keepAll(ids)} />
+        <Keyed key={KEEP_ALL_KEY} el={el} n={0} id={KEEP_ALL_KEY} label={TEXT.keepAll} isDim={look.isWorking} onPress={() => handlers.keepAll(ids)} />
       </Box>
       {hasHint ? <Text dimColor>{cut(TEXT.harvestHint(harvest.chips.length), columns)}</Text> : null}
     </Box>

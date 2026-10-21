@@ -28,7 +28,7 @@ Throughout, it should be keyboard-first, quick, and calm when you aren't using i
 ### Shape
 - **Pane = Launcher**: search-first, fzf-style, with multi-pick and bundle.
 - **One view** inside the pane: notes grouped by project, filtered by the search field. No tab bar.
-- **Resting state = Pocket**: numbered note chips above the prompt. A digit in an empty prompt pulls that note in (§10).
+- **Resting state = Pocket**: numbered note chips above the prompt. `;` and a chip's digit in an empty prompt pull that note in (§10).
 - **Harvest** (opt-in): after a turn, side issues worth keeping are proposed above the prompt, with **no change to how Claude works** (§8).
 - **Sync**: pluggable adapters. A hub (usually reached over Tailscale) that also serves a phone capture form, and a folder adapter for Dropbox, Syncthing and Obsidian (§7).
 
@@ -69,7 +69,7 @@ Claude Code's mods interface has rules and limits that aren't obvious from its A
 
 ### 2.3 Drawing
 - **Elements** come from `$.ui.resolve(e)`: Box, Text, Button, Input, Select, Link, Code, Markdown and Client; Raster and Image are terminal-only; mobile has no Input or Select.
-- **Button** `plain` draws `k: label` with the hotkey in `suggestion`; without `plain` the terminal shows `[ label ]` and no hotkey. A digit hotkey on a band Button also fires when the person types that digit alone into an empty prompt and pauses; that is what makes Pocket possible.
+- **Button** `plain` draws `k: label` with the hotkey in `suggestion`; without `plain` the terminal shows `[ label ]` and no hotkey. A digit hotkey on a band Button also fires when the person types that digit alone into an empty prompt and pauses. Ostrakon's band takes no hotkeys for that reason: a lone digit is how the person answers Claude's numbered questions. It reads its own keys in `prompt.edit` instead (§10).
 - **The band is shared:** compose other mods' bands with `await next(e)` inside your Box.
 - **`$.ui.status`** gets an orange `⚠ <plugin>:` prefix, so it reads like a warning. Avoid it for calm counts.
 - **Placement:** docked beside the transcript (`placement: 'dock'`, fullscreen and wide) or inline above the prompt. Size to `e.props.bodyColumns` and `scroll.bodyRows`.
@@ -349,7 +349,7 @@ Not built. It would be the only adapter that needs real upkeep, because Notion h
   - **Why a review rather than prompt text:** the engine's security default skips a user-tier plugin's `prompt.compose` and `prompt.context` hooks (only a tool's description reaches the model). Claude does call `jot` on its own; the review catches what it leaves in passing.
   - **Cost:** one fork per reviewed turn, mostly cache reads (about 45k cached, 0.5k new input, 0.1k output tokens, 2 s, after the turn).
   - **`light` mode** replaces the fork with one `$.model.complete` on a small model, shown only the turn's prompt, its final reply (cut in the middle beyond a limit) and the notes already jotted, and told it can't see files or tool output. It costs about a sixtieth as much but finds fewer proposals and none that depend on files or tool results.
-- **End of turn:** once the proposals land the band shows them as digit chips (§10). Unhandled proposals stay `proposed` and show in the pane under a "proposed" group; they never clutter Pocket. A review's proposals are kept with their turn, and the band shows them only while that turn is still the latest and none is running, so a review landing after the next prompt or `/clear` leaves its proposals in the pane only.
+- **End of turn:** once the proposals land the band shows them as numbered chips (§10). Unhandled proposals stay `proposed` and show in the pane under a "proposed" group; they never clutter Pocket. A review's proposals are kept with their turn, and the band shows them only while that turn is still the latest and none is running, so a review landing after the next prompt or `/clear` leaves its proposals in the pane only.
 
 ---
 
@@ -403,19 +403,19 @@ A machine that stays on, with Bun installed, systemd (for the unit in `server/`)
 ## 10. Resting state: Pocket (band above the prompt)
 
 ```
-✎ cc   1: check why the cache…   2: rename the store helpers   3: ◆ login returns…   +2
+✎ cc   ;1 check why the cache…   ;2 rename the store helpers   ;3 ◆ login returns…   +2
 ```
 - **Opener:** `✎ <project>` leads the row, dim; it carries the borrowed `ctrl+x s` action and opens the launcher.
-- **Chips:** up to `pocketMax` (default 5, max 9) open notes of the current project, newest `updated` first. Each chip is a `plain` Button whose digit is its hotkey. The label is the note's text on one line, cut to 24 terminal cells with `…`, with `◆ ` in front for Claude's notes. The cut falls at the last word that fits, unless that leaves under 10 cells; then mid-word. Chips sit 3 columns apart.
+- **Chips:** up to `pocketMax` (default 5, max 9) open notes of the current project, newest `updated` first. Each chip is its key, `;` and its digit, in the accent, then a `plain` Button with no hotkey. The label is the note's text on one line, cut to 24 terminal cells with `…`, with `◆ ` in front for Claude's notes. The cut falls at the last word that fits, unless that leaves under 10 cells; then mid-word. Chips sit 3 columns apart.
 - **`+N`** (dim) shows when more open notes exist than chips; it and the opener open the launcher. Opened by their chord the pane gets focus; opened by a click, or after `ctrl+x tab`, the band holds the keys, so the pane opens unfocused.
 - **Width:** fit to `e.props.bodyColumns`, the opener included. First shorten every label, down to 10 columns, then drop chips from the right into `+N`. The opener and `+N` always stay.
-- **While a turn runs** (`e.props.isWorking`) the whole row draws dim; the digits still work.
+- **While a turn runs** (`e.props.isWorking`) the whole row draws dim; the keys still work.
 - **Fresh chip:** a note the person just saved (`/jot text`, the pane) stands out for a moment ([DESIGN.md §7](DESIGN.md#7-motion)): its chip at full strength, the other chips dim. A Button label takes no bold or colour.
-- **Digit from an empty prompt:** type `2` and pause. Note 2 is filled into the prompt (prefixed per §4.5) and a toast says `note 2 in your prompt · ⏎ to send`. Submitting marks it `sent` (§5). A chip never opens the pane.
+- **Keys from an empty prompt:** type `;2`. Note 2 is filled into the prompt at once (prefixed per §4.5, after the stash if one is held, §4.4) and a toast says `note 2 in your prompt · ⏎ to send`. Submitting marks it `sent` (§5). A chip never opens the pane. Only a typed digit right after a lone `;` counts: a lone digit, a pasted `;2` (or both keys arriving in one write, which the engine can't tell from a paste), `;` inside a draft, or a digit with no chip goes in as typed, so to send a prompt that starts with `;2`, paste it. The keys press the chips the terminal's band showed when the key was typed, even if it redraws before the key's turn comes.
 - **Zero notes:** the opener alone. `pocket: false` keeps only the opener.
 - **Composition:** draw `await next(e)` first, inside a column Box, then the chip row.
 - **Harvest** takes the chip row's place while the last turn has proposals:
-  - One line: the opener, `◆ from this turn` in bold, the proposals as digit chips, `+N`, then `0: keep all`. Too narrow for a chip beside the title, the title shortens to `◆`; too narrow for any chip, the row closes up to fit: one column apart, then `✎` without the project, then no `◆`. Under the first 3 harvests ever (counted in `$.store`, once per turn) a dim second line: `1–3 keep one · 0 keep all · the rest wait in the pane under “proposed”`.
+  - One line: the opener, `◆ from this turn` in bold, the proposals as numbered chips, `+N`, then `;0 keep all`. `;n` keeps that proposal, `;0` keeps them all (those in `+N` too), and either empties the prompt. Too narrow for a chip beside the title, the title shortens to `◆`; too narrow for any chip, the row closes up to fit: one column apart, then `✎` without the project, then no `◆`. Under the first 3 harvests ever (counted in `$.store`, once per turn) a dim second line: `;1–;3 keep one · ;0 keep all · the rest wait in the pane under “proposed”`.
   - A turn's proposals are Claude's `proposed` notes in this project carrying the turn's id. Only the main loop's `turn.complete` counts (subagents complete too); a turn that proposed nothing leaves the last harvest up, and a late harvest of an earlier turn never replaces a later one's.
   - Each turn fact (a conversation's generation, then a count per decision) is decided in order when its hook starts, so a write that waited never undoes a newer one. The band is drawn from these facts rather than synchronized to them.
   - Kept notes become `open` (only if still `proposed`). The band returns to Pocket when the next prompt starts a turn.
@@ -457,7 +457,7 @@ How many keystrokes common flows should take, starting with the pane closed. N i
 | Flow | Target |
 |---|---|
 | Capture mid-turn | N+3 (`// text ⏎`), and no loss of an existing draft |
-| Send a same-project note | **2** (Pocket digit, ⏎) |
+| Send a same-project note | **3** (`;`, Pocket digit, ⏎) |
 | Find and send a note from another project | **Q+4** (`ctrl+x s`, type, ⏎, `s`) |
 | Edit a note | **R+5** (`ctrl+x s`, ⏎, R moves, `e`, ⏎), with explicit save/cancel and a kept draft |
 | Bundle 3 hand-picked notes | **10** (`ctrl+x s`, ⏎, `v`, `j`, `v`, `j`, `v`, `b`, ⏎) |
