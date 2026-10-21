@@ -2,7 +2,8 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
 import { MemDir } from './memdir'
-import { FOOTER_KEY } from '../src/ui/pane'
+import { cells } from '../src/model'
+import { FOOTER_KEY, PREVIEW_ROWS, TEXT_COLUMN } from '../src/ui/pane'
 import { COLOUR, GLYPH, JOT_CONTEXT } from '../src/ui/look'
 import { CC, INFRA, PANE, mountPane, noteIn, put, run, startSession, texts } from './world'
 
@@ -441,6 +442,38 @@ test('docked in a body too short for the preview and three rows besides, the pre
   expect(await at(15)).toBe(true)
   expect(await at(14)).toBe(false)
   expect(await ui.find({ type: 'Text', text: /rename the store helpers/ })).toBeDefined()
+  await ui.unmount()
+})
+
+// A drawn element's text, nested Texts and all; a Button draws its label.
+const textOf = (node: unknown): string => {
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (typeof node !== 'object' || node === null) return ''
+  const { type, props = {}, children = [] } = node as Drawn
+  if (type === 'Button') return String(props.label ?? '')
+  return children.map(textOf).join('')
+}
+
+test("docked, the preview's bar starts in the note text's column, with no blank row added", async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  const boxes = (await ui.findAll({ type: 'Box' })) as Drawn[]
+  // The selected row: the cells drawn before the box that holds its text.
+  const row = boxes.find(box => box.props?.backgroundColor !== undefined && /check why the cache test is flaky/.test(textOf(box)))
+  const kids = row?.children ?? []
+  const at = kids.findIndex(child => /check why the cache test is flaky/.test(textOf(child)))
+  expect(at).toBeGreaterThan(0)
+  const column = cells(kids.slice(0, at).map(textOf).join(''))
+  expect(column).toBe(TEXT_COLUMN)
+  // The preview: its padding puts the bar there, and its height is what it was.
+  const preview = boxes.find(box => box.props?.height === PREVIEW_ROWS && (box.children ?? []).some(child => textOf(child).startsWith(GLYPH.quote)))
+  expect(preview?.props?.paddingLeft).toBe(column)
+  const lines = (preview?.children ?? []).filter(child => textOf(child).startsWith(GLYPH.quote))
+  expect(lines.map(textOf)).toEqual([`${GLYPH.quote} check why the cache test is flaky`, expect.stringMatching(new RegExp(`^${GLYPH.quote} you · ~/Work/cc`))])
+  expect(preview?.children?.length).toBe(1 + lines.length)
   await ui.unmount()
 })
 

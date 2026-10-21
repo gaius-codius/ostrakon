@@ -9,6 +9,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 ### Changed
 
 - The band's notes are pulled into the prompt with two keys: type `;` and the note's number (`;2`) in an empty prompt. A lone number no longer does anything, so it answers Claude's numbered questions again. After a turn, `;1` keeps a proposal and `;0` keeps them all. To start a prompt with `;` and a digit, paste it.
+- The docked preview is indented so its `▎` bar starts in the same column as the notes' text, instead of at the pane's edge.
 
 ### Fixed
 

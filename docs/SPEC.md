@@ -138,14 +138,14 @@ Focus starts in the search field; no row is selected and the top result is previ
 ● api                                                             1
    3   document the cache-key format in the api readme           2d
 ──────────────────────────────────────────────────────────────────────
-check why the cache test is flaky on CI. started after the redis     ← preview
-bump, only on the arm runners
-you · ~/Work/cc · main · 12m ago                                      ← meta
+       ▎ check why the cache test is flaky on CI. started after     ← preview
+       ▎ the redis bump, only on the arm runners
+       ▎ you · ~/Work/cc · main · 12m ago                          ← meta
 ──────────────────────────────────────────────────────────────────────
 ctrl+s scope  ctrl+n new  ctrl+q close                               ← footer
 ```
 - **Rows** are one line under their group header, indented two columns: selection bar, the row's number in the window (1–9, then `·`), a marker (`◆`, `▪`, `●`/`○`, `↗`), the text with search hits highlighted, then the age (`now`, `12m`, `3h`, `2d`, `5w`, `1y`).
-- **Preview** (docked only): the selected note's text, capped at 6 lines, then a meta line `who · path · branch · age ago`, all behind a dim `▎` bar. A long path is cut, then dropped, before the age is.
+- **Preview** (docked only): the selected note's text, capped at 6 lines, then a meta line `who · path · branch · age ago`, all behind a dim `▎` bar. It's indented so the bar starts in the rows' text column; no blank row is added for it. A long path is cut, then dropped, before the age is.
 - **Ordering:** groups as in §4.3, with or without a query. Within a group: by rank with a query, otherwise newest `updated` first, ties by id. Ranking is a fuzzy subsequence score with bonuses for word starts, the current project and recency. Query tokens: `@infra`, `is:sent`, `is:archived`, `by:claude`.
 - **Scope** is explicit state, shown at the right of the search row. The pane opens on this project; the first typed character switches to all, and clearing the query switches back, unless the person chose a scope with `ctrl+s`. Choosing all is remembered across sessions (`$.store`).
 - **No match:** dim, `No notes match. ⏎ saves it to cc.` Enter saves the query as a note. The field drops its `⏎ to list`, which would be wrong here. A query too long for the field shows above that line, wrapped, as capture's draft does: up to 6 lines docked, its last line inline or in a body too short for the preview; one that fits isn't repeated. A storage problem's row stays above it.
