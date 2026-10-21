@@ -6,6 +6,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Added
+
+- `ctrl+x i` opens the key sheet from the search field, a new note or the edit card, where `i` is typed instead; closing the sheet goes back to that field. To get it, run `./install.sh --keys` from the checkout, or add `"ctrl+x i": "app:toggleReplTab"` to the `Pane` and `PaneField` keybindings (README, Keybindings). The sheet also lists `ctrl+x tab`, which focuses the pane from the prompt.
+
 ### Changed
 
 - The band's notes are pulled into the prompt with two keys: type `;` and the note's number (`;2`) in an empty prompt. A lone number no longer does anything, so it answers Claude's numbered questions again. After a turn, `;1` keeps a proposal and `;0` keeps them all. To start a prompt with `;` and a digit, paste it.

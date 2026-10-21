@@ -4,7 +4,7 @@ import type { PaneState } from '../types'
 import type { FocusEvent, FocusView } from '../src/focus'
 import { focusMove, leaveMode, needsView, pagedSlot, routeFocus } from '../src/focus'
 import { freshPane } from '../src/model'
-import { DOWN_KEY, EDIT_KEY, MOVE_KEY, SEARCH_KEY, UP_KEY } from '../src/ui/pane'
+import { DOWN_KEY, EDIT_KEY, MOVE_KEY, SEARCH_KEY, SHEET_KEY, UP_KEY } from '../src/ui/pane'
 
 // Ten lines, a window of four from `offset`.
 const viewAt = (offset: number, rows = 4, total = 10): FocusView => {
@@ -30,6 +30,11 @@ describe('focus', () => {
     expect(needsView(focusMove(engine('slot-2')))).toBe(false)
     expect(land(engine('slot-2'), SEARCH_KEY)).toEqual({ to: 'slot-2' })
     expect(focusMove(engine('key-e'))).toEqual({ kind: 'layer' })
+    // Except the key sheet's own key, where the sheet opened from a text field takes the keys.
+    const sheet: PaneState = { ...freshPane(), mode: 'sheet', sheetFrom: 'search' }
+    expect(land(engine(SHEET_KEY), SEARCH_KEY)).toEqual({ to: SHEET_KEY })
+    expect(after(land(engine(SHEET_KEY), SEARCH_KEY), sheet)).toBe(sheet)
+    expect(focusMove(person(SHEET_KEY))).toEqual({ kind: 'layer' })
     // Nowhere, even from the engine, is a landing: the pane's focus becomes none.
     expect(focusMove(engine(undefined))).toEqual({ kind: 'land', slot: undefined })
     expect(after(land(engine(undefined), 'slot-1')).focus).toBe('none')
@@ -112,7 +117,7 @@ describe('focus', () => {
     const moving: PaneState = { ...freshPane(), mode: 'move', moving: 'n1' }
     expect(leaveMode(moving, MOVE_KEY)).toBe(moving)
     expect(leaveMode(moving, 'slot-0')).toMatchObject({ mode: 'browse', moving: null })
-    expect(leaveMode({ ...freshPane(), mode: 'sheet' }, 'slot-0').mode).toBe('browse')
+    expect(leaveMode({ ...freshPane(), mode: 'sheet', sheetFrom: 'capture' }, 'slot-0')).toMatchObject({ mode: 'browse', sheetFrom: null })
     for (const mode of ['capture', 'bundle', 'browse'] as const) expect(leaveMode({ ...freshPane(), mode }, 'slot-0').mode).toBe(mode)
     // Through every route: the layer, an edge, a row.
     expect(after(land(person('key-e'), 'slot-1'), editing()).mode).toBe('browse')

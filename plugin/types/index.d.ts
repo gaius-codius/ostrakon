@@ -63,6 +63,8 @@ export type PaneState = {
   offset: number
   // The key sheet's page, from 0, while it's paged to fit the body.
   sheetPage: number
+  // The text field the key sheet was opened from, which it hands the keys back to; null off a row.
+  sheetFrom: 'search' | 'capture' | 'edit' | null
   edit: { id: string; draft: string } | null
   // The note a move (m) applies to, fixed when the Select opens.
   moving: string | null

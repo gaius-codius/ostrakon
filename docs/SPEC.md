@@ -142,7 +142,7 @@ check why the cache test is flaky on CI. started after the redis     ← preview
 bump, only on the arm runners
 you · ~/Work/cc · main · 12m ago                                      ← meta
 ──────────────────────────────────────────────────────────────────────
-ctrl+s scope  ctrl+n new  ctrl+q close                               ← footer
+ctrl+s scope  ctrl+n new  ctrl+q close                ctrl+x i keys  ← footer
 ```
 - **Rows** are one line under their group header, indented two columns: selection bar, the row's number in the window (1–9, then `·`), a marker (`◆`, `▪`, `●`/`○`, `↗`), the text with search hits highlighted, then the age (`now`, `12m`, `3h`, `2d`, `5w`, `1y`).
 - **Preview** (docked only): the selected note's text, capped at 6 lines, then a meta line `who · path · branch · age ago`, all behind a dim `▎` bar. A long path is cut, then dropped, before the age is.
@@ -195,8 +195,8 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 | `f` / `ctrl+f` | focus search |
 | `n` / `ctrl+n` | new note |
 | `ctrl+s` | scope (search, list) or target project (capture) |
-| `i` | key sheet on/off: a framed list of every key (unframed when the body is too short for a line inside the frame) (storage problems first; opened on a row, that row's own keys next, in its footer's order) between the search row and the footer; while it is up the pane takes the whole body and the footer its last row. It is at most 46 columns and never wider than the pane. When it's longer than the rows between, it pages: the footer shows `j more 2/3`, `j` turns to the next page and `k` back, both going round |
-| Esc | **back** one step: edit → the row (draft kept), move / key sheet / bundle → the list, capture → search, a row → the search field, a query → empty; at the top it closes |
+| `i` / `ctrl+x i` | key sheet on/off (`ctrl+x i` also from a text field, which takes `i`; the sheet then has the keys, and gives them back to that field when it closes): a framed list of every key (unframed when the body is too short for a line inside the frame) (storage problems first; opened on a row, that row's own keys next, in its footer's order) between the search row and the footer; while it is up the pane takes the whole body and the footer its last row. It is at most 46 columns and never wider than the pane. When it's longer than the rows between, it pages: the footer shows `j more 2/3`, `j` turns to the next page and `k` back, both going round |
+| Esc | **back** one step: edit → the row (draft kept), move / bundle → the list, key sheet → the text field it was opened from, else the list, capture → search, a row → the search field, a query → empty; at the top it closes |
 | `q` / `ctrl+q` / `ctrl+x s` | close the pane from anywhere; drafts are kept |
 
 **Borrowed chords** (the person binds them in their keybindings; the table lives in `look.ts`):
@@ -205,9 +205,10 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 - `ctrl+s` → `app:toggleDiffPreSession`
 - `ctrl+q` → `pane:previous` (not the engine's `pane:close`, which the mod reads as Esc)
 - `ctrl+n` → `pane:next`
+- `ctrl+x i` → `app:toggleReplTab`
 
 ### 4.6 Contextual footer
-One blank row, then one line: at most four key/label pairs for the focus (key bold, label dim, two spaces between) and `i keys` on the right; pairs drop from the right until the line fits. On a row with nothing picked, the note's own actions take the four places (`t to prompt  s send  e edit  d archive`); `v` pick is answered and listed in the key sheet. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning); a status takes at most half the line (24 columns when half is less) and is cut with `…`, its `· 3 queued` kept, leaving room for `i keys`. The legend `◆ from Claude` trails while a `◆` row is drawn.
+One blank row, then one line: at most four key/label pairs for the focus (key bold, label dim, two spaces between) and `i keys` on the right (`ctrl+x i keys` while a text field has focus); pairs drop from the right until the line fits. On a row with nothing picked, the note's own actions take the four places (`t to prompt  s send  e edit  d archive`); `v` pick is answered and listed in the key sheet. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning); a status takes at most half the line (24 columns when half is less) and is cut with `…`, its `· 3 queued` kept, leaving room for `i keys`. The legend `◆ from Claude` trails while a `◆` row is drawn.
 
 **The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`.
 
