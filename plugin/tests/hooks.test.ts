@@ -588,8 +588,9 @@ test("opened on a row, the key sheet leads with the row's own keys and the row s
   const ui = await mountPane($)
   await ui.input({ key: 'q', text: '', kind: 'submit' })
   await ui.press({ key: 'key-i' })
-  const keys = (await texts(ui)).map(text => text.trim()).filter(text => ['⏎ / t', 's', 'e', 'd / u', 'v / x', '↑ ↓ j k'].includes(text))
-  expect(keys).toEqual(['⏎ / t', 's', 'e', 'd / u', 'v / x', '↑ ↓ j k'])
+  const lead = ['⏎ / t', 's', 'e', 'd / u', 'm', 'y', 'v / x', '↑ ↓ j k']
+  const keys = (await texts(ui)).map(text => text.trim()).filter(text => lead.includes(text))
+  expect(keys).toEqual(lead)
   expect(await ui.find({ type: 'Text', text: /check why the cache test is flaky/ })).toBeDefined()
   await ui.unmount()
 })

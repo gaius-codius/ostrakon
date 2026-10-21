@@ -71,7 +71,7 @@ export const WIDTH = {
   // The empty pane's shard column, and the key column beside it.
   shard: 13,
   wayKey: 10,
-  // Footer pairs beside `i keys` (SPEC §4.6).
+  // Footer pairs kept ahead of the legend; more show when the width allows (SPEC §4.6).
   footerPairs: 4,
   savedDocked: 3,
   savedInline: 1,
