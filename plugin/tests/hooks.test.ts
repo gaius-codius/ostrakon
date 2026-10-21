@@ -383,7 +383,9 @@ const rowsOf = (node: unknown): number => {
 const footerRow = async (ui: Awaited<ReturnType<typeof mountPane>>) => {
   const [root] = await ui.findAll({ type: 'Box' })
   const children = (root?.children ?? []) as Drawn[]
-  const at = children.findIndex(child => child.key === FOOTER_KEY)
+  // A child's key is in its props; only what find returns carries it as `key`.
+  const at = children.findIndex(child => child.props?.key === FOOTER_KEY)
+  expect(at).toBeGreaterThan(-1)
   const above = children
     .slice(0, at)
     .map(rowsOf)
