@@ -190,6 +190,8 @@ describe('model', () => {
       { kind: 'line', line: { kind: 'group', key: 'group:x', group: 'x', project: CC, isFolded: false, count: 0 }, picks: 0 },
       { kind: 'line', line: { kind: 'problem', key: 'problem', count: 1 }, picks: 0 },
       { kind: 'sheet', page: 0, pages: 1, lead: [] },
+      { kind: 'bundle' },
+      { kind: 'move' },
     ]
     for (const focus of rows) {
       const chorded = uniqueKeys(keysFor(focus)).find(key => key.chord === CHORD.keys.action)

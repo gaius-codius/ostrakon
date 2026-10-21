@@ -1,5 +1,5 @@
 import type { PaneState } from '../types'
-import { DOWN_KEY, EDIT_KEY, LAYER_PREFIX, MOVE_KEY, SEARCH_KEY, UP_KEY, slotKey } from './ui/pane'
+import { DOWN_KEY, EDIT_KEY, LAYER_PREFIX, MOVE_KEY, SEARCH_KEY, SHEET_KEY, UP_KEY, slotKey } from './ui/pane'
 
 // The pane's focus ring: where a move of the ring lands, and what the pane's state becomes. Pure;
 // the ui.focus hook in hooks/register.tsx reads the view, applies the decision and moves the ring
@@ -22,6 +22,9 @@ export type FocusMove = { kind: 'pass' } | { kind: 'layer' } | { kind: 'edge'; i
 export const focusMove = (e: FocusEvent): FocusMove => {
   const element = e.element
   if (!e.isPerson && element !== undefined && !element.startsWith(LAYER_PREFIX)) return { kind: 'pass' }
+  // The one layer stop: the key sheet, opened from a text field, takes the keys there (the mod's
+  // own move; the person's Tab onto it is still routed off the layer).
+  if (!e.isPerson && element === SHEET_KEY) return { kind: 'pass' }
   if (element?.startsWith(LAYER_PREFIX)) return { kind: 'layer' }
   if (element === DOWN_KEY || element === UP_KEY) return { kind: 'edge', isDown: element === DOWN_KEY }
   return { kind: 'land', slot: element?.startsWith('slot-') ? Number(element.slice(5)) : undefined }
@@ -39,7 +42,7 @@ export const leaveMode = (state: PaneState, to: string | undefined): PaneState =
     state.mode === 'capture' ||
     state.mode === 'bundle' ||
     state.mode === 'browse'
-  return stays ? state : { ...state, mode: 'browse', moving: null }
+  return stays ? state : { ...state, mode: 'browse', moving: null, sheetFrom: null }
 }
 
 export type FocusLanding = {

@@ -576,13 +576,23 @@ const markSent = async ($: EngineInterface, ids: string[]) => {
 // keys and hands them back to that field on close; opened on a row, the row keeps them.
 const openSheet = async ($: EngineInterface) => {
   const state = await read($, pane)
-  const from = state.mode === 'capture' || state.mode === 'edit' ? state.mode : state.focus === 'line' ? null : 'search'
+  // The bundle and the move picker answer the chord so it doesn't reach the engine's own action,
+  // and keep their place: the sheet would drop them.
+  if (state.mode === 'bundle' || state.mode === 'move') return
+  const from = state.mode === 'capture' || state.mode === 'edit' ? state.mode : state.focus === 'search' ? 'search' : null
   await setPane($, current => ({ ...current, mode: 'sheet', sheetPage: 0, sheetFrom: from }))
   if (from !== null) focusKey($, SHEET_KEY)
 }
 
 const closeSheet = async ($: EngineInterface) => {
-  const from = (await read($, pane)).sheetFrom ?? null
+  const state = await read($, pane)
+  const from = state.sheetFrom ?? null
+  // The note being edited may have gone meanwhile (archived elsewhere): then back to the list.
+  const isEditGone = from === 'edit' && !(await viewOf($)).lines.some(line => line.key === state.edit?.id)
+  if (isEditGone) {
+    await setPane($, current => ({ ...current, mode: 'browse', sheetFrom: null, focus: 'search' }))
+    return focusKey($, SEARCH_KEY)
+  }
   if (from === 'capture' || from === 'edit') {
     await setPane($, current => ({ ...current, mode: from, sheetFrom: null }))
     return focusKey($, from === 'capture' ? CAPTURE_KEY : EDIT_KEY)

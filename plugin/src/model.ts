@@ -438,9 +438,10 @@ export const keysFor = (focus: Focus): Key[] => {
         { action: 'back', shown: ['esc', 'back'] },
         k('back', 'x', '', false),
         ...CHORDS(false),
+        chord('keys', 'keys', '', false),
       ]
     case 'move':
-      return [{ action: 'move', shown: ['⏎', 'move'] }, { action: 'back', shown: ['esc', 'back'] }, ...CHORDS(false)]
+      return [{ action: 'move', shown: ['⏎', 'move'] }, { action: 'back', shown: ['esc', 'back'] }, ...CHORDS(false), chord('keys', 'keys', '', false)]
     case 'sheet':
       return [
         k('keys', 'i', 'close keys'),
