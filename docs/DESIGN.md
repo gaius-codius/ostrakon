@@ -1,6 +1,6 @@
 # Ostrakon design system
 
-Version: 3.1.0
+Version: 4.0.0
 
 What the terminal mod (the pane, the band and the prompt hint, in `plugin/`) and the phone (`server/public/`) must agree on: colour roles, the project palette, the phone's tokens, symbols, fixed copy, motion and the accessibility bar. [`SPEC.md`](SPEC.md) describes behaviour and points here for these values instead of repeating them. The code holds the values: `plugin/src/ui/look.ts` for the terminal, `style.css`, `app.js` and `index.html` for the phone.
 
@@ -289,7 +289,7 @@ Keys, layout and behaviour are in [`SPEC.md`](SPEC.md). The terminal's spacing i
 
 Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one or more `- Change:` lines and one or more `- Why:` lines. The newest entry ends with `Fingerprint: <hash>` of the design values in the code (`bun tools/check-design.ts --fingerprint` prints it). Versions: major when a meaning changes or something goes (a glyph means something else, a colour role moves); minor when something is added; patch for a value tweak or a doc fix. Entries are never removed.
 
-### 3.1.0 — 2026-10-22
+### 4.0.0 — 2026-10-22
 - Change: The footer shows as many key pairs as the width takes, not four at most: on a row, `m move` and `y copy` follow the note's own four, then `v pick`, `z fold` and `h history`. The legend stays ahead of the pairs past the first four.
 - Change: Docked, what sits between the search row and the footer is cut at the rows left there, so a short body keeps the footer on its last row in every state.
 - Why: A wide pane left most of the footer empty while the keys it could show were only in the key sheet. In a short body the empty block, a long query or capture's saves pushed the footer off the body.

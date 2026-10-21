@@ -337,6 +337,12 @@ export const FOOTER_ROWS = 1
 // Docked in a body too short for the preview and three rows (one between the ↑ and ↓ counts)
 // besides, the preview goes, as inline, so the footer stays on screen.
 const hasPreview = (view: { isInline: boolean; bodyRows: number }) => !view.isInline && view.bodyRows >= 2 + PREVIEW_ROWS + 3 + 1 + FOOTER_ROWS
+// The edit card is three rows taller than its row, so editing in a body too short for both, the
+// preview gives up text lines (the draft keeps its end) rather than be cut at the footer.
+const EDIT_ROWS = 3
+const previewLinesOf = (view: { pane: PaneState; bodyRows: number }) =>
+  view.pane.mode === 'edit' ? Math.max(1, Math.min(WIDTH.previewLines, view.bodyRows - (2 + 2 + 3 + EDIT_ROWS + 1 + FOOTER_ROWS))) : WIDTH.previewLines
+const previewRows = (view: { pane: PaneState; bodyRows: number }) => 1 + previewLinesOf(view) + 1
 
 // A draft being typed, wrapped: the one-line field cuts it off, so this is where it reads whole.
 // Too long for `rows`, it shows its end (where the typing is), led by …
@@ -356,11 +362,12 @@ const Preview = ({ el, view, note }: { el: E; view: PaneView; note: Note }) => {
   // Quoted: a dim bar down the left, the way the bundle shows what it will send.
   const width = view.width - 2
   const lines = wrap(isEditing ? fromField(edit.draft) : note.text, width)
-  let shown = lines.slice(0, WIDTH.previewLines)
-  if (isEditing) shown = draftLines(fromField(edit.draft), width, WIDTH.previewLines)
-  else if (lines.length > WIDTH.previewLines) shown[shown.length - 1] = cut(`${shown[shown.length - 1] ?? ''} `, width).replace(/ ?$/, GLYPH.more)
+  const rows = previewLinesOf(view)
+  let shown = lines.slice(0, rows)
+  if (isEditing) shown = draftLines(fromField(edit.draft), width, rows)
+  else if (lines.length > rows) shown[shown.length - 1] = cut(`${shown[shown.length - 1] ?? ''} `, width).replace(/ ?$/, GLYPH.more)
   return (
-    <Box flexDirection='column' width={view.width} height={PREVIEW_ROWS}>
+    <Box flexDirection='column' width={view.width} height={previewRows(view)}>
       <Box height={1} />
       {shown.map(line => (
         <Text>
@@ -582,14 +589,13 @@ const Empty = ({ el, view, hasHub, hasHarvest }: { el: E; view: PaneView; hasHub
 const Capture = ({ el, view }: { el: E; view: PaneView }) => {
   const { Box, Text } = el
   const { capture } = view.pane
-  const hasDraft = capture.draft.trim() !== ''
   // Docked, the rows between capture's and the footer's, inside the padding. A short body keeps the
-  // hint and the newest save, then the draft's lines, then the earlier saves.
+  // hint (or the error) first, then the newest save, then the draft's lines, then the earlier saves.
   const room = view.bodyRows - topRows('capture', false) - (1 + FOOTER_ROWS) - 2
-  const newest = Math.min(1, capture.saved.length)
-  const draftRows = view.isInline ? 1 : Math.max(1, Math.min(WIDTH.previewLines, room - 1 - newest - 1))
-  const draft = hasDraft ? draftLines(capture.draft, view.width, draftRows) : []
-  const keep = view.isInline ? WIDTH.savedInline : Math.max(newest, Math.min(WIDTH.savedDocked, room - 1 - (hasDraft ? draft.length + 1 : 0)))
+  const newest = Math.min(1, capture.saved.length, room - 1)
+  const draftRows = view.isInline ? 1 : Math.min(WIDTH.previewLines, room - 1 - newest - 1)
+  const draft = capture.draft.trim() === '' || draftRows < 1 ? [] : draftLines(capture.draft, view.width, draftRows)
+  const keep = view.isInline ? WIDTH.savedInline : Math.max(0, newest, Math.min(WIDTH.savedDocked, room - 1 - (draft.length > 0 ? draft.length + 1 : 0)))
   return (
     <Box flexDirection='column' paddingY={view.isInline ? 0 : 1}>
       {draft.map(line => (
@@ -597,7 +603,7 @@ const Capture = ({ el, view }: { el: E; view: PaneView }) => {
       ))}
       {draft.length > 0 && !view.isInline && <Box height={1} />}
       {/* The newest save is bright; earlier ones step back. */}
-      {capture.saved.slice(-keep).map((text, i, saved) => (
+      {capture.saved.slice(capture.saved.length - Math.min(keep, capture.saved.length)).map((text, i, saved) => (
         <Text>
           <Text color={i === saved.length - 1 ? COLOUR.saved : COLOUR.history}>{GLYPH.saved} </Text>
           <Text dimColor={i !== saved.length - 1}>{cut(oneLine(text), view.width - 14)}</Text>
@@ -730,9 +736,9 @@ const KeySheet = ({ el, view }: { el: E; view: PaneView }) => {
 // Rows the chrome around the lines takes, so the mod can page the lines to fit (SPEC §4.8).
 export const chromeRows = (view: Omit<PaneView, 'page'>) => {
   const header = view.isInline ? 1 : 2
-  const preview = hasPreview(view) ? PREVIEW_ROWS : 0
+  const preview = hasPreview(view) ? previewRows(view) : 0
   const footer = view.isInline ? FOOTER_ROWS : 1 + FOOTER_ROWS
-  const edit = view.pane.mode === 'edit' ? 3 : 0
+  const edit = view.pane.mode === 'edit' ? EDIT_ROWS : 0
   const move = view.pane.mode === 'move' ? 1 : 0
   return header + preview + footer + edit + move
 }
@@ -767,7 +773,7 @@ export const Pane = ({
   const middle = [
     body(),
     pane.mode === 'move' && <Move el={el} view={view} handlers={handlers} />,
-    showPreview && (view.preview ? <Preview el={el} view={view} note={view.preview} /> : <Box height={PREVIEW_ROWS} />),
+    showPreview && (view.preview ? <Preview el={el} view={view} note={view.preview} /> : <Box height={previewRows(view)} />),
   ]
   // Docked, and inline with the key sheet up, the pane takes the whole body and the footer its last
   // row, whether the list is full, short, has no match or is empty. What sits between is cut at the

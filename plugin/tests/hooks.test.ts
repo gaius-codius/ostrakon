@@ -382,7 +382,7 @@ const rowsOf = (node: unknown): number => {
   const pad = 2 * Number(props.paddingY ?? 0) + (props.borderStyle !== undefined ? 2 : 0)
   return Math.max(content + pad, Number(props.minHeight ?? 0))
 }
-// The footer's row in the pane: what's above it, with the rows a minHeight leaves to a flexGrow.
+// The footer's row in the pane: the rows of what's above it.
 const footerRow = async (ui: Awaited<ReturnType<typeof mountPane>>) => {
   const [root] = await ui.findAll({ type: 'Box' })
   const children = (root?.children ?? []) as Drawn[]
@@ -393,10 +393,7 @@ const footerRow = async (ui: Awaited<ReturnType<typeof mountPane>>) => {
     .slice(0, at)
     .map(rowsOf)
     .reduce((sum, rows) => sum + rows, 0)
-  const total = children.map(rowsOf).reduce((sum, rows) => sum + rows, 0)
-  const grows = children.slice(0, at).some(child => Number(child.props?.flexGrow ?? 0) > 0)
-  const spare = grows ? Math.max(0, Number(root?.props.minHeight ?? 0) - total) : 0
-  return above + spare + rowsOf(children[at]) - 1
+  return above + rowsOf(children[at]) - 1
 }
 
 test("docked, the footer keeps the body's last row with notes and with no match", async ($, on) => {
@@ -470,10 +467,13 @@ test("docked at short heights, the footer keeps the body's last row with notes, 
       await check?.(bodyRows)
     }
   }
+  // The rows and the no-match block fit the room, so nothing is cut. At 8 rows the no-match block's
+  // bottom padding is.
+  const fits = async (bodyRows: number) => expect(await spill(ui)).toBeLessThanOrEqual(bodyRows > 8 ? 0 : 1)
   await ui.input({ key: 'q', text: '', kind: 'submit' })
-  await everyHeight()
+  await everyHeight(fits)
   await ui.input({ key: 'q', text: Array.from({ length: 40 }, (_, i) => `nomatch${i}`).join(' '), kind: 'change' })
-  await everyHeight()
+  await everyHeight(fits)
   await dockAt(ui, 37)
   await ui.press({ key: 'key-pane:next' })
   for (const text of ['first idea', 'second idea', 'third idea']) await ui.input({ key: 'capture', text, kind: 'submit' })
@@ -486,6 +486,42 @@ test("docked at short heights, the footer keeps the body's last row with notes, 
     expect(await ui.find({ type: 'Text', text: /third idea/ })).toBeDefined()
     expect((await texts(ui)).some(text => /word119$/.test(text))).toBe(true)
   })
+  await ui.unmount()
+})
+
+test("docked at short heights, editing a note in a long list keeps the draft's end and the footer", async ($, on) => {
+  const dir = new MemDir()
+  for (let i = 10; i < 40; i += 1) put(dir, `01JA7K2M3Q9X4ZB6C8D0EFGH${i}`, `note number ${i}`, CC, i)
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  for (let i = 0; i < 12; i += 1) await ui.press({ key: 'key-j' })
+  await ui.press({ key: 'key-e' })
+  await ui.input({ key: 'edit', text: `${Array.from({ length: 80 }, (_, i) => `word${i}`).join(' ')} TAIL`, kind: 'change' })
+  for (let bodyRows = 15; bodyRows <= 20; bodyRows += 1) {
+    await dockAt(ui, bodyRows)
+    expect(await footerRow(ui)).toBe(bodyRows - 1)
+    expect(await spill(ui)).toBeLessThanOrEqual(0)
+    expect((await texts(ui)).some(text => /TAIL$/.test(text))).toBe(true)
+  }
+  await ui.unmount()
+})
+
+test('docked in a very short body, a failed capture save still says why', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.press({ key: 'key-pane:next' })
+  await ui.input({ key: 'capture', text: 'first idea', kind: 'submit' })
+  dir.failWrites = true
+  await ui.input({ key: 'capture', text: 'second idea', kind: 'submit' })
+  for (let bodyRows = 9; bodyRows <= 14; bodyRows += 1) {
+    await dockAt(ui, bodyRows)
+    expect(await spill(ui)).toBeLessThanOrEqual(0)
+    expect((await texts(ui)).some(text => /EROFS/.test(text))).toBe(true)
+  }
   await ui.unmount()
 })
 
