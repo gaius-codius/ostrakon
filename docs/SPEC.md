@@ -88,7 +88,7 @@ Claude Code's mods interface has rules and limits that aren't obvious from its A
 - Writing inside the plugin folder triggers hot reloads, so keep data outside it.
 - There are no file-change events, so poll `$.fs.stat` mtimes.
 - `$.session.root()` is the project root; `$.session.repo()` returns `{ root, remote }`, and the remote is the project key that is the same on every machine.
-- `$.env.get('NAME')` takes literal names; `OSTRAKON_DIR` points a session at fixture data, and `OSTRAKON_CACHE` moves its machine files (memos, locks, sync caches, the doctor's report) out of `~/.cache/ostrakon`.
+- `$.env.get('NAME')` takes literal names; `OSTRAKON_DIR` points a session at fixture data, and `OSTRAKON_CACHE` moves its machine records (memos, sync caches, the doctor's report) out of `~/.cache/ostrakon`; locks stay there, so every session on the machine shares them.
 
 ---
 
@@ -207,7 +207,7 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 - `ctrl+n` → `pane:next`
 
 ### 4.6 Contextual footer
-One blank row, then one line: at most four key/label pairs for the focus (key bold, label dim, two spaces between) and `i keys` on the right; pairs drop from the right until the line fits. On a row with nothing picked, the note's own actions take the four places (`t to prompt  s send  e edit  d archive`); `v` pick is answered and listed in the key sheet. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning); a status takes at most half the line (a problem's text is cut first, so `· 3 queued` stays) and is cut with `…`, leaving room for `i keys`. The legend `◆ from Claude` trails while a `◆` row is drawn.
+One blank row, then one line: at most four key/label pairs for the focus (key bold, label dim, two spaces between) and `i keys` on the right; pairs drop from the right until the line fits. On a row with nothing picked, the note's own actions take the four places (`t to prompt  s send  e edit  d archive`); `v` pick is answered and listed in the key sheet. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning); a status takes at most half the line (24 columns when half is less) and is cut with `…`, its `· 3 queued` kept, leaving room for `i keys`. The legend `◆ from Claude` trails while a `◆` row is drawn.
 
 **The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`.
 

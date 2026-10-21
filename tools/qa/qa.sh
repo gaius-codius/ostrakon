@@ -8,8 +8,8 @@
 #   qstop NAME / qstopall
 # Isolation: CLAUDE_CODE_PLUGIN_DIRS empty, settings with hubUrl empty unless given (a test hub only),
 # the mod's cache in $Q/cache (OSTRAKON_CACHE). The engine keeps the mod's $.store and folder trust
-# in your own ~/.claude: the first qstart saves the store, and qstopall puts it back and forgets
-# the trust given to folders under $Q. Stop with qstopall, not by killing tmux.
+# in your own ~/.claude, shared with your real sessions: the first qstart copies the store to
+# $Q/store-saved, and qstopall says what QA changed there and how to put it back.
 Q=${QA_DIR:-/tmp/ostrakon-qa}
 P=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../plugin" && pwd)
 TOOLS=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -33,12 +33,12 @@ EOF
   QT kill-session -t $name 2>/dev/null
   if [ ! -d "$Q/store-saved" ]; then
     mkdir -p "$Q/store-saved"
-    cp "$STORE"/ostrakon*.json "$Q/store-saved/" 2>/dev/null || true
+    cp -p "$STORE"/ostrakon*.json "$Q/store-saved/" 2>/dev/null || echo "qstart: no ostrakon store to save in $STORE"
   fi
   mkdir -p "$Q/cwd"
   QT new-session -d -s $name -x 160 -y 40 -c "${QA_CWD:-$Q/cwd}" \
     "CLAUDE_CODE_PLUGIN_DIRS= OSTRAKON_DIR=$Q/$name OSTRAKON_CACHE=$Q/cache COLORTERM=truecolor claude --plugin-dir $P --debug-file $Q/debug-$name.log --settings $Q/settings-$name.json"
-  # A folder Claude Code hasn't been trusted in asks first: say yes (qstopall forgets it).
+  # A folder Claude Code hasn't been trusted in asks first: say yes (qstopall lists those).
   for _ in $(seq 1 40); do
     local screen; screen=$(QT capture-pane -p -t $name)
     grep -q "shift+tab" <<<"$screen" && break
@@ -60,23 +60,16 @@ qwait() { # seconds 'test'
   echo TIMEOUT; return 1
 }
 qstop() { QT kill-session -t $1 2>/dev/null; }
+# Never writes your files: it says what QA changed in the mod's store, and how to put it back.
 qstopall() {
   QT kill-server 2>/dev/null
-  if [ -d "$Q/store-saved" ]; then
-    rm -f "$STORE"/ostrakon*.json
-    cp "$Q"/store-saved/*.json "$STORE/" 2>/dev/null || true
-    rm -rf "$Q/store-saved"
-  fi
-  python3 - "$HOME/.claude.json" "$Q" <<'EOF'
-import json, os, sys
-path, q = sys.argv[1], os.path.realpath(sys.argv[2]) + '/'
-d = json.load(open(path))
-gone = [k for k in d.get('projects', {}) if (k.rstrip('/') + '/').startswith(q)]
-for k in gone: del d['projects'][k]
-if gone:
-    json.dump(d, open(path + '.qa-tmp', 'w'), indent=2)
-    os.replace(path + '.qa-tmp', path)
-EOF
+  local saved real
+  for saved in "${Q:?}"/store-saved/*.json; do
+    [ -f "$saved" ] || continue
+    real="$STORE/$(basename "$saved")"
+    cmp -s "$saved" "$real" || echo "QA changed $real; to put it back: cp '$saved' '$real'"
+  done
+  grep -o "\"${Q:?}/[^\"]*\"" "$HOME/.claude.json" 2>/dev/null | sort -u | sed 's/^/trusted by QA (in ~\/.claude.json): /'
 }
 # The note file holding some text, in a folder.
 qfind() { local f; f=$(grep -l -F -- "$2" "$1"/*.md 2>/dev/null | head -1); [ -n "$f" ] && echo "$f"; }

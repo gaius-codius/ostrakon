@@ -215,6 +215,16 @@ describe('model', () => {
     expect(wrap('❤️'.repeat(18), 18)).toEqual(['❤️'.repeat(9), '❤️'.repeat(9)])
   })
 
+  test("a long status keeps its queued count: the problem's text is cut instead", () => {
+    const missing = 'mirror folder missing: /home/me/Documents/a very long vault path/ostrakon/notes · 3 queued'
+    const [fitted] = fitStatuses([[missing, 'w']], 30)
+    expect(fitted?.[0].startsWith('mirror folder')).toBe(true)
+    expect(fitted?.[0].endsWith('… · 3 queued')).toBe(true)
+    expect(cells(fitted?.[0] ?? '')).toBeLessThanOrEqual(30)
+    // Too narrow for the count and some of the problem, it's a plain cut.
+    expect(fitStatuses([[missing, 'w']], 14)[0]?.[0].endsWith('queued')).toBe(false)
+  })
+
   test('footer statuses are cut to their room, the last ones first', () => {
     const offline = 'hub offline · 12 queued · mirror unavailable'
     expect(

@@ -8,7 +8,6 @@ import type { Action, Ctx, Focus, Line } from '../src/model'
 import {
   bundleText,
   canEditInline,
-  cut,
   dispatchText,
   freshPane,
   fromField,
@@ -307,8 +306,7 @@ const syncIO = ($: EngineInterface, syncing: Syncing): SyncIO => ({
 // before first contact.
 const syncStatusOf = (state: { isOn: boolean; isOnline: boolean; queued: number; problem: string }, offline: string) => {
   if (!state.isOn || state.isOnline || state.problem === '') return ''
-  // Cut so a long problem (a mirror's path) leaves the queued count on the line.
-  const what = state.problem === 'offline' ? offline : cut(state.problem, WIDTH.label)
+  const what = state.problem === 'offline' ? offline : state.problem
   return state.queued > 0 ? `${what} · ${state.queued} queued` : what
 }
 
@@ -1661,8 +1659,9 @@ export const register: Register = (on, options) => {
       const all = pocketOptions.isOn ? Object.values(await read($, notes)) : []
       const pocket = pocketOf(all, project.key, pocketOptions.max, columns, opener)
       if (isTerminal) drawn = { kind: 'pocket', chips: pocket.chips }
-      // Alone on the row, the opener has room for the project's whole name.
-      const alone = pocket.chips.length === 0 && pocket.more === 0 ? openerOf(project.name, Math.min(WIDTH.label, columns - 2)) : opener
+      // Alone on the row, the opener has room for the project's whole name (less ✎, its space and
+      // the spare column).
+      const alone = pocket.chips.length === 0 && pocket.more === 0 ? openerOf(project.name, Math.min(WIDTH.label, columns - 3)) : opener
       row = <PocketRow el={el} pocket={pocket} opener={alone} look={look} handlers={handlers} />
     }
     return (

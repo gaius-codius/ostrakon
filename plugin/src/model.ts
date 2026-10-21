@@ -548,12 +548,19 @@ export const sheetLines = (lines: [string, string][], lead: string[]) => {
   return [...own, ...lines.filter(line => !own.includes(line))]
 }
 
+// A status cut to `room` cells, keeping its ` · 3 queued` (a mirror's long path goes first).
+const cutStatus = (text: string, room: number) => {
+  const queued = / · \d+ queued$/.exec(text)?.[0] ?? ''
+  if (cells(text) <= room || queued === '' || room - cells(queued) < 4) return cut(text, room)
+  return `${cut(text.slice(0, -queued.length), room - cells(queued))}${queued}`
+}
+
 // Footer statuses ([text, colour]) within `room` cells, two between them: cut, never wrapped, and
 // the last ones go first.
 export const fitStatuses = (statuses: [string, string][], room: number) => {
   let left = room
   return statuses.flatMap(([text, colour]): [string, string][] => {
-    const fitted = cut(text, left)
+    const fitted = cutStatus(text, left)
     left -= cells(fitted) + 2
     return fitted === '' ? [] : [[fitted, colour]]
   })
