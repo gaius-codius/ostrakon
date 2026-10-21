@@ -45,7 +45,7 @@ import {
   unknownProject,
 } from '../src/harvest'
 import type { HarvestMode } from '../src/harvest'
-import { basename, normalizeRemote } from '../src/project'
+import { basename, folderKey, folderNotes, normalizeRemote } from '../src/project'
 import { freshReport, withProblem } from '../src/report'
 import { StorageError, createStore } from '../src/store'
 import type { NewNote, StoreIO } from '../src/store'
@@ -144,6 +144,8 @@ const mirrorOptions = { dir: '' }
 type Syncing = { name: 'hub' | 'mirror'; target: string; sync: Sync }
 let syncs: Syncing[] = []
 let isSyncRunning = false
+// True once startSync has added every sync it will run (the mirror's after a wait).
+let isSyncSet = false
 let isPushScheduled = false
 // How soon after a local change it goes out (SPEC §7.1).
 const PUSH_DEBOUNCE_MS = 1000
@@ -335,7 +337,32 @@ const currentProject = async ($: EngineInterface): Promise<NoteProject> => {
     return { key, name: basename(key), path: repo.root }
   }
   const root = repo?.root ?? (await $.session.root())
-  return { key: `path:${root}`, name: basename(root), path: root }
+  return { key: folderKey(root), name: basename(root), path: root }
+}
+
+// A folder that gained a remote: its notes from before, kept under its path, join the remote's
+// project (SPEC §6), each only if it's still there under its lock. Run by the poll, and only once
+// every sync has pulled in this session: a move is a change stamped now, so a change made elsewhere
+// that hadn't arrived (an archive on the phone) would lose to this machine's older copy. Notes that
+// arrive later join on a later poll.
+const joinFolderNotes = async ($: EngineInterface) => {
+  if (!isProjectKnown || !isSyncSet || !syncs.every(syncing => syncing.sync.status().isOnline)) return
+  const into = project
+  const from = folderKey(into.path)
+  const waiting = folderNotes(Object.values(await read($, notes)), into)
+  if (waiting.length === 0) return
+  await serially(async () => {
+    let joined = 0
+    for (const note of waiting) {
+      let isJoined = false
+      await changeNote($, note.id, now => {
+        isJoined = !now.deleted && now.project?.key === from
+        return isJoined ? { ...now, project: into } : undefined
+      })
+      if (isJoined) joined += 1
+    }
+    if (joined > 0) $.ui.log(`ostrakon: ${joined} notes under ${from} joined ${into.key}`, { to: 'debug' })
+  })
 }
 
 // The theme's base as the engine resolves it. A custom theme's file names one; one that can't be
@@ -1310,6 +1337,7 @@ const startSync = async ($: EngineInterface) => {
       () => true,
     )
   }
+  isSyncSet = true
 }
 
 // Replaced in register once the person's notesDir option is known.
@@ -1374,6 +1402,7 @@ export const register: Register = (on, options) => {
         .then(store.scan)
         .then(() => prunePicks($))
         .then(() => realign($))
+        .then(() => joinFolderNotes($))
         .catch(error => reportStorage($, error))
     })
     void startSync($).catch(error => noteProblem($, 'sync', error))
