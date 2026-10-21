@@ -88,7 +88,7 @@ fi
 # What the mod itself last saw (plugin/src/report.ts): proof it runs, not just that it validates.
 if has python3; then
   echo "== the mod in a session"
-  python3 -I - "$HOME/.cache/ostrakon/report.json" "${cv:-}" <<'EOF' || problems=$((problems + 1))
+  python3 -I - "${OSTRAKON_CACHE:-$HOME/.cache/ostrakon}/report.json" "${cv:-}" <<'EOF' || problems=$((problems + 1))
 import json, os, sys
 from datetime import datetime, timezone
 path, installed = sys.argv[1], sys.argv[2]

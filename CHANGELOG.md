@@ -12,6 +12,14 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ### Fixed
 
+- The `/jot` hint no longer says Claude won't see the note: Claude does see the command. A `/jot` also stops leaving an empty `ostrakon:` row, and Claude is told the note needs nothing from it, so it doesn't go checking the save.
+- The empty pane shows the harvest line when harvest is on.
+- The key sheet lists `a` keep and `r` dismiss, and leads with them on a proposed row; its last line is no longer cut off.
+- A folded group's footer offers `z unfold`; sent and archived rows show `i keys`.
+- The move picker starts on the first project the note can go to, and leaves out the one it's in (it read `move to: none`).
+- The preview keeps the age when the path is long, and a long mirror problem leaves the queued count and the keys on the footer.
+- With no notes, the band shows the project's whole name.
+- The `pocket` setting's description names `;` and the digit.
 - A folder that gets a git remote is no longer two projects: the notes saved there before the remote move to the remote's project once a session there has synced.
 
 ## [0.6.0] - 2026-10-14

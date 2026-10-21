@@ -47,7 +47,7 @@ import {
 import type { HarvestMode } from '../src/harvest'
 import { basename, folderKey, folderNotes, normalizeRemote } from '../src/project'
 import { freshReport, withProblem } from '../src/report'
-import { StorageError, createStore } from '../src/store'
+import { StorageError, cacheDirOf, createStore } from '../src/store'
 import type { NewNote, StoreIO } from '../src/store'
 import { createSync } from '../src/sync/core'
 import type { Sync, SyncIO } from '../src/sync/core'
@@ -70,7 +70,7 @@ import {
 import type { RunningTurn } from '../src/turns'
 import { HarvestRow, PocketRow, harvestOf, openerOf, pocketOf } from '../src/ui/band'
 import type { BandHandlers, Drawn } from '../src/ui/band'
-import { BAND_KEY, HINT, MS, TEXT, TOAST, toneOf } from '../src/ui/look'
+import { BAND_KEY, HINT, JOT_CONTEXT, MS, TEXT, TOAST, WIDTH, toneOf } from '../src/ui/look'
 import type { Tone } from '../src/ui/look'
 import { CAPTURE_KEY, EDIT_KEY, MOVE_KEY, Pane, SEARCH_KEY, SEND_KEY, chromeRows, sheetPages, slotKey } from '../src/ui/pane'
 import type { Handlers, PaneView } from '../src/ui/pane'
@@ -156,7 +156,8 @@ let report = freshReport('', '')
 let isReportDirty = false
 let isReportSaving = false
 
-const reportPath = async ($: EngineInterface) => `${((await $.env.get('HOME')) ?? '').replace(/\/+$/, '')}/.cache/ostrakon/report.json`
+const cacheEnv = async ($: EngineInterface) => ({ home: await $.env.get('HOME'), cache: await $.env.get('OSTRAKON_CACHE') })
+const reportPath = async ($: EngineInterface) => `${cacheDirOf(await cacheEnv($))}/report.json`
 
 // Never in the way: a report that can't be written is only a debug line, and tried again on the
 // next poll. One save at a time, so an older one never lands over a newer; a call while one runs,
@@ -206,7 +207,7 @@ const recordProblem = ($: EngineInterface, where: string, message: string) => {
 
 // The store's view of the engine. Built per call from $ ($ may only be passed within this file).
 const storeIO = async ($: EngineInterface): Promise<StoreIO> => ({
-  env: { dir: await $.env.get('OSTRAKON_DIR'), home: await $.env.get('HOME') },
+  env: { dir: await $.env.get('OSTRAKON_DIR'), ...(await cacheEnv($)) },
   read: async path => String(await $.fs.read(path)),
   write: (path, text) => $.fs.write(path, text),
   list: dir => $.fs.list(dir),
@@ -272,8 +273,7 @@ const tagOf = (text: string) => {
 }
 
 // Machine-local, per hub or mirror folder: which revisions it holds (src/sync/core.ts).
-const syncCachePath = async ($: EngineInterface, syncing: Syncing) =>
-  `${((await $.env.get('HOME')) ?? '').replace(/\/+$/, '')}/.cache/ostrakon/sync-${syncing.name}-${tagOf(syncing.target)}.json`
+const syncCachePath = async ($: EngineInterface, syncing: Syncing) => `${cacheDirOf(await cacheEnv($))}/sync-${syncing.name}-${tagOf(syncing.target)}.json`
 
 // Each sync's status for the footer (named outright: the engine lists what a module reads and writes).
 const setSyncState = ($: EngineInterface, syncing: Syncing, fn: (state: SyncState) => SyncState) =>
@@ -319,7 +319,7 @@ const mirrorViews: { live: MirrorView; archive: MirrorView } = { live: { notes: 
 const mirrorIO = async ($: EngineInterface, which: 'live' | 'archive'): Promise<MirrorIO> => ({
   ...(await storeIO($)),
   // OSTRAKON_DIR names the notes folder, never the mirror.
-  env: { home: await $.env.get('HOME') },
+  env: await cacheEnv($),
   warn: text => noteProblem($, 'sync', text),
   shown: async () => mirrorViews[which],
   publish: async (merged, broken) => {
@@ -1517,12 +1517,14 @@ export const register: Register = (on, options) => {
     await update($, isJotDraft, () => false)
     if (text === '') {
       const why = await openPane($, 'browse')
-      return { text: why === undefined ? '' : `ostrakon: ${why}` }
+      return why === undefined ? {} : { text: `ostrakon: ${why}` }
     }
     try {
       await createNote($, text, project)
       await showSaved($)
-      return { text: '' }
+      // No output row (the hint line says it saved). Claude reads the command all the same, so it
+      // gets a line saying the note is the person's, saved, and needs nothing.
+      return { context: [JOT_CONTEXT] }
     } catch (error) {
       noteProblem($, 'storage', error)
       return { text: `ostrakon: ${TOAST.failed(messageOf(error))}` }
@@ -1657,7 +1659,10 @@ export const register: Register = (on, options) => {
       const all = pocketOptions.isOn ? Object.values(await read($, notes)) : []
       const pocket = pocketOf(all, project.key, pocketOptions.max, columns, opener)
       if (isTerminal) drawn = { kind: 'pocket', chips: pocket.chips }
-      row = <PocketRow el={el} pocket={pocket} opener={opener} look={look} handlers={handlers} />
+      // Alone on the row, the opener has room for the project's whole name (less ✎, its space and
+      // the spare column).
+      const alone = pocket.chips.length === 0 && pocket.more === 0 ? openerOf(project.name, Math.min(WIDTH.label, columns - 3)) : opener
+      row = <PocketRow el={el} pocket={pocket} opener={alone} look={look} handlers={handlers} />
     }
     return (
       <Box flexDirection='column'>
@@ -1724,6 +1729,6 @@ export const register: Register = (on, options) => {
       editCancel: () => run(serially(() => act($, 'back'))),
       moveTo: value => run(serially(() => moveTo($, value))),
     }
-    return <Pane el={el} view={view} handlers={handlers} hasHub={hubOptions.url !== ''} hasHarvest={false} bundleRows={view.bundleRows} />
+    return <Pane el={el} view={view} handlers={handlers} hasHub={hubOptions.url !== ''} hasHarvest={harvestOptions.isOn} bundleRows={view.bundleRows} />
   })
 }

@@ -91,10 +91,9 @@ export const TEXT = {
   placeholder: 'search notes',
   toList: 'to list',
   captureLabel: 'new note',
-  captureHint: (project: string) => `Notes save to ${project}. Keep typing for the next one.`,
+  captureHint: (project: string) => `${GLYPH.enter} saves to ${project}`,
   noMatch: (project: string) => `No notes match. ${GLYPH.enter} saves it to ${project}.`,
   bundleIntro: 'Please look at these notes from my ostrakon:',
-  bundleNote: 'The picked notes are marked sent once the prompt goes in. Nothing is removed before.',
   editHint: 'draft kept if the pane closes',
   // The edit box's buttons carry their keys, since that's where the eye is while editing.
   editCancel: 'esc cancel',
@@ -109,6 +108,7 @@ export const TEXT = {
     ['↑ ↓ j k', 'move'],
     ['1–9', 'jump to a row'],
     ['⏎ / t', 'to prompt'],
+    ['a / r', 'keep / dismiss'],
     ['s', 'send'],
     ['v / x', 'pick / clear picks'],
     ['b', 'bundle the picks'],
@@ -123,7 +123,7 @@ export const TEXT = {
     ['esc', 'back (to search, then close)'],
     ['q / ctrl+q', 'close'],
     ['ctrl+x s', 'open / close'],
-    ['//', 'jot from the prompt; a space first for a literal //'],
+    ['//', 'jot from the prompt'],
   ] as [string, string][],
   keepAll: 'keep all',
   harvestTitle: `${GLYPH.claude} from this turn`,
@@ -138,9 +138,13 @@ export const TEXT = {
 // it did. The engine parts its line from the tail; `gap` parts ours from another mod's tail.
 export const HINT = {
   gap: ' · ',
-  capture: (project: string) => `${GLYPH.capture} ${GLYPH.enter} saves to ${project}, Claude won't see it`,
+  capture: (project: string) => `${GLYPH.capture} ${GLYPH.enter} saves to ${project}`,
   saved: (project: string) => `${GLYPH.saved} saved to ${project}`,
 } as const
+
+// What Claude reads after a `/jot`: the command is in its transcript, so it learns the note is the
+// person's own and needs nothing from it.
+export const JOT_CONTEXT = 'The person saved that /jot as a note for themselves, and it is saved. It needs no reply or action.'
 
 // How long a just-saved note stays drawn as new, and the saved tail stays up.
 export const MS = { fresh: 2000, saved: 3000 } as const

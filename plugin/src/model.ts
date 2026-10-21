@@ -455,7 +455,7 @@ export const keysFor = (focus: Focus): Key[] => {
       if (line.kind === 'problem') return [{ action: 'details', shown: ['⏎', 'details'] }, k('search', 'f', 'search'), ...always]
       if (line.kind === 'group') {
         return [
-          k('fold', 'z', 'fold'),
+          k('fold', 'z', line.isFolded ? 'unfold' : 'fold'),
           k('history', 'h', 'history'),
           k('search', 'f', 'search'),
           k('keys', 'i', 'keys'),
@@ -473,7 +473,7 @@ export const keysFor = (focus: Focus): Key[] => {
           k('history', 'h', 'hide history'),
           k('fold', 'z', 'fold'),
           k('search', 'f', 'search'),
-          k('keys', 'i', 'keys', false),
+          k('keys', 'i', 'keys'),
           ...always,
         ]
       }
@@ -548,12 +548,19 @@ export const sheetLines = (lines: [string, string][], lead: string[]) => {
   return [...own, ...lines.filter(line => !own.includes(line))]
 }
 
+// A status cut to `room` cells, keeping its ` · 3 queued` (a mirror's long path goes first).
+const cutStatus = (text: string, room: number) => {
+  const queued = / · \d+ queued$/.exec(text)?.[0] ?? ''
+  if (cells(text) <= room || queued === '' || room - cells(queued) < 4) return cut(text, room)
+  return `${cut(text.slice(0, -queued.length), room - cells(queued))}${queued}`
+}
+
 // Footer statuses ([text, colour]) within `room` cells, two between them: cut, never wrapped, and
 // the last ones go first.
 export const fitStatuses = (statuses: [string, string][], room: number) => {
   let left = room
   return statuses.flatMap(([text, colour]): [string, string][] => {
-    const fitted = cut(text, left)
+    const fitted = cutStatus(text, left)
     left -= cells(fitted) + 2
     return fitted === '' ? [] : [[fitted, colour]]
   })

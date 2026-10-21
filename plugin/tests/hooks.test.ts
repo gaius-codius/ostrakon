@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
 import { MemDir } from './memdir'
-import { COLOUR, GLYPH } from '../src/ui/look'
+import { COLOUR, GLYPH, JOT_CONTEXT } from '../src/ui/look'
 import { CC, INFRA, PANE, mountPane, noteIn, put, run, startSession, texts } from './world'
 
 const fixture = () => {
@@ -127,7 +127,8 @@ test('d archives with an undo, and the pane groups by project with history on h'
 test('/jot saves at once; alone it opens the pane, where ctrl+n captures, saving and staying until an empty Enter', async ($, on) => {
   const dir = fixture()
   const { world } = await startSession($, on, dir)
-  await run($, 'jot', 'buy milk')
+  // No output row (the hint line says it saved); Claude, who reads the command, is told it needs nothing.
+  expect(await run($, 'jot', 'buy milk')).toEqual({ context: [JOT_CONTEXT] })
   expect(world.toasts.some(toast => toast.includes('saved to'))).toBe(false)
   expect([...dir.files.values()].some(file => file.text.includes('buy milk'))).toBe(true)
 
@@ -461,6 +462,28 @@ test('the empty pane names its scope and offers ctrl+n for a new note', async ($
   expect(await ui.find({ type: 'Text', text: /open this pane/ })).toBeUndefined()
   await ui.press({ key: 'key-app:toggleDiffPreSession' })
   expect(await ui.find({ type: 'Text', text: /^Nothing pending in any project\.$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('with harvest on, the empty pane says Claude can leave notes', { options: { harvest: true } }, async ($, on) => {
+  await startSession($, on, new MemDir())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  expect(await ui.find({ type: 'Text', text: /^Claude can leave notes for you$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test("m offers every place but the note's own, starting on the first", async ($, on) => {
+  await startSession($, on, fixture())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: 'flaky', kind: 'change' })
+  await ui.input({ key: 'q', text: 'flaky', kind: 'submit' })
+  await ui.press({ key: 'key-m' })
+  const picker = await ui.find({ type: 'Select' })
+  const values = ((picker?.props.options ?? []) as { value: string }[]).map(option => option.value)
+  expect(values).toEqual([INFRA.key, 'unfiled'])
+  expect(picker?.props.value).toBe(INFRA.key)
   await ui.unmount()
 })
 
