@@ -908,13 +908,11 @@ const fillPrompt = async ($: EngineInterface, text: string, ids: string[], isFro
 }
 
 // Once the prompt holds `text`: the held draft is spent, and the person's submit carrying it marks
-// `ids` sent. The pane closes if it's open, except a fill from the band (SPEC §10) leaves one open
-// beside the prompt: the keys were handed over to write with the notes in view.
+// `ids` sent. The pane closes if it's open, except on a fill from the band (SPEC §10): the band or
+// the prompt holds the keys then, so the pane is beside the prompt, kept there to write with.
 const afterFill = async ($: EngineInterface, text: string, ids: string[], isFromBand = false) => {
   await setPane($, current => ({ ...current, stash: '', lastFill: { text, ids } }))
-  if (!(await read($, isOpen))) return
-  if (isFromBand && !((await holdsKeys($)) ?? geometry.isFocused)) return
-  await closePane($)
+  if (!isFromBand && (await read($, isOpen))) await closePane($)
 }
 
 const act = async ($: EngineInterface, action: Action) => {

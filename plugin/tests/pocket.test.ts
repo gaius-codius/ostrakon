@@ -188,22 +188,36 @@ test(';2 with the pane open beside the prompt fills the prompt and leaves the pa
   await pane.unmount()
 })
 
-test('a chip pressed with the pane open beside the prompt leaves it open; with the pane holding the keys it closes', async ($, on) => {
+test('a chip pressed with the pane open beside the prompt leaves it open', async ($, on) => {
   const { world, clock } = await startSession($, on, fixture())
   const pane = await besidePrompt($)
   const band = await mountBand($)
   await band.press({ key: 'band-chip-2' })
   await clock.advance(10)
   expect(world.box.text).toBe('rename the store helpers')
+  expect(world.closed).toBe(1)
   expect(world.pane).toEqual({ isOpen: true, isFocused: false })
+  await band.unmount()
+  await pane.unmount()
+})
 
-  world.box.text = ''
-  await pane.press({ key: 'key-switch' })
-  await pane.redraw({ ...PANE.props, isFocused: true })
-  await band.press({ key: 'band-chip-1' })
+test('a chip pressed while the pane held the keys and a draft leaves the pane open and spends the draft', async ($, on) => {
+  const dir = fixture()
+  const { world, clock } = await startSession($, on, dir, 'my draft')
+  await run($, 'jot', '')
+  const pane = await mountPane($)
+  const band = await mountBand($)
+  await band.press({ key: 'band-chip-2' })
   await clock.advance(10)
-  expect(world.box.text).toBe('check why the cache test is flaky')
-  expect(world.pane.isOpen).toBe(false)
+  const filled = 'my draft\n\nrename the store helpers'
+  expect(world.box.text).toBe(filled)
+  expect(world.closed).toBe(0)
+  expect(world.pane.isOpen).toBe(true)
+  // Spent: the keys going to the prompt give nothing back.
+  await pane.press({ key: 'key-switch' })
+  expect(world.box.text).toBe(filled)
+  await composer($, filled)
+  expect(noteIn(dir, TWO).status).toBe('sent')
   await band.unmount()
   await pane.unmount()
 })
