@@ -12,10 +12,12 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ### Changed
 
+- The pane's footer shows as many keys as its width takes, not four at most: on a note, `m move` and `y copy` come after the note's own four, then `v pick`, `z fold` and `h history`.
 - The band's notes are pulled into the prompt with two keys: type `;` and the note's number (`;2`) in an empty prompt. A lone number no longer does anything, so it answers Claude's numbered questions again. After a turn, `;1` keeps a proposal and `;0` keeps them all. To start a prompt with `;` and a digit, paste it.
 
 ### Fixed
 
+- Docked in a short body, the footer stays on the pane's last row: the empty pane, a long search with no match and a new note with its saves no longer push it off.
 - The `/jot` hint no longer says Claude won't see the note: Claude does see the command. A `/jot` also stops leaving an empty `ostrakon:` row, and Claude is told the note needs nothing from it, so it doesn't go checking the save.
 - The empty pane shows the harvest line when harvest is on.
 - The key sheet lists `a` keep and `r` dismiss, and leads with them on a proposed row; its last line is no longer cut off.

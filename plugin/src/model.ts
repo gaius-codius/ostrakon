@@ -508,12 +508,15 @@ export const keysFor = (focus: Focus): Key[] => {
           ...rest,
         ]
       }
-      // Nothing picked: the note's own actions lead, so they are the four the footer has room for.
+      // Nothing picked: the note's own actions lead, so the footer's first four places are theirs,
+      // and move and copy take the next ones a wider pane has.
       const shown = [
         k('toPrompt', 't', 'to prompt'),
         k('send', 's', 'send'),
         k('edit', 'e', 'edit'),
         k('archive', 'd', 'archive'),
+        k('move', 'm', 'move'),
+        k('copy', 'y', 'copy'),
         k('pick', 'v', 'pick'),
         k('fold', 'z', 'fold'),
         k('history', 'h', 'history'),
@@ -600,4 +603,15 @@ export const fitOneLine = (pairs: [string, string][], lead: string, width: numbe
   const withKeys = () => (keys ? [...kept, keys] : kept)
   while (kept.length > 0 && footerRows(withKeys(), lead, width) > 1) kept = kept.slice(0, -1)
   return withKeys()
+}
+
+// The footer's line: `i keys` on the right, then the pairs as fit, by rank: the first `first`
+// actions, the legend, then the rest in order. Shown in that order, but the legend last.
+export const fitFooter = (pairs: [string, string][], legend: [string, string] | undefined, lead: string, width: number, first: number) => {
+  const keys = pairs.find(isSheetPair)
+  const actions = pairs.filter(pair => !isSheetPair(pair))
+  const ranked = [...actions.slice(0, first), ...(legend ? [legend] : []), ...actions.slice(first)]
+  const fitted = fitOneLine(keys ? [...ranked, keys] : ranked, lead, width)
+  const shown = fitted.filter(pair => pair !== legend && pair !== keys)
+  return [...shown, ...(legend && fitted.includes(legend) ? [legend] : []), ...(keys ? [keys] : [])]
 }
