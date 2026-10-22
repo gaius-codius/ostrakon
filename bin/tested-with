@@ -1,5 +1,5 @@
 # The versions this release was last tested with. `ostrakon doctor` compares yours to these, and
 # the README's Requirements section names the same ones; update both before each release
 # (docs/releasing.md).
-claude=2.1.296
+claude=2.1.308
 bun=1.4.3
