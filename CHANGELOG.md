@@ -6,6 +6,8 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-22
+
 ### Added
 
 - `ctrl+x tab` moves the keyboard between the pane and the prompt, and the pane stays open: write in the prompt with your notes beside it, then go back to where you were. A draft the pane was holding goes back into the prompt on the way. To get it, run `./install.sh --keys` from the checkout, or add `"ctrl+x tab": "app:openArtifact"` to the `Chat`, `Pane` and `PaneField` keybindings (README, Keybindings). It takes the place of Claude Code's `ctrl+x tab`, which focuses the band above the prompt; a click still does.
@@ -112,7 +114,8 @@ The first public release.
 - `ostrakon pair`: a QR code with a one-time code (5 minutes, works once) pairs a phone with the hub; `--token` prints the long-lived link instead.
 - The `ostrakon` command (`pair`, `hub`, `update`, `version`), `install.sh` and `update.sh`.
 
-[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/gaius-codius/ostrakon/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/gaius-codius/ostrakon/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/gaius-codius/ostrakon/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/gaius-codius/ostrakon/compare/v0.3.0...v0.4.0
