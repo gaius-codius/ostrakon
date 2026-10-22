@@ -16,6 +16,7 @@ export const freshPane = (): PaneState => ({
   focus: 'search',
   offset: 0,
   sheetPage: 0,
+  sheetFrom: null,
   edit: null,
   moving: null,
   capture: { draft: '', target: null, saved: [], error: null },
@@ -402,6 +403,8 @@ export type Focus =
 // key the footer shows always works and nothing else is advertised.
 export const keysFor = (focus: Focus): Key[] => {
   const nav = [k('down', 'j', 'down', false), k('up', 'k', 'up', false)]
+  // A text field takes `i`, so there the footer's `keys` is the chord; elsewhere it's only answered.
+  const fieldKeys = chord('keys', 'keys', 'keys')
   switch (focus.kind) {
     case 'unfocused':
       return []
@@ -412,20 +415,22 @@ export const keysFor = (focus: Focus): Key[] => {
           chord('scope', 'scope', 'scope'),
           chord('close', 'close', 'close'),
           chord('new', 'new', '', false),
+          fieldKeys,
         ]
       }
-      return [chord('scope', 'scope', 'scope'), chord('new', 'new', 'new'), chord('close', 'close', 'close')]
+      return [chord('scope', 'scope', 'scope'), chord('new', 'new', 'new'), chord('close', 'close', 'close'), fieldKeys]
     case 'empty':
-      return [chord('new', 'new', 'new'), chord('scope', 'scope', 'scope'), chord('close', 'close', 'close')]
+      return [chord('new', 'new', 'new'), chord('scope', 'scope', 'scope'), chord('close', 'close', 'close'), fieldKeys]
     case 'capture':
       return [
         { action: 'new', shown: ['⏎', 'save'] },
         { action: 'back', shown: ['esc', 'back to search'] },
         chord('scope', 'scope', 'project'),
         ...CHORDS(false),
+        fieldKeys,
       ]
     case 'edit':
-      return [{ action: 'new', shown: ['⏎', 'save'] }, { action: 'back', shown: ['esc', 'back, draft kept'] }, ...CHORDS(false)]
+      return [{ action: 'new', shown: ['⏎', 'save'] }, { action: 'back', shown: ['esc', 'back, draft kept'] }, ...CHORDS(false), fieldKeys]
     case 'bundle':
       return [
         { action: 'send', shown: ['⏎', 'send'] },
@@ -433,14 +438,16 @@ export const keysFor = (focus: Focus): Key[] => {
         { action: 'back', shown: ['esc', 'back'] },
         k('back', 'x', '', false),
         ...CHORDS(false),
+        chord('keys', 'keys', '', false),
       ]
     case 'move':
-      return [{ action: 'move', shown: ['⏎', 'move'] }, { action: 'back', shown: ['esc', 'back'] }, ...CHORDS(false)]
+      return [{ action: 'move', shown: ['⏎', 'move'] }, { action: 'back', shown: ['esc', 'back'] }, ...CHORDS(false), chord('keys', 'keys', '', false)]
     case 'sheet':
       return [
         k('keys', 'i', 'close keys'),
         ...(focus.pages > 1 ? [k('down', 'j', `more ${focus.page + 1}/${focus.pages}`), k('up', 'k', 'back', false)] : []),
         ...CHORDS(false),
+        chord('keys', 'keys', '', false),
       ]
     case 'line': {
       const { line } = focus
@@ -451,6 +458,7 @@ export const keysFor = (focus: Focus): Key[] => {
         k('search', 'f', 'search', false),
         k('new', 'n', 'new', false),
         ...CHORDS(false),
+        chord('keys', 'keys', '', false),
       ]
       if (line.kind === 'problem') return [{ action: 'details', shown: ['⏎', 'details'] }, k('search', 'f', 'search'), ...always]
       if (line.kind === 'group') {
@@ -463,6 +471,7 @@ export const keysFor = (focus: Focus): Key[] => {
           k('close', 'q', 'close', false),
           k('new', 'n', 'new', false),
           ...CHORDS(false),
+          chord('keys', 'keys', '', false),
         ]
       }
       const { note } = line
@@ -499,12 +508,15 @@ export const keysFor = (focus: Focus): Key[] => {
           ...rest,
         ]
       }
-      // Nothing picked: the note's own actions lead, so they are the four the footer has room for.
+      // Nothing picked: the note's own actions lead, so the footer's first four places are theirs,
+      // and move and copy take the next ones a wider pane has.
       const shown = [
         k('toPrompt', 't', 'to prompt'),
         k('send', 's', 'send'),
         k('edit', 'e', 'edit'),
         k('archive', 'd', 'archive'),
+        k('move', 'm', 'move'),
+        k('copy', 'y', 'copy'),
         k('pick', 'v', 'pick'),
         k('fold', 'z', 'fold'),
         k('history', 'h', 'history'),
@@ -581,11 +593,25 @@ export const footerRows = (pairs: [string, string][], lead: string, width: numbe
   return rows
 }
 
+// The footer's `i keys` pair, or `ctrl+x i keys` in a text field: it sits on the right.
+export const isSheetPair = ([key]: [string, string]) => key === 'i' || key === CHORD.keys.keys
+
 // Inline: drop pairs from the right until one line fits, keeping `i keys` when it was there.
 export const fitOneLine = (pairs: [string, string][], lead: string, width: number) => {
-  const keys = pairs.find(([key]) => key === 'i')
-  let kept = pairs.filter(([key]) => key !== 'i')
+  const keys = pairs.find(isSheetPair)
+  let kept = pairs.filter(pair => !isSheetPair(pair))
   const withKeys = () => (keys ? [...kept, keys] : kept)
   while (kept.length > 0 && footerRows(withKeys(), lead, width) > 1) kept = kept.slice(0, -1)
   return withKeys()
+}
+
+// The footer's line: `i keys` on the right, then the pairs as fit, by rank: the first `first`
+// actions, the legend, then the rest in order. Shown in that order, but the legend last.
+export const fitFooter = (pairs: [string, string][], legend: [string, string] | undefined, lead: string, width: number, first: number) => {
+  const keys = pairs.find(isSheetPair)
+  const actions = pairs.filter(pair => !isSheetPair(pair))
+  const ranked = [...actions.slice(0, first), ...(legend ? [legend] : []), ...actions.slice(first)]
+  const fitted = fitOneLine(keys ? [...ranked, keys] : ranked, lead, width)
+  const shown = fitted.filter(pair => pair !== legend && pair !== keys)
+  return [...shown, ...(legend && fitted.includes(legend) ? [legend] : []), ...(keys ? [keys] : [])]
 }

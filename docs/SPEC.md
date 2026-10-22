@@ -142,7 +142,7 @@ Focus starts in the search field; no row is selected and the top result is previ
        ▎ the redis bump, only on the arm runners
        ▎ you · ~/Work/cc · main · 12m ago                          ← meta
 ──────────────────────────────────────────────────────────────────────
-ctrl+s scope  ctrl+n new  ctrl+q close                               ← footer
+ctrl+s scope  ctrl+n new  ctrl+q close                ctrl+x i keys  ← footer
 ```
 - **Rows** are one line under their group header, indented two columns: selection bar, the row's number in the window (1–9, then `·`), a marker (`◆`, `▪`, `●`/`○`, `↗`), the text with search hits highlighted, then the age (`now`, `12m`, `3h`, `2d`, `5w`, `1y`).
 - **Preview** (docked only): the selected note's text, capped at 6 lines, then a meta line `who · path · branch · age ago`, all behind a dim `▎` bar. It's indented so the bar starts in the rows' text column; no blank row is added for it. A long path is cut, then dropped, before the age is.
@@ -157,7 +157,7 @@ ctrl+s scope  ctrl+n new  ctrl+q close                               ← footer
 - **Picking:** `v` picks or unpicks an open or proposed note. Once one is picked every row shows `●`/`○` and the footer leads with `3 picked`. Picks live in `$.state` until sent, cleared (`x`) or the session ends; a picked note that stops being open drops out with a toast. Bundles keep pick order.
 
 ### 4.4 Capture, `//` and the draft stash
-- **In the pane:** `n` on a row or `ctrl+n` turns the search row into the capture row (`✎ new note`, the text, the target project at the right). Enter saves and stays in capture; Enter on an empty line returns to search; `ctrl+s` cycles the target project. The draft shows whole underneath, wrapped. A failed save keeps the text and shows `Couldn't save: <reason>`.
+- **In the pane:** `n` on a row or `ctrl+n` turns the search row into the capture row (`✎ new note`, the text, the target project at the right). Enter saves and stays in capture; Enter on an empty line returns to search; `ctrl+s` cycles the target project. The draft shows underneath, wrapped (its end, when it's longer than the room). A failed save keeps the text and shows `Couldn't save: <reason>`.
 - **From the prompt:** a prompt that becomes exactly `//` is rewritten to `/jot ` (cursor at the end). `/jot` runs at once even mid-turn. `/jot` is painted in the accent and bold, the note after it italic. `/jot text` saves to this project; `/jot` alone opens the pane on search, where Enter on a query that matches nothing saves it as a note and `ctrl+n` turns to capture. To send a literal `//` prompt, start with a space or paste it: only one typed `/` after a lone `/` triggers the rewrite.
 - **Hint line:** the dim line under the prompt gets a tail after ` · `. While the draft leads with `/jot `: `✎ ⏎ saves to cc`. A `/jot` draws no output row, but Claude still reads the command in its transcript, so the mod adds one line for Claude only: the note is the person's, saved, and needs nothing from it. For a few seconds after a save from the prompt ([DESIGN.md §7](DESIGN.md#7-motion)) (or a search with no match, saved from the pane): `✓ saved to cc`, in place of a toast. A failed save still says `Couldn't save: <reason>`.
 - **Draft stash.** Every open that asks for focus (`ctrl+x s`, `/jot`) first reads the prompt. If it holds a draft, the draft is kept in `$.state` as the *stash*, the prompt is emptied, and the pane opens focused. Exactly one exit then decides what the prompt holds, and clears the stash:
@@ -195,8 +195,8 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 | `f` / `ctrl+f` | focus search |
 | `n` / `ctrl+n` | new note |
 | `ctrl+s` | scope (search, list) or target project (capture) |
-| `i` | key sheet on/off: a framed list of every key (unframed when the body is too short for a line inside the frame) (storage problems first; opened on a row, that row's own keys next, in its footer's order) between the search row and the footer; while it is up the pane takes the whole body and the footer its last row. It is at most 46 columns and never wider than the pane. When it's longer than the rows between, it pages: the footer shows `j more 2/3`, `j` turns to the next page and `k` back, both going round |
-| Esc | **back** one step: edit → the row (draft kept), move / key sheet / bundle → the list, capture → search, a row → the search field, a query → empty; at the top it closes |
+| `i` / `ctrl+x i` | key sheet on/off (`ctrl+x i` also from a text field, which takes `i`; the sheet then has the keys, and gives them back to that field when it closes): a framed list of every key (unframed when the body is too short for a line inside the frame) (storage problems first; opened on a row, that row's own keys next, in its footer's order) between the search row and the footer; while it is up the pane takes the whole body and the footer its last row. It is at most 46 columns and never wider than the pane. When it's longer than the rows between, it pages: the footer shows `j more 2/3`, `j` turns to the next page and `k` back, both going round |
+| Esc | **back** one step: edit → the row (draft kept), move / bundle → the list, key sheet → the text field it was opened from, else the list, capture → search, a row → the search field, a query → empty; at the top it closes |
 | `q` / `ctrl+q` / `ctrl+x s` | close the pane from anywhere; drafts are kept |
 
 **Borrowed chords** (the person binds them in their keybindings; the table lives in `look.ts`):
@@ -205,9 +205,10 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 - `ctrl+s` → `app:toggleDiffPreSession`
 - `ctrl+q` → `pane:previous` (not the engine's `pane:close`, which the mod reads as Esc)
 - `ctrl+n` → `pane:next`
+- `ctrl+x i` → `app:toggleReplTab`
 
 ### 4.6 Contextual footer
-One blank row, then one line: at most four key/label pairs for the focus (key bold, label dim, two spaces between) and `i keys` on the right; pairs drop from the right until the line fits. On a row with nothing picked, the note's own actions take the four places (`t to prompt  s send  e edit  d archive`); `v` pick is answered and listed in the key sheet. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning); a status takes at most half the line (24 columns when half is less) and is cut with `…`, its `· 3 queued` kept, leaving room for `i keys`. The legend `◆ from Claude` trails while a `◆` row is drawn.
+One blank row, then one line: as many key/label pairs for the focus as the width takes (key bold, label dim, two spaces between) and `i keys` on the right (`ctrl+x i keys` while a text field has focus); the last pairs drop until the line fits. On a row with nothing picked, the note's own actions lead (`t to prompt  s send  e edit  d archive`), then `m move` and `y copy`, then `v pick`, `z fold` and `h history`. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning); a status takes at most half the line (24 columns when half is less) and is cut with `…`, its `· 3 queued` kept, leaving room for `i keys`. The legend `◆ from Claude` trails while a `◆` row is drawn; it drops after any pairs past the first four, and before those four.
 
 **The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`.
 
@@ -234,7 +235,7 @@ One blank row, then one line: at most four key/label pairs for the focus (key bo
 - While the move picker or the edit card is open, the rows and the `↑ n more` and `↓ n more` lines draw a plain space instead of their Button. Across a redraw the terminal keeps the ring at the same place among the controls, not on the same key, so a row added or dropped above the picker or the card would otherwise take the ring: the picker closes and loses its arrow-key choice. Leaving either one by Shift+Tab goes to the search field.
 - Keys with no visible control (letter actions, digits, borrowed chords) are Buttons in an **action layer**, a `display: 'none'` Box drawn last. A `ui.focus` hook redirects any move onto it.
 - While a row, the bundle or the key sheet holds the ring, the layer also answers every other letter and digit by doing nothing, because an unanswered printable key would go to the prompt and take the keyboard with it.
-- Docked, the preview and footer have fixed heights, so the window never changes size as the selection moves. The pane fills the body and the footer keeps its last row, whether the list is full, short, has no match or is empty. In a body too short for the preview and three rows besides, the preview goes, as inline, so the footer stays on screen.
+- Docked, the preview and footer have fixed heights, so the window never changes size as the selection moves. The pane fills the body and the footer keeps its last row, whether the list is full, short, has no match or is empty. In a body too short for the preview and three rows besides, the preview goes, as inline, so the footer stays on screen. What sits between the search row and the footer is cut at the rows left there, so in a short body it is the empty block, a long query or capture's saves that are cut, never the footer. Capture keeps its hint (or its error) first, then the newest save, then the draft's lines, then the earlier saves. Editing, the preview gives up text lines (the draft keeps its end) before the rows or the footer give way.
 - Each open draws exactly one `autoFocus` element. Every in-pane view change calls `$.ui.focus` on its target (search → first result, list toggle → selected row, capture, edit, bundle → `[ send ]`, back out → the row it came from, fold → the header).
 
 ---

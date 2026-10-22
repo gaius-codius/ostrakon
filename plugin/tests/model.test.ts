@@ -2,16 +2,18 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import type { Note, NoteProject } from '../types'
 import type { Ctx, Focus, Line } from '../src/model'
-import { COLOUR, TEXT, WIDTH, colourOf, toneOf } from '../src/ui/look'
+import { CHORD, COLOUR, TEXT, WIDTH, colourOf, toneOf } from '../src/ui/look'
 import {
   ageOf,
   bundleText,
   canEditInline,
   cells,
   dispatchText,
+  fitFooter,
   fitOneLine,
   fitStatuses,
   footerPairs,
+  footerRows,
   freshPane,
   fromField,
   keysFor,
@@ -161,9 +163,10 @@ describe('model', () => {
     expect(history).toEqual(['u', 'h', 'z', 'f', 'i'])
     const picked = footerPairs(keysFor(focuses[3] as Focus)).map(([key]) => key)
     expect(picked.slice(0, 3)).toEqual(['b', 'v', 'x'])
-    // Nothing picked, the note's own actions take the four footer places, archive among them.
+    // Nothing picked, the note's own actions take the four footer places, archive among them, and
+    // move and copy come next.
     const row = footerPairs(keysFor(focuses[2] as Focus)).map(([key]) => key)
-    expect(row.slice(0, 4)).toEqual(['t', 's', 'e', 'd'])
+    expect(row.slice(0, 6)).toEqual(['t', 's', 'e', 'd', 'm', 'y'])
     expect(footerPairs(keysFor({ kind: 'sheet', page: 0, pages: 1, lead: [] })).map(([key]) => key)).toEqual(['i'])
     expect(footerPairs(keysFor({ kind: 'sheet', page: 1, pages: 3, lead: [] }))).toEqual([
       ['i', 'close keys'],
@@ -171,16 +174,46 @@ describe('model', () => {
     ])
   })
 
+  test('a text field, which takes i, shows the key sheet as its chord; everywhere else the chord is answered unshown', () => {
+    const open = note('n', CC, 1)
+    const fields: Focus[] = [
+      { kind: 'search', hasResults: true, hasQuery: false },
+      { kind: 'search', hasResults: false, hasQuery: true },
+      { kind: 'empty' },
+      { kind: 'capture' },
+      { kind: 'edit' },
+    ]
+    for (const focus of fields) {
+      const pairs = footerPairs(keysFor(focus))
+      expect(pairs.at(-1)).toEqual([CHORD.keys.keys, 'keys'])
+      expect(pairs.some(([key]) => key === 'i')).toBe(false)
+    }
+    const rows: Focus[] = [
+      { kind: 'line', line: { kind: 'note', key: open.id, note: open, group: CC.key, hits: [] }, picks: 0 },
+      { kind: 'line', line: { kind: 'group', key: 'group:x', group: 'x', project: CC, isFolded: false, count: 0 }, picks: 0 },
+      { kind: 'line', line: { kind: 'problem', key: 'problem', count: 1 }, picks: 0 },
+      { kind: 'sheet', page: 0, pages: 1, lead: [] },
+      { kind: 'bundle' },
+      { kind: 'move' },
+    ]
+    for (const focus of rows) {
+      const chorded = uniqueKeys(keysFor(focus)).find(key => key.chord === CHORD.keys.action)
+      expect(chorded?.action).toBe('keys')
+      expect(chorded?.shown).toBeUndefined()
+    }
+    expect(TEXT.keySheet.map(([key]) => key)).toEqual(expect.arrayContaining([CHORD.keys.keys, 'ctrl+x tab']))
+  })
+
   test("the key sheet leads with a row's own keys, in its footer's order", () => {
     const open = note('n', CC, 1)
     const row: Focus = { kind: 'line', line: { kind: 'note', key: open.id, note: open, group: CC.key, hits: [] }, picks: 0 }
     const picked: Focus = { kind: 'line', line: { kind: 'note', key: open.id, note: open, group: CC.key, hits: [] }, picks: 2 }
     const group: Focus = { kind: 'line', line: { kind: 'group', key: 'group:x', group: 'x', project: CC, isFolded: false, count: 0 }, picks: 0 }
-    expect(ownKeys(keysFor(row))).toEqual(['t', 's', 'e', 'd', 'v'])
+    expect(ownKeys(keysFor(row))).toEqual(['t', 's', 'e', 'd', 'm', 'y', 'v'])
     expect(ownKeys(keysFor(picked))).toEqual(['b', 'v', 'x', 't'])
     expect(ownKeys(keysFor(group))).toEqual([])
     const sheet = sheetLines(TEXT.keySheet, ownKeys(keysFor(row)))
-    expect(sheet.slice(0, 6).map(([key]) => key)).toEqual(['⏎ / t', 's', 'e', 'd / u', 'v / x', '↑ ↓ j k'])
+    expect(sheet.slice(0, 8).map(([key]) => key)).toEqual(['⏎ / t', 's', 'e', 'd / u', 'm', 'y', 'v / x', '↑ ↓ j k'])
     expect(sheet).toHaveLength(TEXT.keySheet.length)
     expect(new Set(sheet).size).toBe(TEXT.keySheet.length)
     expect(sheetLines(TEXT.keySheet, [])).toEqual(TEXT.keySheet)
@@ -270,6 +303,37 @@ describe('model', () => {
       ['i', 'keys'],
     ]
     expect(fitOneLine(pairs, '', 30).map(([key]) => key)).toEqual(['v', 't', 'i'])
+    // In a text field the pair is the chord's, kept the same way.
+    const field: [string, string][] = [
+      ['ctrl+s', 'scope'],
+      ['ctrl+n', 'new'],
+      ['ctrl+q', 'close'],
+      ['ctrl+x i', 'keys'],
+    ]
+    expect(fitOneLine(field, '', 40).map(([key]) => key)).toEqual(['ctrl+s', 'ctrl+n', 'ctrl+x i'])
+  })
+
+  test('the footer fits as many pairs as the width allows, the legend before all but the first four', () => {
+    const open = note('n', CC, 1)
+    const row: Focus = { kind: 'line', line: { kind: 'note', key: open.id, note: open, group: CC.key, hits: [] }, picks: 0 }
+    const pairs = footerPairs(keysFor(row))
+    const legend: [string, string] = [TEXT.legend, '']
+    const shown = (width: number, withLegend?: [string, string]) => fitFooter(pairs, withLegend, '', width, WIDTH.footerPairs).map(([key]) => key)
+    // `t to prompt  s send  e edit  d archive  i keys` is 46 cells, and each pair after it 8 more.
+    expect(shown(46)).toEqual(['t', 's', 'e', 'd', 'i'])
+    expect(shown(45)).toEqual(['t', 's', 'e', 'i'])
+    expect(shown(62)).toEqual(['t', 's', 'e', 'd', 'm', 'y', 'i'])
+    expect(shown(100)).toEqual(['t', 's', 'e', 'd', 'm', 'y', 'v', 'z', 'h', 'i'])
+    // Wider never shows fewer, and every width keeps the line whole.
+    for (let width = 10; width <= 120; width += 1) {
+      const fitted = fitFooter(pairs, legend, '2 picked', width, WIDTH.footerPairs)
+      expect(footerRows(fitted, '2 picked', width) === 1 || fitted.length === 1).toBe(true)
+      expect(fitted.length).toBeGreaterThanOrEqual(fitFooter(pairs, legend, '2 picked', width - 1, WIDTH.footerPairs).length)
+    }
+    // The legend goes after the first four, before the rest, and is drawn last but for `i keys`.
+    expect(shown(61, legend)).toEqual(['t', 's', 'e', 'd', TEXT.legend, 'i'])
+    expect(shown(77, legend)).toEqual(['t', 's', 'e', 'd', 'm', 'y', TEXT.legend, 'i'])
+    expect(shown(60, legend)).toEqual(['t', 's', 'e', 'd', 'i'])
   })
 
   test('dispatch names other projects, and edit fields round-trip newlines', () => {

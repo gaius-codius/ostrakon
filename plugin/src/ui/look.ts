@@ -71,7 +71,7 @@ export const WIDTH = {
   // The empty pane's shard column, and the key column beside it.
   shard: 13,
   wayKey: 10,
-  // Footer pairs beside `i keys` (SPEC §4.6).
+  // Footer pairs kept ahead of the legend; more show when the width allows (SPEC §4.6).
   footerPairs: 4,
   savedDocked: 3,
   savedInline: 1,
@@ -123,6 +123,8 @@ export const TEXT = {
     ['esc', 'back (to search, then close)'],
     ['q / ctrl+q', 'close'],
     ['ctrl+x s', 'open / close'],
+    ['ctrl+x i', 'keys, from a text field too'],
+    ['ctrl+x tab', 'focus the pane from the prompt'],
     ['//', 'jot from the prompt'],
   ] as [string, string][],
   keepAll: 'keep all',
@@ -179,6 +181,9 @@ export const CHORD = {
   // Not the engine's pane:close: that close looks like Esc's to the mod, which makes Esc "back".
   close: { action: 'pane:previous', keys: 'ctrl+q' },
   new: { action: 'pane:next', keys: 'ctrl+n' },
+  // `i` is typed into a text field, so the key sheet has a chord too. Not app:redraw: the engine's
+  // own handler for it is always on and takes the key before the pane's Button.
+  keys: { action: 'app:toggleReplTab', keys: 'ctrl+x i' },
 } as const
 
 // How the person's theme draws: `dark` and `light` take the palette's hex, `ansi` its theme keys.

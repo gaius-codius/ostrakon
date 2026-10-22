@@ -345,14 +345,15 @@ test('the key sheet pages to fit the inline body, j and k turning the pages roun
   const ui = await $.ui.mount({ plugin: 'ostrakon', surface: 'terminal', ...PANE, props })
   await ui.input({ key: 'q', text: '', kind: 'submit' })
   await ui.press({ key: 'key-i' })
-  // 11 rows less the search row, the footer and the frame: 7 a page, so 19 keys take 3.
-  expect(await ui.find({ type: 'Text', text: /^jump to a row$/ })).toBeDefined()
+  // 11 rows less the search row, the footer and the frame: 7 a page, so 19 keys take 3. Opened on
+  // a row, its own seven keys (copy the last but one) are the first page.
+  expect(await ui.find({ type: 'Text', text: /^copy$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ close keys$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ more 1\/3$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^copy$/ })).toBeUndefined()
-  await ui.press({ key: 'key-j' })
-  expect(await ui.find({ type: 'Text', text: /^copy$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^jump to a row$/ })).toBeUndefined()
+  await ui.press({ key: 'key-j' })
+  expect(await ui.find({ type: 'Text', text: /^jump to a row$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^copy$/ })).toBeUndefined()
   await ui.press({ key: 'key-k' })
   await ui.press({ key: 'key-k' })
   expect(await ui.find({ type: 'Text', text: /^ more 3\/3$/ })).toBeDefined()
@@ -368,6 +369,14 @@ test('the key sheet pages to fit the inline body, j and k turning the pages roun
 
 // An element as the tests read the drawn tree.
 type Drawn = { type: string; props?: Record<string, unknown>; children?: unknown[] }
+// A drawn element's text, nested Texts and all; a Button draws its label.
+const textOf = (node: unknown): string => {
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (typeof node !== 'object' || node === null) return ''
+  const { type, props = {}, children = [] } = node as Drawn
+  if (type === 'Button') return String(props.label ?? '')
+  return children.map(textOf).join('')
+}
 
 // Rows a drawn element takes, for the column layouts the pane's states draw: a Text is a row, a
 // Box its fixed height, or its rows (summed down a column, the tallest across a row) and padding.
@@ -382,7 +391,7 @@ const rowsOf = (node: unknown): number => {
   const pad = 2 * Number(props.paddingY ?? 0) + (props.borderStyle !== undefined ? 2 : 0)
   return Math.max(content + pad, Number(props.minHeight ?? 0))
 }
-// The footer's row in the pane: what's above it, with the rows a minHeight leaves to a flexGrow.
+// The footer's row in the pane: the rows of what's above it.
 const footerRow = async (ui: Awaited<ReturnType<typeof mountPane>>) => {
   const [root] = await ui.findAll({ type: 'Box' })
   const children = (root?.children ?? []) as Drawn[]
@@ -393,10 +402,7 @@ const footerRow = async (ui: Awaited<ReturnType<typeof mountPane>>) => {
     .slice(0, at)
     .map(rowsOf)
     .reduce((sum, rows) => sum + rows, 0)
-  const total = children.map(rowsOf).reduce((sum, rows) => sum + rows, 0)
-  const grows = children.slice(0, at).some(child => Number(child.props?.flexGrow ?? 0) > 0)
-  const spare = grows ? Math.max(0, Number(root?.props.minHeight ?? 0) - total) : 0
-  return above + spare + rowsOf(children[at]) - 1
+  return above + rowsOf(children[at]) - 1
 }
 
 test("docked, the footer keeps the body's last row with notes and with no match", async ($, on) => {
@@ -426,6 +432,125 @@ test("docked, the empty pane's footer keeps the body's last row too", async ($, 
   await ui.unmount()
 })
 
+// Redraws the pane docked at `bodyRows` by `bodyColumns`.
+const dockAt = async (ui: Awaited<ReturnType<typeof mountPane>>, bodyRows: number, bodyColumns: number = PANE.props.bodyColumns) => {
+  const props = { ...PANE.props, bodyColumns, scroll: { offset: 0, bodyRows } }
+  await ui.redraw(props)
+  await ui.redraw(props)
+}
+// Rows what sits between the search row and the footer would take past the room it's cut to.
+const spill = async (ui: Awaited<ReturnType<typeof mountPane>>) => {
+  const [root] = await ui.findAll({ type: 'Box' })
+  const middle = ((root?.children ?? []) as Drawn[]).find(child => child.props?.overflow === 'hidden')
+  return rowsOf(middle?.children?.[0]) - Number(middle?.props?.height ?? 0)
+}
+
+test('docked, the footer fits as many key pairs as the width allows, none cut', async ($, on) => {
+  await startSession($, on, fixture())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  const shown = async (bodyColumns: number) => {
+    await dockAt(ui, 37, bodyColumns)
+    const labels = [' to prompt', ' send', ' edit', ' archive', ' move', ' copy', ' pick', ' fold', ' history']
+    const found = await Promise.all(labels.map(async label => (await ui.find({ type: 'Text', text: label })) !== undefined))
+    return labels.filter((_, i) => found[i]).map(label => label.trim())
+  }
+  // The pane is a column narrower than the body, the line two narrower than the pane.
+  expect(await shown(101)).toEqual(['to prompt', 'send', 'edit', 'archive', 'move', 'copy', 'pick', 'fold', 'history'])
+  expect(await shown(65)).toEqual(['to prompt', 'send', 'edit', 'archive', 'move', 'copy'])
+  expect(await shown(57)).toEqual(['to prompt', 'send', 'edit', 'archive', 'move'])
+  expect(await shown(41)).toEqual(['to prompt', 'send', 'edit'])
+  expect(await ui.find({ type: 'Text', text: ' keys' })).toBeDefined()
+  await ui.unmount()
+})
+
+test("docked at short heights, the footer keeps the body's last row with notes, no match or capture", async ($, on) => {
+  await startSession($, on, fixture())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  const everyHeight = async (check?: (bodyRows: number) => Promise<void>) => {
+    for (let bodyRows = 8; bodyRows <= 17; bodyRows += 1) {
+      await dockAt(ui, bodyRows)
+      expect(await footerRow(ui)).toBe(bodyRows - 1)
+      await check?.(bodyRows)
+    }
+  }
+  // The rows and the no-match block fit the room, so nothing is cut. At 8 rows the no-match block's
+  // bottom padding is.
+  const fits = async (bodyRows: number) => expect(await spill(ui)).toBeLessThanOrEqual(bodyRows > 8 ? 0 : 1)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await everyHeight(fits)
+  await ui.input({ key: 'q', text: Array.from({ length: 40 }, (_, i) => `nomatch${i}`).join(' '), kind: 'change' })
+  await everyHeight(fits)
+  await dockAt(ui, 37)
+  await ui.press({ key: 'key-pane:next' })
+  for (const text of ['first idea', 'second idea', 'third idea']) await ui.input({ key: 'capture', text, kind: 'submit' })
+  await ui.input({ key: 'capture', text: Array.from({ length: 120 }, (_, i) => `word${i}`).join(' '), kind: 'change' })
+  // From 14 rows capture keeps its hint, the newest save and the draft's end, nothing cut.
+  await everyHeight(async bodyRows => {
+    if (bodyRows < 14) return
+    expect(await spill(ui)).toBeLessThanOrEqual(0)
+    expect((await texts(ui)).some(text => /saves to/.test(text))).toBe(true)
+    expect(await ui.find({ type: 'Text', text: /third idea/ })).toBeDefined()
+    expect((await texts(ui)).some(text => /word119$/.test(text))).toBe(true)
+  })
+  await ui.unmount()
+})
+
+test("docked at short heights, editing a note in a long list keeps the draft's end and the footer", async ($, on) => {
+  const dir = new MemDir()
+  for (let i = 10; i < 40; i += 1) put(dir, `01JA7K2M3Q9X4ZB6C8D0EFGH${i}`, `note number ${i}`, CC, i)
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  for (let i = 0; i < 12; i += 1) await ui.press({ key: 'key-j' })
+  await ui.press({ key: 'key-e' })
+  await ui.input({ key: 'edit', text: `${Array.from({ length: 80 }, (_, i) => `word${i}`).join(' ')} TAIL`, kind: 'change' })
+  for (let bodyRows = 15; bodyRows <= 20; bodyRows += 1) {
+    await dockAt(ui, bodyRows)
+    expect(await footerRow(ui)).toBe(bodyRows - 1)
+    expect(await spill(ui)).toBeLessThanOrEqual(0)
+    expect((await texts(ui)).some(text => /TAIL$/.test(text))).toBe(true)
+    // Each of the draft's lines is one row: wrapped to the indented preview's width, none runs past it.
+    const boxes = (await ui.findAll({ type: 'Box' })) as Drawn[]
+    const preview = boxes.find(box => box.props?.paddingLeft === TEXT_COLUMN)
+    const lines = (preview?.children ?? []).map(textOf).filter(text => text.startsWith(GLYPH.quote))
+    expect(lines.length).toBeGreaterThan(1)
+    for (const line of lines) expect(cells(line)).toBeLessThanOrEqual(Number(preview?.props?.width) - TEXT_COLUMN)
+  }
+  await ui.unmount()
+})
+
+test('docked in a very short body, a failed capture save still says why', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.press({ key: 'key-pane:next' })
+  await ui.input({ key: 'capture', text: 'first idea', kind: 'submit' })
+  dir.failWrites = true
+  await ui.input({ key: 'capture', text: 'second idea', kind: 'submit' })
+  for (let bodyRows = 9; bodyRows <= 14; bodyRows += 1) {
+    await dockAt(ui, bodyRows)
+    expect(await spill(ui)).toBeLessThanOrEqual(0)
+    expect((await texts(ui)).some(text => /EROFS/.test(text))).toBe(true)
+  }
+  await ui.unmount()
+})
+
+test("docked at short heights, the empty pane's footer keeps the body's last row", async ($, on) => {
+  await startSession($, on, new MemDir())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  for (let bodyRows = 8; bodyRows <= 17; bodyRows += 1) {
+    await dockAt(ui, bodyRows, 72)
+    expect(await footerRow(ui)).toBe(bodyRows - 1)
+  }
+  await ui.unmount()
+})
+
 test('docked in a body too short for the preview and three rows besides, the preview goes', async ($, on) => {
   const dir = fixture()
   await startSession($, on, dir)
@@ -444,15 +569,6 @@ test('docked in a body too short for the preview and three rows besides, the pre
   expect(await ui.find({ type: 'Text', text: /rename the store helpers/ })).toBeDefined()
   await ui.unmount()
 })
-
-// A drawn element's text, nested Texts and all; a Button draws its label.
-const textOf = (node: unknown): string => {
-  if (typeof node === 'string' || typeof node === 'number') return String(node)
-  if (typeof node !== 'object' || node === null) return ''
-  const { type, props = {}, children = [] } = node as Drawn
-  if (type === 'Button') return String(props.label ?? '')
-  return children.map(textOf).join('')
-}
 
 test("docked, the preview's bar starts in the note text's column, with no blank row added", async ($, on) => {
   const dir = fixture()
@@ -532,8 +648,9 @@ test("opened on a row, the key sheet leads with the row's own keys and the row s
   const ui = await mountPane($)
   await ui.input({ key: 'q', text: '', kind: 'submit' })
   await ui.press({ key: 'key-i' })
-  const keys = (await texts(ui)).map(text => text.trim()).filter(text => ['⏎ / t', 's', 'e', 'd / u', 'v / x', '↑ ↓ j k'].includes(text))
-  expect(keys).toEqual(['⏎ / t', 's', 'e', 'd / u', 'v / x', '↑ ↓ j k'])
+  const lead = ['⏎ / t', 's', 'e', 'd / u', 'm', 'y', 'v / x', '↑ ↓ j k']
+  const keys = (await texts(ui)).map(text => text.trim()).filter(text => lead.includes(text))
+  expect(keys).toEqual(lead)
   expect(await ui.find({ type: 'Text', text: /check why the cache test is flaky/ })).toBeDefined()
   await ui.unmount()
 })
