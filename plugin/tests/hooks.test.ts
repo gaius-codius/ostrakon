@@ -370,7 +370,8 @@ test('the key sheet pages to fit the inline body, j and k turning the pages roun
 type Drawn = { type: string; props?: Record<string, unknown>; children?: unknown[] }
 
 // Rows a drawn element takes, for the column layouts the pane's states draw: a Text is a row, a
-// Box its fixed height, or its rows (summed down a column, the tallest across a row) and padding.
+// Box its fixed height, or its rows (summed down a column, the tallest across a row), padding and
+// border (a quote border is only a bar down the left).
 const rowsOf = (node: unknown): number => {
   if (typeof node !== 'object' || node === null) return 0
   const { type, props = {}, children = [] } = node as Drawn
@@ -379,7 +380,7 @@ const rowsOf = (node: unknown): number => {
   if (typeof props.height === 'number') return props.height
   const inner = children.map(rowsOf)
   const content = props.flexDirection === 'column' ? inner.reduce((sum, rows) => sum + rows, 0) : Math.max(0, ...inner)
-  const pad = 2 * Number(props.paddingY ?? 0) + (props.borderStyle !== undefined ? 2 : 0)
+  const pad = 2 * Number(props.paddingY ?? 0) + (props.borderStyle !== undefined && props.borderStyle !== 'quote' ? 2 : 0)
   return Math.max(content + pad, Number(props.minHeight ?? 0))
 }
 // The footer's row in the pane: the rows of what's above it.
@@ -521,6 +522,42 @@ test('docked in a very short body, a failed capture save still says why', async 
     await dockAt(ui, bodyRows)
     expect(await spill(ui)).toBeLessThanOrEqual(0)
     expect((await texts(ui)).some(text => /EROFS/.test(text))).toBe(true)
+  }
+  await ui.unmount()
+})
+
+test('docked at short heights, the bundle keeps its send button and the note list gives up lines', async ($, on) => {
+  const dir = new MemDir()
+  for (let i = 10; i < 15; i += 1) put(dir, `01JA7K2M3Q9X4ZB6C8D0EFGH${i}`, `note number ${i}`, CC, i)
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  for (let i = 0; i < 5; i += 1) {
+    await ui.press({ key: 'key-v' })
+    await ui.press({ key: 'key-j' })
+  }
+  await ui.press({ key: 'key-b' })
+  expect(await ui.find({ type: 'Text', text: /5 notes into one prompt/ })).toBeDefined()
+  // The header, the intro, the button and the footer take 5 rows; the blanks around the quote and
+  // above the button and the footer 4; the notes the rest, at least the one `… and N more` line.
+  const notes: [bodyRows: number, shown: number][] = [
+    [8, 1],
+    [9, 1],
+    [10, 2],
+    [11, 3],
+    [12, 4],
+    [13, 5],
+  ]
+  for (const [bodyRows, shown] of notes) {
+    await dockAt(ui, bodyRows)
+    expect(await footerRow(ui)).toBe(bodyRows - 1)
+    expect(await spill(ui)).toBeLessThanOrEqual(0)
+    const labels = (await ui.findAll({ type: 'Button' })).map(found => (found.props as { label?: string }).label)
+    expect(labels).toContain('send')
+    const lines = (await texts(ui)).filter(text => /^- note number|^… and \d+ more$/.test(text))
+    expect(lines.length).toBe(shown)
+    if (shown < 5) expect(lines.at(-1)).toBe(`… and ${5 - shown + 1} more`)
   }
   await ui.unmount()
 })

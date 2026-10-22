@@ -475,7 +475,7 @@ const focusOf = (state: PaneState, lines: Line[], problemCount: number): Focus =
   return { kind: 'search', hasResults: lines.some(candidate => candidate.kind === 'note'), hasQuery: state.query.trim() !== '' }
 }
 
-const viewOf = async ($: EngineInterface): Promise<PaneView & { bundleRows: number }> => {
+const viewOf = async ($: EngineInterface): Promise<PaneView> => {
   let state = await read($, pane)
   const all = Object.values(await read($, notes))
   const broken = await read($, problems)
@@ -527,7 +527,7 @@ const viewOf = async ($: EngineInterface): Promise<PaneView & { bundleRows: numb
   const isOnLine = focus.kind === 'line' || (focus.kind === 'sheet' && state.focus === 'line')
   const anchor = state.mode === 'edit' ? (state.edit?.id ?? null) : state.mode === 'move' ? state.moving : isOnLine ? state.cursor : null
   const page = pageOf(lines, state.offset, anchor, capacity)
-  return { ...partial, page, bundleRows: Math.max(1, geometry.bodyRows - 11) }
+  return { ...partial, page }
 }
 
 // ---- actions ----
@@ -1765,6 +1765,6 @@ export const register: Register = (on, options) => {
       editCancel: () => run(serially(() => act($, 'back'))),
       moveTo: value => run(serially(() => moveTo($, value))),
     }
-    return <Pane el={el} view={view} handlers={handlers} hasHub={hubOptions.url !== ''} hasHarvest={harvestOptions.isOn} bundleRows={view.bundleRows} />
+    return <Pane el={el} view={view} handlers={handlers} hasHub={hubOptions.url !== ''} hasHarvest={harvestOptions.isOn} />
   })
 }

@@ -17,6 +17,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ### Fixed
 
+- Docked in a short body (8 to 11 rows), the bundle's `[ send ]` button stays on screen: the note list shows fewer notes, then the blank lines go.
 - Docked in a short body, the footer stays on the pane's last row: the empty pane, a long search with no match and a new note with its saves no longer push it off.
 - The `/jot` hint no longer says Claude won't see the note: Claude does see the command. A `/jot` also stops leaving an empty `ostrakon:` row, and Claude is told the note needs nothing from it, so it doesn't go checking the save.
 - The empty pane shows the harvest line when harvest is on.
