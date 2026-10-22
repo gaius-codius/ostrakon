@@ -46,6 +46,8 @@ export type World = {
   toasts: string[]
   submitted: string[]
   opened: number
+  // Each open's `focus`, in order.
+  openFocus: boolean[]
   closed: number
   focused: string[]
   tools: { name: string; description: string; isDeferred?: unknown; registeredAs: string }[]
@@ -63,7 +65,7 @@ const IN_CC: Where = { repo: { root: '/home/me/Work/cc', remote: 'git@github.com
 
 export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '', where: Where = IN_CC) => {
   const engine = $
-  const world: World = { box: { text: draft }, toasts: [], submitted: [], opened: 0, closed: 0, focused: [], tools: [] }
+  const world: World = { box: { text: draft }, toasts: [], submitted: [], opened: 0, openFocus: [], closed: 0, focused: [], tools: [] }
   const clock = mock.clock(on, { now: Date.parse('2026-10-09T12:00:00.000Z') })
   mock.env(on, { OSTRAKON_DIR: '/data', HOME: '/home/me' })
   mock.store(on)
@@ -104,8 +106,9 @@ export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '', w
     if (world.turnOnSubmit !== undefined) await engine.turn.start({ text: e.text, turnId: world.turnOnSubmit })
     return world.drop !== undefined ? { drop: world.drop } : { text: e.text }
   })
-  on('ui.open', () => {
+  on('ui.open', ($, e) => {
     world.opened += 1
+    world.openFocus.push(e.focus === true)
     return { value: { isPlaced: true } }
   })
   on('ui.close', () => {

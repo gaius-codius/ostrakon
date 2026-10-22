@@ -77,9 +77,10 @@ fi
 keys_py=$(cat <<'EOF'
 import json, os, shutil, sys
 mode, path = sys.argv[1], sys.argv[2]
-pane = {"ctrl+x s": "app:cycleDiffBase", "ctrl+q": "pane:previous", "ctrl+f": "app:toggleDiffNoiseFilter",
-        "ctrl+s": "app:toggleDiffPreSession", "ctrl+n": "pane:next", "ctrl+x i": "app:toggleReplTab"}
-want = {"Chat": {"ctrl+x s": "app:cycleDiffBase"}, "Pane": pane, "PaneField": pane}
+pane = {"ctrl+x s": "app:cycleDiffBase", "ctrl+x tab": "app:openArtifact", "ctrl+q": "pane:previous",
+        "ctrl+f": "app:toggleDiffNoiseFilter", "ctrl+s": "app:toggleDiffPreSession", "ctrl+n": "pane:next",
+        "ctrl+x i": "app:toggleReplTab"}
+want = {"Chat": {"ctrl+x s": "app:cycleDiffBase", "ctrl+x tab": "app:openArtifact"}, "Pane": pane, "PaneField": pane}
 try:
     keys = json.load(open(path)) if os.path.exists(path) else {}
     blocks = keys.setdefault("bindings", [])

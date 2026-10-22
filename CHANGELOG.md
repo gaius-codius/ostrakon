@@ -8,9 +8,12 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ### Added
 
-- `ctrl+x i` opens the key sheet from the search field, a new note or the edit card, where `i` is typed instead; closing the sheet goes back to that field. To get it, run `./install.sh --keys` from the checkout, or add `"ctrl+x i": "app:toggleReplTab"` to the `Pane` and `PaneField` keybindings (README, Keybindings). The sheet also lists `ctrl+x tab`, which focuses the pane from the prompt.
+- `ctrl+x tab` moves the keyboard between the pane and the prompt, and the pane stays open: write in the prompt with your notes beside it, then go back to where you were. A draft the pane was holding goes back into the prompt on the way. To get it, run `./install.sh --keys` from the checkout, or add `"ctrl+x tab": "app:openArtifact"` to the `Chat`, `Pane` and `PaneField` keybindings (README, Keybindings). It takes the place of Claude Code's `ctrl+x tab`, which focuses the band above the prompt; a click still does.
+- `ctrl+x i` opens the key sheet from the search field, a new note or the edit card, where `i` is typed instead; closing the sheet goes back to that field. To get it, run `./install.sh --keys` from the checkout, or add `"ctrl+x i": "app:toggleReplTab"` to the `Pane` and `PaneField` keybindings (README, Keybindings).
 
 ### Changed
+
+- Esc at the top of the pane (an empty search) hands the keyboard to the prompt and leaves the pane open, instead of closing it. `q`, `ctrl+q` and `ctrl+x s` still close it (`ctrl+x s` from the prompt too).
 
 - The pane's footer shows as many keys as its width takes, not four at most: on a note, `m move` and `y copy` come after the note's own four, then `v pick`, `z fold` and `h history`.
 - The band's notes are pulled into the prompt with two keys: type `;` and the note's number (`;2`) in an empty prompt. A lone number no longer does anything, so it answers Claude's numbered questions again. After a turn, `;1` keeps a proposal and `;0` keeps them all. To start a prompt with `;` and a digit, paste it.

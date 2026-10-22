@@ -5,6 +5,7 @@ import type { PromptEditInput, PromptEditResult } from 'claude-code'
 import { serializeNote } from '../src/frontmatter'
 import { MemDir } from './memdir'
 import { MS } from '../src/ui/look'
+import { SWITCH_KEY } from '../src/ui/band'
 import { CC, INFRA, NOTE, noteIn, put, run, startSession } from './world'
 
 const ONE = '01JA7K2M3Q9X4ZB6C8D0EFGH01'
@@ -59,15 +60,17 @@ const mountBand = ($: Engine, props: Partial<{ hasSurvey: boolean; isWorking: bo
 
 type Band = Awaited<ReturnType<typeof mountBand>>
 
+// The band's drawn Buttons: not the hidden one that carries ctrl+x tab (tests/handoff.test.ts).
+const drawn = async (ui: Band) => (await ui.findAll({ type: 'Button' })).filter(found => found.key !== SWITCH_KEY)
+
 const buttons = async (ui: Band) =>
-  (await ui.findAll({ type: 'Button' })).map(found => {
+  (await drawn(ui)).map(found => {
     const props = found.props as { label?: string; hotkey?: string }
     return { key: found.key, label: props.label, hotkey: props.hotkey }
   })
 
 // Which of the band's Buttons draw dim, by key.
-const dims = async (ui: Band) =>
-  Object.fromEntries((await ui.findAll({ type: 'Button' })).map(found => [found.key, (found.props as { dimColor?: boolean }).dimColor === true]))
+const dims = async (ui: Band) => Object.fromEntries((await drawn(ui)).map(found => [found.key, (found.props as { dimColor?: boolean }).dimColor === true]))
 
 const composer = ($: Engine, text: string) => $.prompt.submit({ text, wait: false, origin: { kind: 'composer' } })
 

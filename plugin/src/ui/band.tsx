@@ -17,6 +17,8 @@ export type BandHandlers = {
   // Returns the open: the press waits for it, so the engine counts the pane as the person's
   // (an open after the press settled is "unasked" and isn't placed under 144 columns).
   open: () => Promise<unknown>
+  // ctrl+x tab: the same waiting, for the same reason.
+  switchKeys: () => Promise<unknown>
 }
 
 export type Chip = { n: number; id: string; label: string }
@@ -29,6 +31,7 @@ export type Chips = { chips: Chip[]; more: number }
 export type Drawn = { kind: 'pocket'; chips: Chip[] } | { kind: 'harvest'; chips: Chip[]; ids: string[] } | null
 
 export const OPEN_KEY = 'band-open'
+export const SWITCH_KEY = 'band-switch'
 export const MORE_KEY = 'band-more'
 export const KEEP_ALL_KEY = 'band-keep-all'
 export const chipKey = (n: number) => `band-chip-${n}`
@@ -152,6 +155,17 @@ const Keyed = ({ el, n, id, label, isDim, onPress }: { el: E; n: number; id: str
         {bandKey(n)}
       </Text>
       <Button key={id} plain dimColor={isDim} label={label} onPress={onPress} />
+    </Box>
+  )
+}
+
+// ctrl+x tab, while the pane is closed or the pane's own key isn't mounted yet: the borrowed action
+// never reaches the engine's handler (which would open an artifact). Hidden, so it's no stop.
+export const SwitchKey = ({ el, handlers }: { el: E; handlers: BandHandlers }) => {
+  const { Box, Button } = el
+  return (
+    <Box display='none'>
+      <Button key={SWITCH_KEY} plain action={CHORD.switch.action} label='switch' onPress={() => handlers.switchKeys()} />
     </Box>
   )
 }

@@ -125,26 +125,28 @@ A mod can't add keyboard shortcuts of its own, so ostrakon borrows some existing
 ```json
 {
   "bindings": [
-    { "context": "Chat", "bindings": { "ctrl+x s": "app:cycleDiffBase" } },
+    { "context": "Chat", "bindings": { "ctrl+x s": "app:cycleDiffBase", "ctrl+x tab": "app:openArtifact" } },
     {
       "context": "Pane",
       "bindings": {
-        "ctrl+x s": "app:cycleDiffBase", "ctrl+q": "pane:previous", "ctrl+f": "app:toggleDiffNoiseFilter",
-        "ctrl+s": "app:toggleDiffPreSession", "ctrl+n": "pane:next", "ctrl+x i": "app:toggleReplTab"
+        "ctrl+x s": "app:cycleDiffBase", "ctrl+x tab": "app:openArtifact", "ctrl+q": "pane:previous",
+        "ctrl+f": "app:toggleDiffNoiseFilter", "ctrl+s": "app:toggleDiffPreSession", "ctrl+n": "pane:next",
+        "ctrl+x i": "app:toggleReplTab"
       }
     },
     {
       "context": "PaneField",
       "bindings": {
-        "ctrl+x s": "app:cycleDiffBase", "ctrl+q": "pane:previous", "ctrl+f": "app:toggleDiffNoiseFilter",
-        "ctrl+s": "app:toggleDiffPreSession", "ctrl+n": "pane:next", "ctrl+x i": "app:toggleReplTab"
+        "ctrl+x s": "app:cycleDiffBase", "ctrl+x tab": "app:openArtifact", "ctrl+q": "pane:previous",
+        "ctrl+f": "app:toggleDiffNoiseFilter", "ctrl+s": "app:toggleDiffPreSession", "ctrl+n": "pane:next",
+        "ctrl+x i": "app:toggleReplTab"
       }
     }
   ]
 }
 ```
 
-`ctrl+x s` opens and closes the pane; the other keys work inside it. `/jot` and `//` need no setup. The full key list is in [`docs/SPEC.md`](docs/SPEC.md) §4.
+`ctrl+x s` opens and closes the pane, and `ctrl+x tab` moves the keyboard between the pane and the prompt, leaving the pane open (it takes the place of Claude Code's `ctrl+x tab`, which focuses the band above the prompt; a click still does). The other keys work inside the pane. `/jot` and `//` need no setup. The full key list is in [`docs/SPEC.md`](docs/SPEC.md) §4.
 
 ## Configuration
 
