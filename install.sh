@@ -132,7 +132,7 @@ elif python3 -I -c "$keys_py" check "$KEYS_FILE"; then
     answer=y
   elif { : </dev/tty; } 2>/dev/null; then
     # From /dev/tty, so the question still works when get.sh is piped into bash.
-    read -r -p "add ostrakon's keybindings (ctrl+x s opens the pane) to $KEYS_FILE? [Y/n] " answer </dev/tty || answer=n
+    read -r -p "add ostrakon's keybindings (ctrl+x s opens the pane, ctrl+x tab moves the keys to it and back) to $KEYS_FILE? [Y/n] " answer </dev/tty || answer=n
     answer=${answer:-y}
   fi
   case $answer in

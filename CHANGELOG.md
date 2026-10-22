@@ -14,7 +14,6 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 ### Changed
 
 - Esc at the top of the pane (an empty search) hands the keyboard to the prompt and leaves the pane open, instead of closing it. `q`, `ctrl+q` and `ctrl+x s` still close it (`ctrl+x s` from the prompt too).
-
 - The pane's footer shows as many keys as its width takes, not four at most: on a note, `m move` and `y copy` come after the note's own four, then `v pick`, `z fold` and `h history`.
 - The band's notes are pulled into the prompt with two keys: type `;` and the note's number (`;2`) in an empty prompt. A lone number no longer does anything, so it answers Claude's numbered questions again. After a turn, `;1` keeps a proposal and `;0` keeps them all. To start a prompt with `;` and a digit, paste it.
 

@@ -109,3 +109,62 @@ test('the key sheet goes when the keys go: back, the pane shows the field it was
   expect(await ui.find({ type: 'Input', key: 'q' })).toBeDefined()
   await ui.unmount()
 })
+
+test('refused the keys (a dialog, a survey), ctrl+x tab from the prompt gives the draft straight back', async ($, on) => {
+  const { world, ui } = await opened($, on, 'my draft')
+  await ui.press({ key: 'key-switch' })
+  await ui.redraw({ ...PANE.props, isFocused: false })
+  expect(world.box.text).toBe('my draft')
+  world.refuseFocus = true
+  await ui.press({ key: 'key-switch' })
+  expect(world.box.text).toBe('my draft')
+  await ui.unmount()
+})
+
+test('a hook that refuses the close keeps the pane with the keys, and the draft held', async ($, on) => {
+  const { world, ui } = await opened($, on, 'my draft')
+  world.refuseClose = 'not now'
+  await ui.press({ key: 'key-switch' })
+  expect(world.openFocus).toEqual([true])
+  expect(world.box.text).toBe('')
+  world.refuseClose = undefined
+  await ui.press({ key: 'key-pane:previous' })
+  expect(world.box.text).toBe('my draft')
+  await ui.unmount()
+})
+
+test("the switch decides by the engine's record, not the last drawing: no redraw needed between presses", async ($, on) => {
+  const { world, ui } = await opened($, on, 'my draft')
+  await ui.press({ key: 'key-switch' })
+  await ui.press({ key: 'key-switch' })
+  expect(world.openFocus).toEqual([true, false, true])
+  expect(world.box.text).toBe('')
+  await ui.unmount()
+})
+
+test('under a survey the band draws none of its own, but still carries ctrl+x tab', async ($, on) => {
+  const { world } = await startSession($, on, fixture())
+  const band = await $.ui.mount({ plugin: 'ostrakon', surface: 'terminal', ...BAND, props: { ...BAND.props, hasSurvey: true } })
+  await band.press({ key: 'band-switch' })
+  expect(world.openFocus).toEqual([true])
+  await band.unmount()
+})
+
+test('a selected note archived while the prompt had the keys: back, the row that took its place is selected', async ($, on) => {
+  const dir = fixture()
+  const { world, clock } = await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  // Enter in search selects the first result, the newest note.
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-switch' })
+  await ui.redraw({ ...PANE.props, isFocused: false })
+  const archived = '/data/notes/01JA7K2M3Q9X4ZB6C8D0EFGH01.md'
+  dir.put(archived, dir.get(archived)?.replace('status: open', 'status: archived') ?? '')
+  await clock.advance(2000)
+  await ui.press({ key: 'key-switch' })
+  await ui.redraw({ ...PANE.props, isFocused: true })
+  await ui.press({ key: 'key-t' })
+  expect(world.box.text).toBe('rename the store helpers')
+  await ui.unmount()
+})
