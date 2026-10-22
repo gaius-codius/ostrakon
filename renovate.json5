@@ -1,0 +1,40 @@
+// Version updates: weekly, one grouped PR per kind, Actions pinned to a commit
+// SHA with the version in a comment. Replaces Dependabot, which can't read
+// mise.toml.
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: ['config:recommended', 'helpers:pinGitHubActionDigests', 'schedule:weekly'],
+  // Each manager below gets one grouped PR, so config:recommended's per-monorepo
+  // groups (playwright's, for one) would only split PRs off them.
+  ignorePresets: ['group:monorepos'],
+  timezone: 'Etc/UTC',
+  packageRules: [
+    {
+      description: 'GitHub Actions: one PR, pinned to a commit SHA with the version in a comment',
+      matchManagers: ['github-actions'],
+      groupName: 'GitHub Actions',
+    },
+    {
+      // CI installs these exact versions (mise.toml), so a bump is a lint change.
+      description: 'mise tools: one PR, majors included',
+      matchManagers: ['mise'],
+      groupName: 'mise tools',
+      separateMajorMinor: false,
+    },
+    {
+      // Biome tags its releases @biomejs/biome@X.Y.Z; without this Renovate
+      // finds the tags but proposes no update.
+      description: 'Biome: read the version out of its tags',
+      matchManagers: ['mise'],
+      matchDepNames: ['biome'],
+      extractVersion: '^@biomejs/biome@(?<version>.+)$',
+    },
+    {
+      // Dev-only: the hub's type-check and the phone tests (server/, tools/phone/).
+      description: 'Bun packages: one PR for minor and patch updates',
+      matchManagers: ['bun'],
+      matchUpdateTypes: ['minor', 'patch'],
+      groupName: 'Bun packages',
+    },
+  ],
+}
