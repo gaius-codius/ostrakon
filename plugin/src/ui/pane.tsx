@@ -624,11 +624,20 @@ const Capture = ({ el, view }: { el: E; view: PaneView }) => {
   )
 }
 
+// The bundle's rows: its header, the intro and the button, and blanks after the header, after the
+// intro and (docked) before the button. In a short body the note list gives up lines first, down
+// to one (`… and N more`), then the blanks go, the button's first, so the button stays on screen.
+const bundleFit = (rows: number, count: number, isInline: boolean) => {
+  const gaps = isInline ? 2 : 3
+  const kept = Math.max(0, Math.min(gaps, rows - 3 - 1))
+  return { room: Math.max(1, Math.min(count, rows - 3 - kept)), hasHeaderGap: kept >= 2, hasIntroGap: kept >= 1, hasSendGap: kept >= 3 }
+}
+
 const Bundle = ({ el, view, handlers, rows }: { el: E; view: PaneView; handlers: Handlers; rows: number }) => {
   const { Box, Text, Button } = el
   const others = view.bundle.filter(note => note.project !== null && note.project.key !== view.ctx.current.key)
   const fromOthers = [...new Set(others.map(note => labelOf(view.ctx, note.project)))]
-  const room = Math.max(1, rows)
+  const { room, hasHeaderGap, hasIntroGap, hasSendGap } = bundleFit(rows, view.bundle.length, view.isInline)
   const lines = view.bundle.map(
     note => `- ${note.project !== null && note.project.key !== view.ctx.current.key ? `[${labelOf(view.ctx, note.project)}] ` : ''}${oneLine(note.text)}`,
   )
@@ -649,15 +658,15 @@ const Bundle = ({ el, view, handlers, rows }: { el: E; view: PaneView; handlers:
           </Text>
         )}
       </Box>
-      <Box height={1} />
+      {hasHeaderGap && <Box height={1} />}
       <Box borderStyle='quote' borderColor={COLOUR.history} flexDirection='column' width={view.width}>
         <Text>{TEXT.bundleIntro}</Text>
-        <Text> </Text>
+        {hasIntroGap && <Text> </Text>}
         {shown.map(line => (
           <Text>{cut(line, view.width - 2)}</Text>
         ))}
       </Box>
-      {!view.isInline && <Box height={1} />}
+      {hasSendGap && <Box height={1} />}
       <Box gap={2}>
         <Button key={SEND_KEY} variant='primary' label='send' onPress={() => handlers.action('send')} />
       </Box>
@@ -748,27 +757,21 @@ export const chromeRows = (view: Omit<PaneView, 'page'>) => {
   return header + preview + footer + edit + move
 }
 
-export const Pane = ({
-  el,
-  view,
-  handlers,
-  hasHub,
-  hasHarvest,
-  bundleRows,
-}: {
-  el: E
-  view: PaneView
-  handlers: Handlers
-  hasHub: boolean
-  hasHarvest: boolean
-  bundleRows: number
-}) => {
+export const Pane = ({ el, view, handlers, hasHub, hasHarvest }: { el: E; view: PaneView; handlers: Handlers; hasHub: boolean; hasHarvest: boolean }) => {
   const { Box } = el
   const { pane } = view
+  // Docked, and inline with the key sheet up, the pane takes the whole body and the footer its last
+  // row, whether the list is full, short, has no match or is empty. What sits between is cut at the
+  // rows left there: in a short body the empty block, a long query, capture's saves or the rows
+  // under the sheet run taller than the room, and pushed the footer off the body. Inline otherwise,
+  // the pane is only as tall as what it shows.
+  const isSheet = pane.mode === 'sheet'
+  const isFilled = isSheet || !view.isInline
+  const middleRows = Math.max(0, view.bodyRows - topRows(pane.mode, view.isInline) - (view.isInline ? FOOTER_ROWS : 1 + FOOTER_ROWS))
   const hasNotes = view.lines.some(line => line.kind !== 'group')
   const body = () => {
     if (pane.mode === 'capture') return <Capture el={el} view={view} />
-    if (pane.mode === 'bundle') return <Bundle el={el} view={view} handlers={handlers} rows={bundleRows} />
+    if (pane.mode === 'bundle') return <Bundle el={el} view={view} handlers={handlers} rows={middleRows} />
     // A storage problem's row stays above the no-match line.
     if (isNoMatch(view)) return [view.lines.length > 0 && <Rows el={el} view={view} handlers={handlers} />, <NoMatch el={el} view={view} />]
     if (view.lines.length === 0 && pane.query.trim() === '') return <Empty el={el} view={view} hasHub={hasHub} hasHarvest={hasHarvest} />
@@ -780,14 +783,6 @@ export const Pane = ({
     pane.mode === 'move' && <Move el={el} view={view} handlers={handlers} />,
     showPreview && (view.preview ? <Preview el={el} view={view} note={view.preview} /> : <Box height={previewRows(view)} />),
   ]
-  // Docked, and inline with the key sheet up, the pane takes the whole body and the footer its last
-  // row, whether the list is full, short, has no match or is empty. What sits between is cut at the
-  // rows left there: in a short body the empty block, a long query, capture's saves or the rows
-  // under the sheet run taller than the room, and pushed the footer off the body. Inline otherwise,
-  // the pane is only as tall as what it shows.
-  const isSheet = pane.mode === 'sheet'
-  const isFilled = isSheet || !view.isInline
-  const middleRows = Math.max(0, view.bodyRows - topRows(pane.mode, view.isInline) - (view.isInline ? FOOTER_ROWS : 1 + FOOTER_ROWS))
   return (
     <Box flexDirection='column' width={view.width} height={isFilled ? view.bodyRows : undefined}>
       {pane.mode === 'bundle' ? null : pane.mode === 'capture' ? (
