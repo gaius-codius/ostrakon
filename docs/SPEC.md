@@ -64,7 +64,8 @@ Claude Code's mods interface has rules and limits that aren't obvious from its A
 - **Inputs swallow keys:** while an Input has focus every printable key goes to it, so letter hotkeys only work when a Button has focus. The UI therefore always shows which mode you're in and which keys work now.
 - **Hotkeys:** a Button `hotkey` is a single lowercase letter or digit and only works while the pane or band holds focus. Tab/Shift+Tab and Up/Down move between controls natively.
 - **Esc:** with `closeOnEscape: true`, Esc raises `ui.close` with origin `person`, the same as the close mark, `ctrl+x x` and the engine's `pane:close`. A `ui.close` hook may refuse it by answering without `next`. The keys still go to the prompt, though, so take them back with `$.ui.open({ id, focus: true })` a moment later. That is how Esc can mean "back" instead of "close".
-- **Ctrl chords:** mods can't define global shortcuts. A Button's `action` prop names an *existing* keybinding action, and the person's chord for it presses the button while it's mounted. Ostrakon borrows actions with no default key (table in §4.5). Contexts: `Pane` (a pane control has focus), `PaneField` (a pane Input or Select has focus), `Chat` (the main prompt).
+- **Ctrl chords:** mods can't define global shortcuts. A Button's `action` prop names an *existing* keybinding action, and the person's chord for it presses the button while it's mounted. Ostrakon borrows actions with no default key (table in §4.5). Contexts: `Pane` (a pane control has focus), `PaneField` (a pane Input or Select has focus), `Chat` (the main prompt). An action the engine is handling at the time never reaches the Button: `app:toggleTerminal`, `app:toggleBrief` and `pane:top` don't, the diff view's actions (the view is closed), `pane:previous` and `pane:next` (with one pane open) and `app:openArtifact` do. A pane's Button gets the person's chord from the prompt too.
+- **Giving the keys back:** a mod has no call that gives the prompt the keyboard. Esc does (with `closeOnEscape` it raises the close, which a hook may refuse), and so does closing the pane. So to hand the keys over and keep the pane, close it and open it again without `focus`, inside the press: the press must wait for the open (return its promise) or the reopen counts as unasked and isn't placed under 110 columns.
 - A bare `ctrl+x` can't be bound (it prefixes every engine chord), and `ctrl+x x` only closes a pane that holds the keyboard.
 
 ### 2.3 Drawing
@@ -160,16 +161,18 @@ ctrl+s scope  ctrl+n new  ctrl+q close                ctrl+x i keys  ← footer
 - **In the pane:** `n` on a row or `ctrl+n` turns the search row into the capture row (`✎ new note`, the text, the target project at the right). Enter saves and stays in capture; Enter on an empty line returns to search; `ctrl+s` cycles the target project. The draft shows underneath, wrapped (its end, when it's longer than the room). A failed save keeps the text and shows `Couldn't save: <reason>`.
 - **From the prompt:** a prompt that becomes exactly `//` is rewritten to `/jot ` (cursor at the end). `/jot` runs at once even mid-turn. `/jot` is painted in the accent and bold, the note after it italic. `/jot text` saves to this project; `/jot` alone opens the pane on search, where Enter on a query that matches nothing saves it as a note and `ctrl+n` turns to capture. To send a literal `//` prompt, start with a space or paste it: only one typed `/` after a lone `/` triggers the rewrite.
 - **Hint line:** the dim line under the prompt gets a tail after ` · `. While the draft leads with `/jot `: `✎ ⏎ saves to cc`. A `/jot` draws no output row, but Claude still reads the command in its transcript, so the mod adds one line for Claude only: the note is the person's, saved, and needs nothing from it. For a few seconds after a save from the prompt ([DESIGN.md §7](DESIGN.md#7-motion)) (or a search with no match, saved from the pane): `✓ saved to cc`, in place of a toast. A failed save still says `Couldn't save: <reason>`.
-- **Draft stash.** Every open that asks for focus (`ctrl+x s`, `/jot`) first reads the prompt. If it holds a draft, the draft is kept in `$.state` as the *stash*, the prompt is emptied, and the pane opens focused. Exactly one exit then decides what the prompt holds, and clears the stash:
+- **Draft stash.** Every open that asks for focus (`ctrl+x s`, `/jot`, `ctrl+x tab` on a closed pane) first reads the prompt. If it holds a draft, the draft is kept in `$.state` as the *stash*, the prompt is emptied, and the pane opens focused. Each time the pane gives up the keys, the exit decides what the prompt holds and clears the stash; `ctrl+x tab` back into the pane holds it again:
 
 | Exit | Prompt afterwards |
 |---|---|
 | `t`, or `t` in the bundle | the non-empty parts of: stash, whatever was typed into the prompt meanwhile, the note text, joined by blank lines; the pane closes |
 | `s`, or ⏎ in the bundle | the note is submitted; on close the stash goes back. A failed or dropped submit leaves the note `open`, toasts `Not sent: <reason>`, and keeps the pane and stash |
-| close (`q`, `ctrl+q`, `ctrl+x s`, Esc at the top) | the stash goes back |
+| close (`q`, `ctrl+q`, `ctrl+x s`) | the stash goes back |
+| keys to the prompt (`ctrl+x tab`, Esc at the top): the pane stays open | the stash goes back; `ctrl+x tab` from the prompt holds what's there again, after anything still held, and takes the keys back (refused them, it gives it straight back) |
 | open refused or not placed | the stash goes straight back |
 
   The `ui.close` hook puts the stash back as the whole prompt only if the prompt is still empty. Otherwise it adds the stash after a blank line, so nothing is overwritten.
+  So the stash is held only while the pane has the keys: when they go to the prompt, the draft is there too. A click into the prompt is the exception (the mod isn't told), and leaves it held until the next exit. `t` closes the pane rather than leaving it open: the prompt is where the work goes next, and an inline pane would keep its rows above it.
 - The capture draft and the edit draft live in `$.state` and are restored when the pane reopens.
 
 ### 4.5 Keys and actions
@@ -196,11 +199,13 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 | `n` / `ctrl+n` | new note |
 | `ctrl+s` | scope (search, list) or target project (capture) |
 | `i` / `ctrl+x i` | key sheet on/off (`ctrl+x i` also from a text field, which takes `i`; the sheet then has the keys, and gives them back to that field when it closes): a framed list of every key (unframed when the body is too short for a line inside the frame) (storage problems first; opened on a row, that row's own keys next, in its footer's order) between the search row and the footer; while it is up the pane takes the whole body and the footer its last row. It is at most 46 columns and never wider than the pane. When it's longer than the rows between, it pages: the footer shows `j more 2/3`, `j` turns to the next page and `k` back, both going round |
-| Esc | **back** one step: edit → the row (draft kept), move / bundle → the list, key sheet → the text field it was opened from, else the list, capture → search, a row → the search field, a query → empty; at the top it closes |
-| `q` / `ctrl+q` / `ctrl+x s` | close the pane from anywhere; drafts are kept |
+| Esc | **back** one step: edit → the row (draft kept), move / bundle → the list, key sheet → the text field it was opened from, else the list, capture → search, a row → the search field, a query → empty; at the top the keys go to the prompt and the pane stays open (Esc again, at an idle empty prompt, closes it). The close mark and `ctrl+x x` do the same as Esc (the mod can't tell them apart); the close mark closes a pane that isn't holding the keys |
+| `ctrl+x tab` | the keys go to the prompt and the pane stays open, keeping its search, selection and drafts (an open key sheet or move picker closes); from the prompt, back to the pane where it was. On a closed pane it opens it. It replaces the engine's `ctrl+x tab` (focus the band); a click still focuses the band |
+| `q` / `ctrl+q` / `ctrl+x s` | close the pane from anywhere; drafts are kept. `ctrl+x s` closes it from the prompt too |
 
 **Borrowed chords** (the person binds them in their keybindings; the table lives in `look.ts`):
 - `ctrl+x s` → `app:cycleDiffBase`
+- `ctrl+x tab` → `app:openArtifact` (in `Chat`, `Pane` and `PaneField`; the band carries it too, so with the pane closed it never reaches the engine, which would open an artifact)
 - `ctrl+f` → `app:toggleDiffNoiseFilter`
 - `ctrl+s` → `app:toggleDiffPreSession`
 - `ctrl+q` → `pane:previous` (not the engine's `pane:close`, which the mod reads as Esc)
@@ -210,7 +215,7 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 ### 4.6 Contextual footer
 One blank row, then one line: as many key/label pairs for the focus as the width takes (key bold, label dim, two spaces between) and `i keys` on the right (`ctrl+x i keys` while a text field has focus); the last pairs drop until the line fits. On a row with nothing picked, the note's own actions lead (`t to prompt  s send  e edit  d archive`), then `m move` and `y copy`, then `v pick`, `z fold` and `h history`. A status leads in bold: `3 picked`, `2 unreadable files` (error), `hub offline · 3 queued` (warning); a status takes at most half the line (24 columns when half is less) and is cut with `…`, its `· 3 queued` kept, leaving room for `i keys`. The legend `◆ from Claude` trails while a `◆` row is drawn; it drops after any pairs past the first four, and before those four.
 
-**The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`.
+**The footer never advertises a key that doesn't work in the current focus**, so it changes with the focus (search field, row, picks held, history, proposed, group header, capture, edit, bundle, empty inbox). A pane that isn't holding the keyboard shows only `ctrl+x tab focus  ctrl+x s close`, both of which work from the prompt.
 
 **Storage problems** also draw a focusable problem row above the first result, in `error` (`⚠ 2 unreadable files · ⏎ details`); ⏎ opens a card listing each file and reason.
 
@@ -411,7 +416,7 @@ A machine that stays on, with Bun installed, systemd (for the unit in `server/`)
 ```
 - **Opener:** `✎ <project>` leads the row, dim; it carries the borrowed `ctrl+x s` action and opens the launcher.
 - **Chips:** up to `pocketMax` (default 5, max 9) open notes of the current project, newest `updated` first. Each chip is its key, `;` and its digit, in the accent, then a `plain` Button with no hotkey. The label is the note's text on one line, cut to 24 terminal cells with `…`, with `◆ ` in front for Claude's notes. The cut falls at the last word that fits, unless that leaves under 10 cells; then mid-word. Chips sit 3 columns apart.
-- **`+N`** (dim) shows when more open notes exist than chips; it and the opener open the launcher. Opened by their chord the pane gets focus; opened by a click, or after `ctrl+x tab`, the band holds the keys, so the pane opens unfocused.
+- **`+N`** (dim) shows when more open notes exist than chips; it and the opener open the launcher. Opened by their chord the pane gets focus; opened by a click the band holds the keys, so the pane opens unfocused (`ctrl+x tab` then gives it them).
 - **Width:** fit to `e.props.bodyColumns`, the opener included. First shorten every label, down to 10 columns, then drop chips from the right into `+N`. The opener and `+N` always stay.
 - **While a turn runs** (`e.props.isWorking`) the whole row draws dim; the keys still work.
 - **Fresh chip:** a note the person just saved (`/jot text`, the pane) stands out for a moment ([DESIGN.md §7](DESIGN.md#7-motion)): its chip at full strength, the other chips dim. A Button label takes no bold or colour.

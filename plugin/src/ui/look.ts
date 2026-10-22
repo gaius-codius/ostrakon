@@ -120,11 +120,11 @@ export const TEXT = {
     ['f / ctrl+f', 'search'],
     ['n / ctrl+n', 'new note'],
     ['ctrl+s', 'scope'],
-    ['esc', 'back (to search, then close)'],
+    ['esc', 'back, then to the prompt'],
     ['q / ctrl+q', 'close'],
     ['ctrl+x s', 'open / close'],
     ['ctrl+x i', 'keys, from a text field too'],
-    ['ctrl+x tab', 'focus the pane from the prompt'],
+    ['ctrl+x tab', 'to the prompt and back'],
     ['//', 'jot from the prompt'],
   ] as [string, string][],
   keepAll: 'keep all',
@@ -176,6 +176,9 @@ export const TOAST = {
 // Borrowed engine actions (SPEC §2.2); the person binds the chords in their keybindings.
 export const CHORD = {
   toggle: { action: 'app:cycleDiffBase', keys: 'ctrl+x s' },
+  // Moves the keyboard between the pane and the prompt; it takes ctrl+x tab from the band. Not
+  // app:toggleTerminal or app:toggleBrief: the engine's own handlers take those before a Button.
+  switch: { action: 'app:openArtifact', keys: 'ctrl+x tab' },
   search: { action: 'app:toggleDiffNoiseFilter', keys: 'ctrl+f' },
   scope: { action: 'app:toggleDiffPreSession', keys: 'ctrl+s' },
   // Not the engine's pane:close: that close looks like Esc's to the mod, which makes Esc "back".

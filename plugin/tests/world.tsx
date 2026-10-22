@@ -46,6 +46,13 @@ export type World = {
   toasts: string[]
   submitted: string[]
   opened: number
+  // Each open's `focus`, in order.
+  openFocus: boolean[]
+  // The pane as the engine records it (`$.ui.panes()`): open, and holding the keys.
+  pane: { isOpen: boolean; isFocused: boolean }
+  // The engine refuses the next opens' focus (a dialog, a survey) / the next close (another hook).
+  refuseFocus?: boolean
+  refuseClose?: string
   closed: number
   focused: string[]
   tools: { name: string; description: string; isDeferred?: unknown; registeredAs: string }[]
@@ -63,7 +70,17 @@ const IN_CC: Where = { repo: { root: '/home/me/Work/cc', remote: 'git@github.com
 
 export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '', where: Where = IN_CC) => {
   const engine = $
-  const world: World = { box: { text: draft }, toasts: [], submitted: [], opened: 0, closed: 0, focused: [], tools: [] }
+  const world: World = {
+    box: { text: draft },
+    toasts: [],
+    submitted: [],
+    opened: 0,
+    openFocus: [],
+    pane: { isOpen: false, isFocused: false },
+    closed: 0,
+    focused: [],
+    tools: [],
+  }
   const clock = mock.clock(on, { now: Date.parse('2026-10-09T12:00:00.000Z') })
   mock.env(on, { OSTRAKON_DIR: '/data', HOME: '/home/me' })
   mock.store(on)
@@ -104,14 +121,22 @@ export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '', w
     if (world.turnOnSubmit !== undefined) await engine.turn.start({ text: e.text, turnId: world.turnOnSubmit })
     return world.drop !== undefined ? { drop: world.drop } : { text: e.text }
   })
-  on('ui.open', () => {
+  on('ui.open', ($, e) => {
     world.opened += 1
+    world.openFocus.push(e.focus === true)
+    const isFocused = e.focus === true ? !world.refuseFocus : world.pane.isOpen && world.pane.isFocused
+    world.pane = { isOpen: true, isFocused }
     return { value: { isPlaced: true } }
   })
   on('ui.close', () => {
+    if (world.refuseClose !== undefined) return { deny: world.refuseClose }
     world.closed += 1
+    world.pane = { isOpen: false, isFocused: false }
     return { value: undefined }
   })
+  on('ui.panes', () => ({
+    value: world.pane.isOpen ? [{ id: 'ostrakon', title: 'ostrakon', isShown: true, isFocused: world.pane.isFocused, isPlaced: true }] : [],
+  }))
   on('ui.focus', ($, e) => {
     if (e.element) world.focused.push(e.element)
     return {}

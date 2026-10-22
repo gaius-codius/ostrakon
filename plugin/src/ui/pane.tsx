@@ -28,6 +28,8 @@ type E = Elements['terminal']
 
 export type Handlers = {
   action: (action: Action) => void
+  // Returns the open, as the band's opener does: the press waits for it.
+  switchKeys: () => Promise<unknown>
   digit: (n: number) => void
   pressSlot: (slot: number) => void
   searchInput: (value: string) => void
@@ -467,6 +469,8 @@ const ActionLayer = ({ el, view, handlers }: { el: E; view: PaneView; handlers: 
       ))}
       {/* ctrl+x s closes the pane from anywhere while it's mounted; the band (P3) opens it. */}
       <Button key={`${LAYER_PREFIX}toggle`} plain action={CHORD.toggle.action} label='toggle' onPress={() => handlers.action('toggle')} />
+      {/* ctrl+x tab, from the pane or the prompt: the keyboard goes to the other. */}
+      <Button key={`${LAYER_PREFIX}switch`} plain action={CHORD.switch.action} label='switch' onPress={() => handlers.switchKeys()} />
       {idle.map(char => (
         <Button key={`${LAYER_PREFIX}idle-${char}`} plain hotkey={char} label='' onPress={() => undefined} />
       ))}

@@ -225,7 +225,7 @@ describe('model', () => {
         .slice(0, 2)
         .map(([key]) => key),
     ).toEqual(['a / r', '⏎ / t'])
-    for (const [key, label] of TEXT.keySheet) expect(cells(key) <= WIDTH.sheetKey && cells(label) <= WIDTH.keySheet - WIDTH.sheetKey).toBe(true)
+    for (const [key, label] of TEXT.keySheet) expect(cells(key) <= WIDTH.sheetKey && cells(label) <= WIDTH.keySheet - 4 - WIDTH.sheetKey).toBe(true)
   })
 
   test("a folded group's footer offers to unfold it", () => {

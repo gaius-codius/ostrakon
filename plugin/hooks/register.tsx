@@ -68,7 +68,7 @@ import {
   waitingProposals,
 } from '../src/turns'
 import type { RunningTurn } from '../src/turns'
-import { HarvestRow, PocketRow, harvestOf, openerOf, pocketOf } from '../src/ui/band'
+import { HarvestRow, PocketRow, SwitchKey, harvestOf, openerOf, pocketOf } from '../src/ui/band'
 import type { BandHandlers, Drawn } from '../src/ui/band'
 import { BAND_KEY, HINT, JOT_CONTEXT, MS, TEXT, TOAST, WIDTH, toneOf } from '../src/ui/look'
 import type { Tone } from '../src/ui/look'
@@ -602,7 +602,7 @@ const closeSheet = async ($: EngineInterface) => {
 }
 
 // One step back, for Esc: a mode to the list, a row to the search field, a query to empty. False
-// at the top: the pane closes.
+// at the top: the keys go to the prompt and the pane stays (the ui.close hook).
 const goBack = async ($: EngineInterface) => {
   const state = await read($, pane)
   if (state.mode === 'edit') {
@@ -651,7 +651,11 @@ const refocus = async ($: EngineInterface) => {
   // The key sheet closed back to capture or the edit card (Esc): their field takes the keys again.
   if (state.mode === 'capture') return focusKey($, CAPTURE_KEY)
   if (state.mode === 'edit') return focusKey($, EDIT_KEY)
-  if (state.focus === 'line' && state.cursor !== null) return focusLine($, state.cursor)
+  if (state.mode === 'bundle') return focusKey($, SEND_KEY)
+  // The selected note may have left the list while the prompt had the keys: the line that took its
+  // place (viewOf picks it, as realign does) takes them.
+  const cursor = state.focus === 'line' ? (await viewOf($)).pane.cursor : null
+  if (cursor !== null) return focusLine($, cursor)
   focusKey($, SEARCH_KEY)
 }
 
@@ -714,20 +718,22 @@ const afterClose = ($: EngineInterface) => {
   return closing
 }
 
+// Puts the held draft back in the prompt: the whole prompt if it's empty, else after a blank line.
+// The draft stays held if the prompt won't take it back; the next open merges it.
+const giveBack = async ($: EngineInterface) => {
+  const held = (await read($, pane)).stash
+  if (held === '') return
+  const box = await $.prompt.read().catch(() => ({ text: '' }))
+  const filled = await $.prompt.fill({ text: joined(box.text, held), mode: 'replace' }).catch(() => ({ isFilled: false }))
+  // Only what was put back leaves the stash; anything held since stays.
+  if (filled.isFilled) await setPane($, current => ({ ...current, stash: current.stash === held ? '' : current.stash }))
+}
+
 const cleanUp = async ($: EngineInterface) => {
   generation += 1
-  const held = (await read($, pane)).stash
-  // The draft stays held if the prompt won't take it back; the next open merges it.
-  let restored = false
-  if (held !== '') {
-    const box = await $.prompt.read().catch(() => ({ text: '' }))
-    const filled = await $.prompt.fill({ text: joined(box.text, held), mode: 'replace' }).catch(() => ({ isFilled: false }))
-    restored = filled.isFilled
-  }
+  await giveBack($)
   await setPane($, current => ({
     ...current,
-    // Only what was put back leaves the stash; anything held since stays.
-    stash: restored && current.stash === held ? '' : current.stash,
     moving: null,
     mode: 'browse',
     query: '',
@@ -742,6 +748,74 @@ const cleanUp = async ($: EngineInterface) => {
 const closePane = async ($: EngineInterface) => {
   await afterClose($)
   await $.ui.close({ id: PANE }).catch(() => undefined)
+}
+
+// Whether the pane holds the keyboard, from the engine's own record; undefined when it can't say.
+// geometry.isFocused is only as fresh as the last render.
+const holdsKeys = async ($: EngineInterface) => {
+  const panes = await $.ui.panes().catch(() => undefined)
+  return panes?.find(candidate => candidate.id === PANE)?.isFocused
+}
+
+// The keyboard goes to the prompt and the pane stays open (SPEC §4.4): the held draft goes back.
+// A mod can't give the prompt the keys, so the pane closes and opens again without them; the
+// reopen is the press's, so it's placed at any width. Its own close skips the cleanup.
+let isReopening = false
+const handOff = async ($: EngineInterface) => {
+  // The keys come back where the pane's state says (refocus): an open key sheet goes back to what
+  // it was opened from (the list, if the note being edited has gone), the move picker to the list.
+  const state = await read($, pane)
+  if (state.mode === 'sheet') {
+    const from = state.sheetFrom ?? null
+    const isEditGone = from === 'edit' && !(await viewOf($)).lines.some(line => line.key === state.edit?.id)
+    const back = (from === 'capture' || from === 'edit') && !isEditGone ? from : 'browse'
+    await setPane($, current => ({ ...current, mode: back, sheetFrom: null, ...(back === 'browse' && from !== null ? { focus: 'search' as const } : {}) }))
+  } else if (state.mode === 'move') {
+    await setPane($, current => ({ ...current, mode: 'browse', moving: null }))
+  }
+  isReopening = true
+  let why: string | undefined
+  try {
+    // A hook that refuses the close keeps the pane, the keys and the held draft as they are.
+    const isClosed = await $.ui.close({ id: PANE }).then(
+      () => true,
+      error => {
+        noteProblem($, 'pane not handed off', error)
+        return false
+      },
+    )
+    if (!isClosed) return
+    const opened = await $.ui.open({ id: PANE, title: 'ostrakon', closeOnEscape: true })
+    if (!opened.isPlaced) why = opened.reason ?? 'not placed'
+  } catch (error) {
+    why = messageOf(error)
+  } finally {
+    isReopening = false
+  }
+  geometry.isFocused = false
+  if (why === undefined) return giveBack($)
+  noteProblem($, 'pane not reopened', why)
+  await afterClose($)
+}
+
+// The open pane takes the keyboard back from the prompt. The engine gives it only over an empty
+// prompt, so what's there is held, as at an open, after anything still held. Refused the keys (a
+// dialog, a survey), the pane gives the draft straight back.
+const takeKeys = async ($: EngineInterface) => {
+  const box = await $.prompt.read().catch(() => ({ text: '' }))
+  if (box.text !== '') {
+    const emptied = await $.prompt.fill({ text: '', mode: 'replace' }).catch(() => ({ isFilled: false }))
+    if (emptied.isFilled) await setPane($, current => ({ ...current, stash: joined(current.stash, box.text) }))
+  }
+  await refocus($)
+  if ((await holdsKeys($)) === false) await giveBack($)
+}
+
+// ctrl+x tab (SPEC §4.5): the keyboard goes from the pane to the prompt or back. A closed pane
+// opens with it.
+const switchKeys = async ($: EngineInterface) => {
+  if (!(await read($, isOpen))) return openPane($, 'browse')
+  return ((await holdsKeys($)) ?? geometry.isFocused) ? handOff($) : takeKeys($)
 }
 
 // Opens the pane with the keyboard, holding the prompt's draft until it closes (SPEC §4.4).
@@ -1666,12 +1740,20 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const below = await next(e)
     const isTerminal = e.surface === 'terminal'
-    if (e.props.hasSurvey) {
-      if (isTerminal) drawn = null
-      return below
-    }
     const el = $.ui.resolve(e) as Elements['terminal']
     const { Box } = el
+    // ctrl+x tab; the press waits for it, as for the opener.
+    const pressSwitch = () => serially(() => switchKeys($)).catch(error => reportStorage($, error))
+    if (e.props.hasSurvey) {
+      if (isTerminal) drawn = null
+      // Under a survey the band draws nothing of its own, but still carries ctrl+x tab.
+      return (
+        <Box flexDirection='column'>
+          {below}
+          <SwitchKey el={el} onPress={pressSwitch} />
+        </Box>
+      )
+    }
     const columns = e.props.bodyColumns
     const run = (work: Promise<unknown>) => {
       work.catch(error => reportStorage($, error))
@@ -1704,23 +1786,31 @@ export const register: Register = (on, options) => {
       <Box flexDirection='column'>
         {below}
         {row}
+        <SwitchKey el={el} onPress={pressSwitch} />
       </Box>
     )
   })
 
   // Esc is "back" (SPEC §4.5): the mod can't see Esc, only the close it asks for, so a person's
-  // close of the focused pane goes back one step and closes only from the top. ctrl+q and
-  // ctrl+x s are the mod's own closes (origin plugin) and always close.
+  // close of the focused pane goes back one step, and at the top hands the keys to the prompt with
+  // the pane left open. ctrl+q and ctrl+x s are the mod's own closes (origin plugin) and always
+  // close; so does the person's close of a pane that isn't holding the keys.
   on('ui.close', async ($, e, next) => {
-    if (e.id === PANE && e.origin.kind === 'person' && geometry.isFocused && (await serially(() => goBack($)))) {
-      // Esc hands the keys back to the prompt once this settles: take them back after.
-      $.clock.after(REFOCUS_MS, () => {
-        serially(() => refocus($)).catch(error => reportStorage($, error))
-      })
+    if (e.id === PANE && e.origin.kind === 'person' && geometry.isFocused) {
+      if (await serially(() => goBack($))) {
+        // Esc hands the keys back to the prompt once this settles: take them back after.
+        $.clock.after(REFOCUS_MS, () => {
+          serially(() => refocus($)).catch(error => reportStorage($, error))
+        })
+        return { value: undefined }
+      }
+      // The keys go to the prompt anyway: so does the held draft.
+      geometry.isFocused = false
+      await serially(() => giveBack($))
       return { value: undefined }
     }
     const closed = await next(e)
-    if (e.id === PANE) await afterClose($)
+    if (e.id === PANE && !isReopening) await afterClose($)
     return closed
   })
 
@@ -1754,6 +1844,7 @@ export const register: Register = (on, options) => {
     // Typing goes straight to state; everything else waits its turn (serially).
     const handlers: Handlers = {
       action: action => run(serially(() => act($, action))),
+      switchKeys: () => serially(() => switchKeys($)).catch(error => reportStorage($, error)),
       digit: n => run(serially(() => digit($, n))),
       pressSlot: slot => run(serially(() => pressSlot($, slot))),
       searchInput: value => run(searchInput($, value)),
