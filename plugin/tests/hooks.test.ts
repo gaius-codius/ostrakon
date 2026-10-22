@@ -2,7 +2,8 @@ import { expect, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
 
 import { MemDir } from './memdir'
-import { FOOTER_KEY } from '../src/ui/pane'
+import { cells } from '../src/model'
+import { FOOTER_KEY, PREVIEW_ROWS, TEXT_COLUMN } from '../src/ui/pane'
 import { COLOUR, GLYPH, JOT_CONTEXT } from '../src/ui/look'
 import { CC, INFRA, PANE, mountPane, noteIn, put, run, startSession, texts } from './world'
 
@@ -368,6 +369,14 @@ test('the key sheet pages to fit the inline body, j and k turning the pages roun
 
 // An element as the tests read the drawn tree.
 type Drawn = { type: string; props?: Record<string, unknown>; children?: unknown[] }
+// A drawn element's text, nested Texts and all; a Button draws its label.
+const textOf = (node: unknown): string => {
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (typeof node !== 'object' || node === null) return ''
+  const { type, props = {}, children = [] } = node as Drawn
+  if (type === 'Button') return String(props.label ?? '')
+  return children.map(textOf).join('')
+}
 
 // Rows a drawn element takes, for the column layouts the pane's states draw: a Text is a row, a
 // Box its fixed height, or its rows (summed down a column, the tallest across a row) and padding.
@@ -504,6 +513,12 @@ test("docked at short heights, editing a note in a long list keeps the draft's e
     expect(await footerRow(ui)).toBe(bodyRows - 1)
     expect(await spill(ui)).toBeLessThanOrEqual(0)
     expect((await texts(ui)).some(text => /TAIL$/.test(text))).toBe(true)
+    // Each of the draft's lines is one row: wrapped to the indented preview's width, none runs past it.
+    const boxes = (await ui.findAll({ type: 'Box' })) as Drawn[]
+    const preview = boxes.find(box => box.props?.paddingLeft === TEXT_COLUMN)
+    const lines = (preview?.children ?? []).map(textOf).filter(text => text.startsWith(GLYPH.quote))
+    expect(lines.length).toBeGreaterThan(1)
+    for (const line of lines) expect(cells(line)).toBeLessThanOrEqual(Number(preview?.props?.width) - TEXT_COLUMN)
   }
   await ui.unmount()
 })
@@ -552,6 +567,51 @@ test('docked in a body too short for the preview and three rows besides, the pre
   expect(await at(15)).toBe(true)
   expect(await at(14)).toBe(false)
   expect(await ui.find({ type: 'Text', text: /rename the store helpers/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test("docked, the preview's bar starts in the note text's column, with no blank row added", async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  const boxes = (await ui.findAll({ type: 'Box' })) as Drawn[]
+  // The selected row: the cells drawn before the box that holds its text.
+  const row = boxes.find(box => box.props?.backgroundColor !== undefined && /check why the cache test is flaky/.test(textOf(box)))
+  const kids = row?.children ?? []
+  const at = kids.findIndex(child => /check why the cache test is flaky/.test(textOf(child)))
+  expect(at).toBeGreaterThan(0)
+  const column = cells(kids.slice(0, at).map(textOf).join(''))
+  expect(column).toBe(TEXT_COLUMN)
+  // The preview: its padding puts the bar there, and its height is what it was.
+  const preview = boxes.find(box => box.props?.height === PREVIEW_ROWS && (box.children ?? []).some(child => textOf(child).startsWith(GLYPH.quote)))
+  expect(preview?.props?.paddingLeft).toBe(column)
+  const lines = (preview?.children ?? []).filter(child => textOf(child).startsWith(GLYPH.quote))
+  expect(lines.map(textOf)).toEqual([`${GLYPH.quote} check why the cache test is flaky`, expect.stringMatching(new RegExp(`^${GLYPH.quote} you · ~/Work/cc`))])
+  expect(preview?.children?.length).toBe(1 + lines.length)
+  await ui.unmount()
+})
+
+test('docked and narrow, a preview cut at its sixth line still fits its row', async ($, on) => {
+  const dir = new MemDir()
+  // Seven lines that each fill the preview's 30 cells at 40 columns.
+  put(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH01', Array.from({ length: 7 }, (_, i) => `line${i} abcdefghij abcdefghijklm`).join('\n'), CC, 1)
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  const props = { ...PANE.props, bodyColumns: 40 }
+  await ui.redraw(props)
+  await ui.redraw(props)
+  const boxes = (await ui.findAll({ type: 'Box' })) as Drawn[]
+  const preview = boxes.find(box => box.props?.height === PREVIEW_ROWS && (box.children ?? []).some(child => textOf(child).startsWith(GLYPH.quote)))
+  const room = Number(preview?.props?.width) - TEXT_COLUMN
+  const lines = (preview?.children ?? []).map(textOf).filter(text => text.startsWith(GLYPH.quote))
+  expect(room).toBe(32)
+  expect(lines[0]).toBe(`${GLYPH.quote} line0 abcdefghij abcdefghijklm`)
+  for (const line of lines) expect(cells(line)).toBeLessThanOrEqual(room)
+  expect(lines[5]).toBe(`${GLYPH.quote} line5 abcdefghij abcdefghijkl${GLYPH.more}`)
   await ui.unmount()
 })
 

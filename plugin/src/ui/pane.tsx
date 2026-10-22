@@ -126,6 +126,11 @@ const Target = ({ el, view, id, isDim, onPress }: { el: E; view: PaneView; id: s
   return isHeld ? <Text> </Text> : <Button key={id} plain dimColor={isDim} label=' ' onPress={onPress} />
 }
 
+// A note sits indented under its heading, which names its project.
+const NOTE_INDENT = 2
+// The column a note row's text starts in: the focus target, the indent, the number and the marker.
+export const TEXT_COLUMN = WIDTH.lead + NOTE_INDENT
+
 const NoteRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; line: Extract<Line, { kind: 'note' }>; slot: number; handlers: Handlers }) => {
   const { Box, Text } = el
   const { note } = line
@@ -134,15 +139,13 @@ const NoteRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; li
   const number = view.page.numbers.get(note.id)
   const isHistory = note.status === 'sent' || note.status === 'archived'
   const [marker, markerColour] = markerOf(note, pane)
-  // A note sits indented under its heading, which names its project.
-  const indent = 2
   const right = 1 + WIDTH.age
-  const textWidth = view.width - WIDTH.lead - indent - right
+  const textWidth = view.width - TEXT_COLUMN - right
   const text = cut(oneLine(note.text), textWidth)
   return (
     <Box key={`row-${slot}`} width={view.width} backgroundColor={isSelected ? COLOUR.band : undefined}>
       <Target el={el} view={view} id={slotKey(slot)} onPress={() => handlers.pressSlot(slot)} />
-      <Text>{' '.repeat(indent)}</Text>
+      <Text>{' '.repeat(NOTE_INDENT)}</Text>
       {number !== undefined ? (
         <Text color={isSelected ? undefined : COLOUR.accent} bold>
           {String(number)}
@@ -359,15 +362,17 @@ const Preview = ({ el, view, note }: { el: E; view: PaneView; note: Note }) => {
   const { edit } = view.pane
   // While the note is being edited, the preview is the draft, whole.
   const isEditing = view.pane.mode === 'edit' && edit !== null && edit.id === note.id
-  // Quoted: a dim bar down the left, the way the bundle shows what it will send.
-  const width = view.width - 2
+  // Quoted: a dim bar down the left, the way the bundle shows what it will send. The bar sits
+  // under the rows' text, so the preview reads as the selected row's.
+  const width = Math.max(1, view.width - TEXT_COLUMN - 2)
   const lines = wrap(isEditing ? fromField(edit.draft) : note.text, width)
   const rows = previewLinesOf(view)
   let shown = lines.slice(0, rows)
   if (isEditing) shown = draftLines(fromField(edit.draft), width, rows)
-  else if (lines.length > rows) shown[shown.length - 1] = cut(`${shown[shown.length - 1] ?? ''} `, width).replace(/ ?$/, GLYPH.more)
+  // A last line that fills the width gives up its end to the … rather than run past it.
+  else if (lines.length > rows) shown[shown.length - 1] = cut(`${shown[shown.length - 1] ?? ''}${GLYPH.more}`, width)
   return (
-    <Box flexDirection='column' width={view.width} height={previewRows(view)}>
+    <Box flexDirection='column' width={view.width} height={previewRows(view)} paddingLeft={TEXT_COLUMN}>
       <Box height={1} />
       {shown.map(line => (
         <Text>
