@@ -371,9 +371,17 @@ const fitFooter = (keys: Key[], legend: string | undefined, lead: string, width:
   const actions = keys.filter(pair => !isSheetPair(pair))
   const legendPair: Key | undefined = legend === undefined ? undefined : [legend, '']
   let kept = [...actions.slice(0, FIRST_PAIRS), ...(legendPair ? [legendPair] : []), ...actions.slice(FIRST_PAIRS)]
-  // The spacer before `i keys` takes one more gap than the pairs between them.
-  const used = () => [...kept, ...(sheet ? [sheet] : [])].reduce((sum, pair) => sum + pairSize(pair), lead.length) + 2 * (kept.length + (sheet ? 1 : 0) - (lead === '' ? 1 : 0))
-  while (kept.length > 0 && used() > width - 2) kept = kept.slice(0, -1)
+  // As the pane's footerRows: a pair that alone is wider than the line still takes it. The spacer
+  // before `i keys` takes one more gap than the pairs between them, hence `width - 2`.
+  const isOneLine = () => {
+    let used = lead.length
+    for (const pair of [...kept, ...(sheet ? [sheet] : [])]) {
+      if (used > 0 && used + 2 + pairSize(pair) > width - 2) return false
+      used += (used === 0 ? 0 : 2) + pairSize(pair)
+    }
+    return true
+  }
+  while (kept.length > 0 && !isOneLine()) kept = kept.slice(0, -1)
   return { pairs: kept.filter(pair => pair !== legendPair), legend: legendPair && kept.includes(legendPair) ? legend : undefined, sheet }
 }
 
