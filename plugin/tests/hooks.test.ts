@@ -539,8 +539,9 @@ test('docked at short heights, the bundle keeps its send button and the note lis
   }
   await ui.press({ key: 'key-b' })
   expect(await ui.find({ type: 'Text', text: /5 notes into one prompt/ })).toBeDefined()
-  // The header, the intro, the button and the footer take 5 rows; the blanks around the quote and
-  // above the button and the footer 4; the notes the rest, at least the one `… and N more` line.
+  // The header, the intro, the button and the footer take 4 rows, the blanks under the header and the
+  // intro and above the button and the footer 4, and the notes the rest. At 8 the blank above the
+  // button goes, so one `… and N more` line still fits.
   const notes: [bodyRows: number, shown: number][] = [
     [8, 1],
     [9, 1],
