@@ -18,6 +18,7 @@ const VIEWS = [
   'search-empty',
   'search-typing',
   'search-nomatch',
+  'unfocused',
   'list-grouped',
   'list-folded',
   'list-history',
@@ -337,8 +338,44 @@ const Preview = ({ el, dir, width, note }: { el: E; dir: Direction; width: numbe
 // ---- footer ----
 
 type Key = [string, string]
-const SEARCH_KEYS: Key[] = [['ctrl+l', 'list view'], ['ctrl+s', 'scope'], ['ctrl+n', 'new'], ['ctrl+q', 'close']]
-const ROW_KEYS: Key[] = [['v', 'pick'], ['t', 'to prompt'], ['s', 'send'], ['e', 'edit'], ['d', 'archive'], ['b', 'bundle'], ['l', 'list'], ['f', 'search'], ['i', 'keys']]
+// The pane's footers as keysFor (plugin/src/model.ts) shows them: a text field's `keys` is the chord.
+const FIELD_KEYS: Key = ['ctrl+x i', 'keys']
+const SEARCH_KEYS: Key[] = [['ctrl+s', 'scope'], ['ctrl+n', 'new'], ['ctrl+q', 'close'], FIELD_KEYS]
+// Nothing picked: the note's own actions lead, then move and copy, as the pane's row does.
+const ROW_KEYS: Key[] = [
+  ['t', 'to prompt'],
+  ['s', 'send'],
+  ['e', 'edit'],
+  ['d', 'archive'],
+  ['m', 'move'],
+  ['y', 'copy'],
+  ['v', 'pick'],
+  ['z', 'fold'],
+  ['h', 'history'],
+  ['i', 'keys'],
+]
+const UNFOCUSED_KEYS: Key[] = [
+  ['ctrl+x tab', 'focus'],
+  ['ctrl+x s', 'close'],
+]
+// The pane's first four pairs rank before the legend (WIDTH.footerPairs).
+const FIRST_PAIRS = 4
+
+const isSheetPair = ([key]: Key) => key === 'i' || key === FIELD_KEYS[0]
+const pairSize = ([key, label]: Key) => key.length + (label === '' ? 0 : 1 + label.length)
+
+// The pane's fitFooter, on one line: the first four actions, the legend, then the rest, dropped
+// from the right until the line fits; `i keys` stays on the right. Shown in order, the legend last.
+const fitFooter = (keys: Key[], legend: string | undefined, lead: string, width: number) => {
+  const sheet = keys.find(isSheetPair)
+  const actions = keys.filter(pair => !isSheetPair(pair))
+  const legendPair: Key | undefined = legend === undefined ? undefined : [legend, '']
+  let kept = [...actions.slice(0, FIRST_PAIRS), ...(legendPair ? [legendPair] : []), ...actions.slice(FIRST_PAIRS)]
+  // The spacer before `i keys` takes one more gap than the pairs between them.
+  const used = () => [...kept, ...(sheet ? [sheet] : [])].reduce((sum, pair) => sum + pairSize(pair), lead.length) + 2 * (kept.length + (sheet ? 1 : 0) - (lead === '' ? 1 : 0))
+  while (kept.length > 0 && used() > width - 2) kept = kept.slice(0, -1)
+  return { pairs: kept.filter(pair => pair !== legendPair), legend: legendPair && kept.includes(legendPair) ? legend : undefined, sheet }
+}
 
 const Footer = ({ el, dir, width, keys, status, legend }: { el: E; dir: Direction; width: number; keys: Key[]; status?: string; legend?: string }) => {
   const { Box, Text } = el
@@ -366,25 +403,31 @@ const Footer = ({ el, dir, width, keys, status, legend }: { el: E; dir: Directio
       </Box>
     )
   }
+  const fitted = fitFooter(keys, legend, status ?? '', width)
+  const Pair = ({ pair: [k, label] }: { pair: Key }) => (
+    <Text>
+      <Text color={dir === 'quiet' ? 'claude' : undefined} bold={dir === 'ledger' || dir === 'mix'}>
+        {k}
+      </Text>
+      {label !== '' && <Text dimColor> {label}</Text>}
+    </Text>
+  )
   return (
     <Box flexDirection="column" width={width}>
       {dir === 'ledger' && <Text dimColor>{'━'.repeat(width)}</Text>}
       {dir === 'mix' && <Text dimColor>{'─'.repeat(width)}</Text>}
-      <Box flexWrap="wrap" columnGap={2} width={width}>
+      <Box columnGap={2} width={width} height={1}>
         {status !== undefined && (
           <Text color="claude" bold>
             {status}
           </Text>
         )}
-        {keys.map(([k, label]) => (
-          <Text>
-            <Text color={dir === 'quiet' ? 'claude' : undefined} bold={dir === 'ledger' || dir === 'mix'}>
-              {k}
-            </Text>
-            <Text dimColor> {label}</Text>
-          </Text>
+        {fitted.pairs.map(pair => (
+          <Pair pair={pair} />
         ))}
-        {legend !== undefined && <Text dimColor>{legend}</Text>}
+        {fitted.legend !== undefined && <Text dimColor>{fitted.legend}</Text>}
+        <Box flexGrow={1} />
+        {fitted.sheet && <Pair pair={fitted.sheet} />}
       </Box>
     </Box>
   )
@@ -454,7 +497,9 @@ const rowsOf = (
 
 const legendFor = (notes: Note[]) => (notes.some(note => note.by === 'claude') ? '◆ from Claude' : undefined)
 
-const SearchView = (ctx: Ctx, query: string) => {
+// Unfocused: the pane isn't holding the keyboard, so its footer shows only the chords that work
+// from the prompt.
+const SearchView = (ctx: Ctx, query: string, isUnfocused = false) => {
   const { Box, Text } = ctx.el
   const here = NOTES.filter(note => note.project === CURRENT)
   const found = query === '' ? here : matches(query)
@@ -463,7 +508,7 @@ const SearchView = (ctx: Ctx, query: string) => {
   const right = query === '' ? `${scope} · ${here.length} open` : `${scope} · ${found.length} of ${total}`
   return (
     <Box flexDirection="column" width={ctx.width}>
-      <HeaderLine el={ctx.el} dir={ctx.dir} width={ctx.width} header={{ mode: 'search', query, right, isFocused: true }} />
+      <HeaderLine el={ctx.el} dir={ctx.dir} width={ctx.width} header={{ mode: 'search', query, right, isFocused: !isUnfocused }} />
       {ctx.dir === 'ledger' && <LedgerColumns el={ctx.el} width={ctx.width} />}
       {found.length === 0 ? (
         <Box flexDirection="column" paddingY={1}>
@@ -478,7 +523,7 @@ const SearchView = (ctx: Ctx, query: string) => {
         el={ctx.el}
         dir={ctx.dir}
         width={ctx.width}
-        keys={found.length === 0 ? [['⏎', 'save as note'], ['ctrl+s', 'scope'], ['ctrl+q', 'close']] : SEARCH_KEYS}
+        keys={isUnfocused ? UNFOCUSED_KEYS : found.length === 0 ? [['⏎', 'save as note'], ['ctrl+s', 'scope'], ['ctrl+q', 'close'], FIELD_KEYS] : SEARCH_KEYS}
         legend={legendFor(found)}
       />
     </Box>
@@ -525,10 +570,10 @@ const ListView = (ctx: Ctx, options: { folded?: string[]; history?: boolean; pic
         width={ctx.width}
         keys={
           options.history
-            ? [['u', 'restore'], ['h', 'hide history'], ['z', 'fold'], ['f', 'search']]
+            ? [['u', 'restore'], ['h', 'hide history'], ['z', 'fold'], ['f', 'search'], ['i', 'keys']]
             : picked > 0
               ? [['b', 'bundle'], ['v', 'pick'], ['x', 'clear picks'], ['t', 'to prompt'], ['i', 'keys']]
-              : [...ROW_KEYS.slice(0, 5), ['z', 'fold'], ['h', 'history'], ['i', 'keys']]
+              : ROW_KEYS
         }
         status={picked > 0 ? `${picked} picked` : undefined}
         legend={picked > 0 ? undefined : legendFor(NOTES)}
@@ -564,7 +609,7 @@ const BundleView = (ctx: Ctx) => {
       <Box height={1} />
       <Text dimColor>The picked notes are marked sent once the prompt goes in. Nothing is removed before.</Text>
       <Box height={1} />
-      <Footer el={ctx.el} dir={ctx.dir} width={ctx.width} keys={[['⏎', 'send'], ['t', 'to prompt (edit first)'], ['x', 'back'], ['esc', 'close']]} />
+      <Footer el={ctx.el} dir={ctx.dir} width={ctx.width} keys={[['⏎', 'send'], ['t', 'to prompt (edit first)'], ['esc', 'back']]} />
     </Box>
   )
 }
@@ -591,7 +636,7 @@ const CaptureView = (ctx: Ctx) => {
       </Box>
       <Text dimColor>Notes save to cc. Keep typing for the next one.</Text>
       <Box height={1} />
-      <Footer el={ctx.el} dir={ctx.dir} width={ctx.width} keys={[['⏎', 'save'], ['empty ⏎', 'back to search'], ['ctrl+s', 'project']]} />
+      <Footer el={ctx.el} dir={ctx.dir} width={ctx.width} keys={[['⏎', 'save'], ['esc', 'back to search'], ['ctrl+s', 'project'], FIELD_KEYS]} />
     </Box>
   )
 }
@@ -621,7 +666,7 @@ const EditView = (ctx: Ctx) => {
       </Box>
       {rowsOf(ctx, here.slice(2), { firstNumber: 3 })}
       <Box height={1} />
-      <Footer el={ctx.el} dir={ctx.dir} width={ctx.width} keys={[['⏎', 'save'], ['esc', 'close, draft kept']]} />
+      <Footer el={ctx.el} dir={ctx.dir} width={ctx.width} keys={[['⏎', 'save'], ['esc', 'back, draft kept'], FIELD_KEYS]} />
     </Box>
   )
 }
@@ -649,7 +694,7 @@ const EmptyView = (ctx: Ctx) => {
           </Text>
         ))}
       </Box>
-      <Footer el={ctx.el} dir={ctx.dir} width={ctx.width} keys={[['ctrl+n', 'new'], ['ctrl+s', 'scope'], ['ctrl+q', 'close']]} />
+      <Footer el={ctx.el} dir={ctx.dir} width={ctx.width} keys={[['ctrl+n', 'new'], ['ctrl+s', 'scope'], ['ctrl+q', 'close'], FIELD_KEYS]} />
     </Box>
   )
 }
@@ -662,6 +707,8 @@ const render = (ctx: Ctx, name: string) => {
       return SearchView(ctx, 'cache')
     case 'search-nomatch':
       return SearchView(ctx, 'kubernetes')
+    case 'unfocused':
+      return SearchView(ctx, '', true)
     case 'list-grouped':
       return ListView(ctx, { selected: 'b' })
     case 'list-folded':
