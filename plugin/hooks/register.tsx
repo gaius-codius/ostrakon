@@ -894,8 +894,8 @@ const showSaved = async ($: EngineInterface) => {
 }
 
 // Fills the prompt with the held draft, anything typed there since, and the note; closes the pane
-// if it's open.
-const fillPrompt = async ($: EngineInterface, text: string, ids: string[]) => {
+// as afterFill says.
+const fillPrompt = async ($: EngineInterface, text: string, ids: string[], isFromBand = false) => {
   const state = await read($, pane)
   const box = await $.prompt.read().catch(() => ({ text: '' }))
   const filled = await $.prompt.fill({ text: joined(state.stash, box.text, text), mode: 'replace' }).catch(() => ({ isFilled: false }))
@@ -903,15 +903,16 @@ const fillPrompt = async ($: EngineInterface, text: string, ids: string[]) => {
     toast($, TOAST.notFilled)
     return false
   }
-  await afterFill($, text, ids)
+  await afterFill($, text, ids, isFromBand)
   return true
 }
 
-// Once the prompt holds `text`: the held draft is spent, the person's submit carrying it marks
-// `ids` sent, and the pane closes if it's open.
-const afterFill = async ($: EngineInterface, text: string, ids: string[]) => {
+// Once the prompt holds `text`: the held draft is spent, and the person's submit carrying it marks
+// `ids` sent. The pane closes if it's open, except on a fill from the band (SPEC §10): the band or
+// the prompt holds the keys then, so the pane is beside the prompt, kept there to write with.
+const afterFill = async ($: EngineInterface, text: string, ids: string[], isFromBand = false) => {
   await setPane($, current => ({ ...current, stash: '', lastFill: { text, ids } }))
-  if (await read($, isOpen)) await closePane($)
+  if (!isFromBand && (await read($, isOpen))) await closePane($)
 }
 
 const act = async ($: EngineInterface, action: Action) => {
@@ -1235,11 +1236,12 @@ const digit = async ($: EngineInterface, n: number) => {
 
 // ---- the band ----
 
-// A Pocket chip: the note goes into the prompt (SPEC §10); a chip never opens the pane.
+// A Pocket chip: the note goes into the prompt (SPEC §10); a chip never opens the pane, and leaves
+// one that's open beside the prompt open.
 const pocketChip = async ($: EngineInterface, n: number, id: string) => {
   const note = await openNote($, id)
   if (note === undefined) return
-  if (await fillPrompt($, await pocketText($, note), [note.id])) toast($, TOAST.inPrompt(n))
+  if (await fillPrompt($, await pocketText($, note), [note.id], true)) toast($, TOAST.inPrompt(n))
 }
 
 const openNote = async ($: EngineInterface, id: string) => {
@@ -1272,7 +1274,7 @@ const pressBandKey = async ($: EngineInterface, shown: Drawn, n: number): Promis
   if (note === undefined) return { text: '', cursor: 0 }
   const text = await pocketText($, note)
   const filled = joined((await read($, pane)).stash, text)
-  await afterFill($, text, [note.id])
+  await afterFill($, text, [note.id], true)
   toast($, TOAST.inPrompt(n))
   return { text: filled, cursor: filled.length }
 }

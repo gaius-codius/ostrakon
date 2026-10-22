@@ -6,7 +6,7 @@ import { serializeNote } from '../src/frontmatter'
 import { MemDir } from './memdir'
 import { MS } from '../src/ui/look'
 import { SWITCH_KEY } from '../src/ui/band'
-import { CC, INFRA, NOTE, noteIn, put, run, startSession } from './world'
+import { CC, INFRA, NOTE, PANE, mountPane, noteIn, put, run, startSession } from './world'
 
 const ONE = '01JA7K2M3Q9X4ZB6C8D0EFGH01'
 const TWO = '01JA7K2M3Q9X4ZB6C8D0EFGH02'
@@ -163,6 +163,63 @@ test(';2 typed into an empty prompt puts exactly note 2 there, and the submit ma
   expect(noteIn(dir, TWO).status).toBe('sent')
   expect(noteIn(dir, ONE).status).toBe('open')
   await ui.unmount()
+})
+
+// The pane opened, then ctrl+x tab: it stays open beside the prompt, which holds the keys.
+const besidePrompt = async ($: Engine) => {
+  await run($, 'jot', '')
+  const pane = await mountPane($)
+  await pane.press({ key: 'key-switch' })
+  await pane.redraw({ ...PANE.props, isFocused: false })
+  return pane
+}
+
+test(';2 with the pane open beside the prompt fills the prompt and leaves the pane open', async ($, on) => {
+  editor(on)
+  const { world } = await startSession($, on, fixture())
+  const pane = await besidePrompt($)
+  const band = await mountBand($)
+  expect(world.closed).toBe(1)
+  await type($, '', ';')
+  expect(await type($, ';', '2')).toEqual({ text: 'rename the store helpers', cursor: 24 })
+  expect(world.closed).toBe(1)
+  expect(world.pane).toEqual({ isOpen: true, isFocused: false })
+  await band.unmount()
+  await pane.unmount()
+})
+
+test('a chip pressed with the pane open beside the prompt leaves it open', async ($, on) => {
+  const { world, clock } = await startSession($, on, fixture())
+  const pane = await besidePrompt($)
+  const band = await mountBand($)
+  await band.press({ key: 'band-chip-2' })
+  await clock.advance(10)
+  expect(world.box.text).toBe('rename the store helpers')
+  expect(world.closed).toBe(1)
+  expect(world.pane).toEqual({ isOpen: true, isFocused: false })
+  await band.unmount()
+  await pane.unmount()
+})
+
+test('a chip pressed while the pane held the keys and a draft leaves the pane open and spends the draft', async ($, on) => {
+  const dir = fixture()
+  const { world, clock } = await startSession($, on, dir, 'my draft')
+  await run($, 'jot', '')
+  const pane = await mountPane($)
+  const band = await mountBand($)
+  await band.press({ key: 'band-chip-2' })
+  await clock.advance(10)
+  const filled = 'my draft\n\nrename the store helpers'
+  expect(world.box.text).toBe(filled)
+  expect(world.closed).toBe(0)
+  expect(world.pane.isOpen).toBe(true)
+  // Spent: the keys going to the prompt give nothing back.
+  await pane.press({ key: 'key-switch' })
+  expect(world.box.text).toBe(filled)
+  await composer($, filled)
+  expect(noteIn(dir, TWO).status).toBe('sent')
+  await band.unmount()
+  await pane.unmount()
 })
 
 test('a lone digit, a ; inside a draft, a pasted ;2 or a digit with no chip goes into the prompt as typed', async ($, on) => {
