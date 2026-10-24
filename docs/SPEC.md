@@ -409,9 +409,9 @@ A machine that stays on, with Bun installed, systemd (for the unit in `server/`)
 
 ### 9.5 Outside Claude Code: `ostrakon jot`
 - `ostrakon jot [--project <name>] <text>` (`server/jot.ts`, Bun) saves an `open` note of yours (`by: you`, `origin` this machine's hostname) into the notes folder the mod uses, found as the mod finds it: `OSTRAKON_DIR` from Claude Code's settings, else from the shell, else the `notesDir` option, else the default. It writes a temp file and renames it into place (§6.2); sessions here read it on their next poll.
-- `--project` takes a project the notes in that folder already know, matched as Claude's `jot` matches (§8); an unknown or ambiguous name is refused with the known ones, and nothing is saved.
-- When a hub is set (the mod's `hubUrl` and `hubToken`, or `OSTRAKON_HUB_URL` and `OSTRAKON_HUB_TOKEN` over them), it also posts the note to `POST /api/notes`, waiting at most 3 s. The sessions' own push of the same note later changes nothing (§6.3). A hub that can't be reached or refuses it is reported on stderr; the note is still saved and the exit code is 0.
-- `ostrakon jot --ask` (`bin/jot-ask`) asks for one line in the first prompt tool it finds (walker, fuzzel, rofi, wofi, zenity, or a macOS dialog), takes a leading `@name` as `--project name`, and shows the answer as a notification.
+- `--project` (`-p`) takes a project the notes in that folder already know, matched as Claude's `jot` matches (§8); an unknown or ambiguous name is refused with the known ones, and nothing is saved.
+- When a hub is set (the mod's `hubUrl` and `hubToken`, or `OSTRAKON_HUB_URL` and `OSTRAKON_HUB_TOKEN`, read as a pair: if either is set, neither comes from the settings), it also posts the note to `POST /api/notes`, waiting at most 3 s. The sessions' own push of the same note later changes nothing (§6.3). A hub that can't be reached, refuses it or answers as something other than a hub is reported on stderr, with whether a session here will send it later (only when the mod has that hub); the note is still saved and the exit code is 0.
+- `ostrakon jot --ask` (`bin/jot-ask`) asks for one line in the first prompt tool it finds (Omarchy's `omarchy-menu-input`, walker, fuzzel, rofi, wofi, zenity, or a macOS dialog), takes a leading `@name` as `--project name` (a lone `@name` is refused), and shows the answer as a notification; a refused note's text is in it, so it isn't lost.
 
 ---
 

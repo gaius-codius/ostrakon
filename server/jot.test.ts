@@ -143,6 +143,48 @@ describe('ostrakon jot', () => {
     expect(() => readdirSync(join(home, '.local/share/ostrakon/notes'))).toThrow()
   })
 
+  test('takes the hub URL and token as a pair: the settings token never goes to an env URL', async () => {
+    const seen: string[] = []
+    const spy: JotDeps['fetch'] = async (url, init) => {
+      seen.push(`${url} ${(init.headers as Record<string, string>).authorization}`)
+      return new Response('{}', { status: 500 })
+    }
+    const settings = { pluginConfigs: { ostrakon: { options: { hubUrl: 'https://real', hubToken: 'real-token' } } } }
+    const halfEnv = setup(settings, { OSTRAKON_HUB_URL: 'https://test' }, spy)
+    expect((await jot(['x'], halfEnv.deps)).err[0]).toContain('go together')
+    expect(seen).toEqual([])
+    const fromSettings = setup(settings, {}, spy)
+    const down = await jot(['y'], fromSettings.deps)
+    expect(seen).toEqual(['https://real/api/notes Bearer real-token'])
+    expect(down.err[0]).toContain('Claude Code sends it')
+  })
+
+  test('says something else answered when the reply is not the hub', async () => {
+    const html: JotDeps['fetch'] = async () => new Response('<html>tailscale</html>', { status: 200 })
+    const { deps } = setup({}, { OSTRAKON_HUB_URL: 'https://wrong', OSTRAKON_HUB_TOKEN: 't' }, html)
+    const result = await jot(['x'], deps)
+    expect(result.err[0]).toContain("https://wrong didn't answer as a hub (200)")
+    expect(result.err[0]).toContain('until it reaches the hub')
+  })
+
+  test('refuses an empty project name and "all"', async () => {
+    const { deps, home } = setup()
+    seed(join(home, '.local/share/ostrakon/notes'), [existing('01JA7K2M3Q9X4ZB6C8D0EFGHJK', cc)])
+    expect((await jot(['--project=', 'x'], deps)).code).toBe(2)
+    expect((await jot(['--project', 'all', 'x'], deps)).err).toEqual(['ostrakon jot: a note goes in one project, not "all".'])
+  })
+
+  test('the command keeps text that starts with a dash after --', async () => {
+    const home = temp()
+    const run = Bun.spawnSync(['bash', join(import.meta.dir, '../bin/ostrakon'), 'jot', '--', '-5 degrees outside'], {
+      env: { HOME: home, PATH: process.env.PATH ?? '' },
+    })
+    expect(run.stdout.toString()).toBe('Saved.\n')
+    const dir = join(home, '.local/share/ostrakon/notes')
+    const [name] = readdirSync(dir)
+    expect(parseNote(readFileSync(join(dir, name ?? ''), 'utf8')).text).toBe('-5 degrees outside')
+  })
+
   test('reads text after -- as it is', () => {
     expect(parseArgs(['--', '--project', 'is', 'text'])).toEqual({ text: '--project is text' })
   })

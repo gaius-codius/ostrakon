@@ -18,7 +18,7 @@ import { randomTag } from '../plugin/src/store'
 import { ulid } from '../plugin/src/ulid'
 
 const HUB_TIMEOUT_MS = 3000
-const USAGE = 'usage: ostrakon jot [--project <name>] <text>'
+const USAGE = 'usage: ostrakon jot [--project|-p <name>] <text>'
 
 export type JotDeps = {
   home: string
@@ -40,7 +40,9 @@ export const settingsOf = (home: string): Settings => {
   } catch {
     return {}
   }
-  const s = JSON.parse(raw) as { env?: Record<string, unknown>; pluginConfigs?: Record<string, { options?: Record<string, unknown> }> }
+  const parsed = JSON.parse(raw) as unknown
+  if (typeof parsed !== 'object' || parsed === null) return {}
+  const s = parsed as { env?: Record<string, unknown>; pluginConfigs?: Record<string, { options?: Record<string, unknown> }> }
   const option = (key: string) =>
     ['ostrakon', 'ostrakon@inline', 'ostrakon@ostrakon'].map(name => text(s.pluginConfigs?.[name]?.options?.[key])).find(value => value !== undefined)
   return { envDir: text(s.env?.OSTRAKON_DIR), notesDir: option('notesDir'), hubUrl: option('hubUrl'), hubToken: option('hubToken') }
@@ -50,7 +52,7 @@ export const settingsOf = (home: string): Settings => {
 // shell's), else the notesDir option, else the default; the notes are in its notes/.
 export const notesDirOf = (home: string, env: JotDeps['env'], settings: Settings) => {
   const chosen = settings.envDir || env.OSTRAKON_DIR || settings.notesDir || `${home}/.local/share/ostrakon`
-  return `${chosen.replace(/^~(?=\/|$)/, home).replace(/\/+$/, '')}/notes`
+  return `${chosen.replace(/^~(?=\/)/, home).replace(/\/+$/, '')}/notes`
 }
 
 // The projects the notes here know, each as its newest live note has it.
@@ -87,16 +89,15 @@ export const parseArgs = (args: string[]): Parsed => {
       words.push(...args.slice(at + 1))
       break
     }
-    if (arg === '--project' || arg === '-p') {
-      project = args[++at]
-      if (project === undefined) return { error: `${arg} needs a project name` }
-    } else if (arg.startsWith('--project=')) project = arg.slice('--project='.length)
-    else if (arg.startsWith('-') && arg !== '-') return { error: `unknown option: ${arg}` }
+    if (arg === '--project' || arg === '-p' || arg.startsWith('--project=')) {
+      project = arg.startsWith('--project=') ? arg.slice('--project='.length) : args[++at]
+      if (project === undefined || project.trim() === '') return { error: '--project needs a project name' }
+    } else if (arg.startsWith('-') && arg !== '-') return { error: `unknown option: ${arg}` }
     else words.push(arg)
   }
   const joined = words.join(' ').trim()
   if (joined === '') return { error: 'nothing to save' }
-  return project === undefined || project.trim() === '' ? { text: joined } : { text: joined, project }
+  return project === undefined ? { text: joined } : { text: joined, project }
 }
 
 // What the hub said, or why it said nothing; undefined when it took the note.
@@ -109,9 +110,13 @@ const sendToHub = async (deps: JotDeps, url: string, token: string, note: Note) 
       signal: AbortSignal.timeout(HUB_TIMEOUT_MS),
     })
     if (response.status === 401) return 'the hub refused the token'
-    const body = (await response.json().catch(() => ({}))) as { notes?: { id?: unknown }[]; rejected?: { reason?: unknown }[]; error?: unknown }
+    // A body that isn't the hub's JSON is something else answering at that address (a wrong URL).
+    const body = (await response.json().catch(() => undefined)) as
+      | { notes?: { id?: unknown }[]; rejected?: { reason?: unknown }[]; error?: unknown }
+      | undefined
+    if (typeof body !== 'object' || body === null) return `${url} didn't answer as a hub (${response.status})`
     if (!response.ok) return `the hub answered ${typeof body.error === 'string' ? body.error : response.status}`
-    if (body.notes?.some(sent => sent.id === note.id)) return undefined
+    if (Array.isArray(body.notes) && body.notes.some(sent => sent?.id === note.id)) return undefined
     return `the hub refused it: ${String(body.rejected?.[0]?.reason ?? 'no reason given')}`
   } catch {
     return 'the hub is unreachable'
@@ -136,7 +141,8 @@ export const jot = async (args: string[], deps: JotDeps): Promise<{ out: string[
     const projects = knownProjects(dir)
     const ctx = { now: deps.now, current: { key: '', name: '', path: '' }, labels: labelsOf(projects) }
     const named = projectNamed(ctx, projects, parsed.project)
-    if (!named)
+    if (named === null) return { out: [], err: ['ostrakon jot: a note goes in one project, not "all".'], code: 1 }
+    if (named === undefined)
       return {
         out: [],
         err: [
@@ -175,16 +181,29 @@ export const jot = async (args: string[], deps: JotDeps): Promise<{ out: string[
   }
 
   const saved = project === null ? 'Saved.' : `Saved to ${label}.`
-  const url = deps.env.OSTRAKON_HUB_URL || settings.hubUrl
-  const token = deps.env.OSTRAKON_HUB_TOKEN || settings.hubToken
-  if (!url || !token) return { out: [saved], err: [], code: 0 }
+  // The URL and token as a pair, from one place: the settings' token never goes to the env's URL.
+  const fromEnv = Boolean(deps.env.OSTRAKON_HUB_URL || deps.env.OSTRAKON_HUB_TOKEN)
+  const url = fromEnv ? deps.env.OSTRAKON_HUB_URL : settings.hubUrl
+  const token = fromEnv ? deps.env.OSTRAKON_HUB_TOKEN : settings.hubToken
+  if (!url || !token)
+    return { out: [saved], err: fromEnv ? ['OSTRAKON_HUB_URL and OSTRAKON_HUB_TOKEN go together; the note is only in this folder.'] : [], code: 0 }
   const problem = await sendToHub(deps, url, token, note)
   if (problem === undefined) return { out: [saved], err: [], code: 0 }
-  return { out: [saved], err: [`Only on this machine for now: ${problem}. Claude Code sends it once a session runs here.`], code: 0 }
+  // Sessions here push it later only when the mod itself has that hub.
+  const later = !fromEnv || url === settings.hubUrl ? 'Claude Code sends it once a session runs here.' : `It stays in ${dir} until it reaches the hub.`
+  return { out: [saved], err: [`Only on this machine for now: ${problem}. ${later}`], code: 0 }
 }
 
 if (import.meta.main) {
-  const result = await jot(Bun.argv.slice(2), { home: process.env.HOME ?? '', env: process.env, host: hostname(), now: Date.now(), fetch })
+  // bin/ostrakon passes `jot` first, so Bun never takes a `--` the person typed as its own.
+  const [first, ...rest] = Bun.argv.slice(2)
+  const result = await jot(first === 'jot' ? rest : Bun.argv.slice(2), {
+    home: process.env.HOME ?? '',
+    env: process.env,
+    host: hostname(),
+    now: Date.now(),
+    fetch,
+  })
   for (const line of result.out) console.log(line)
   for (const line of result.err) console.error(line)
   process.exit(result.code)

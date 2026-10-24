@@ -17,7 +17,7 @@ usage: ostrakon <command>
                5 minutes (needs the hub running here). --token prints one that carries the
                hub token itself instead. url: the hub's https address, default this
                machine's Tailscale name on port 8443
-  jot [--project <name>] <text>
+  jot [--project|-p <name>] <text>
                save a note of yours from outside Claude Code: into this machine's notes, and
                to the hub at once if one is set up. --ask asks for it in a desktop prompt
                (bind that to a key; README)
@@ -55,7 +55,7 @@ case ${1:-help} in
   jot)
     shift
     if [ "${1:-}" = --ask ]; then exec "$ROOT/bin/jot-ask"; fi
-    need_bun; exec bun "$ROOT/server/jot.ts" "$@" ;;
+    need_bun; exec bun "$ROOT/server/jot.ts" jot "$@" ;;
   hub) shift; need_bun; load_env; exec bun "$ROOT/server/hub.ts" "$@" ;;
   help | -h | --help) usage ;;
   *) echo "ostrakon: unknown command: $1" >&2; usage >&2; exit 1 ;;
