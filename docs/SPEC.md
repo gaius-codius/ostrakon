@@ -246,7 +246,7 @@ One blank row, then one line: as many key/label pairs for the focus as the width
 ---
 
 ## 5. Dispatch semantics
-- **Detecting a sent note:** in `prompt.submit` (origin `composer`), if the text contains the exact text the mod last filled for a note or bundle, those notes are marked `sent`, with `sentAt` and `context.sentSessionId`. A prompt submitted while idle is marked at once; one submitted mid-turn only waits in the queue (the person can take it back) and is marked when it is delivered.
+- **Detecting a sent note:** in `prompt.submit` (origin `composer`), if the text contains the exact text the mod filled for a note or bundle since the last submit, those notes are marked `sent` (each fill on its own: two notes filled one after the other are both marked, and one whose text was deleted from the prompt is not), with `sentAt` and `context.sentSessionId`. A prompt submitted while idle is marked at once; one submitted mid-turn only waits in the queue (the person can take it back) and is marked when it is delivered.
 - **Failure-safe:** a note is never removed or altered before the submit is known to have entered. `sent` notes stay in history and can be restored.
 - **Cross-project dispatch:** when a note's project differs from the session's it is prefixed `[label] ` in `t`, `s`, Pocket fills and bundle lines.
 

@@ -1,13 +1,14 @@
 import { atom, read, update } from 'claude-code'
 import type { Elements, EngineInterface, Register } from 'claude-code'
 
-import type { Note, NoteProblem, NoteProject, NoteStatus, PaneState, SyncState } from '../types'
+import type { Fill, Note, NoteProblem, NoteProject, NoteStatus, PaneState, SyncState } from '../types'
 import { focusMove, needsView, pagedSlot, routeFocus } from '../src/focus'
 import { createMirrorStore } from '../src/mirror'
 import type { Action, Ctx, Focus, Line } from '../src/model'
 import {
   bundleText,
   canEditInline,
+  carriedIn,
   dispatchText,
   freshPane,
   fromField,
@@ -659,15 +660,16 @@ const refocus = async ($: EngineInterface) => {
   focusKey($, SEARCH_KEY)
 }
 
-// Spends the pane's last fill if it's still `text`: one submit or entry marks it, never two.
-const spendFill = async ($: EngineInterface, text: string) => {
-  let isSpent = false
+// Spends the pane's fills of these texts that are still held, and answers them: one submit or
+// entry marks a fill, never two.
+const spendFills = async ($: EngineInterface, texts: string[]) => {
+  let spent: Fill[] = []
   await setPane($, current => {
-    if (current.lastFill?.text !== text) return current
-    isSpent = true
-    return { ...current, lastFill: null }
+    spent = current.fills.filter(fill => texts.includes(fill.text))
+    if (spent.length === 0) return current
+    return { ...current, fills: current.fills.filter(fill => !texts.includes(fill.text)) }
   })
-  return isSpent
+  return spent
 }
 
 // Focus a line by key once the next drawing has it: its slot in the window.
@@ -911,7 +913,13 @@ const fillPrompt = async ($: EngineInterface, text: string, ids: string[], isFro
 // `ids` sent. The pane closes if it's open, except on a fill from the band (SPEC §10): the band or
 // the prompt holds the keys then, so the pane is beside the prompt, kept there to write with.
 const afterFill = async ($: EngineInterface, text: string, ids: string[], isFromBand = false) => {
-  await setPane($, current => ({ ...current, stash: '', lastFill: { text, ids } }))
+  // Added to the fills since the last submit. The same text filled again counts once, for every
+  // note that filled it.
+  await setPane($, current => {
+    const same = current.fills.find(fill => fill.text === text)?.ids ?? []
+    const fill = { text, ids: [...new Set([...same, ...ids])], isQueued: false }
+    return { ...current, stash: '', fills: [...current.fills.filter(other => other.text !== text), fill] }
+  })
   if (!isFromBand && (await read($, isOpen))) await closePane($)
 }
 
@@ -1680,33 +1688,50 @@ export const register: Register = (on, options) => {
 
   // A note the pane or band put into the prompt is sent once a submit carrying that text goes in.
   on('prompt.submit', async ($, e, next) => {
-    const fill = e.origin.kind === 'composer' ? (await read($, pane)).lastFill : null
-    // Only the person's next submit after a fill counts: once one goes in, the fill is spent, so a
+    const fills = e.origin.kind === 'composer' ? (await read($, pane)).fills : []
+    // Only the person's next submit after the fills counts: once one goes in, they're spent, so a
     // later prompt that happens to contain a short note's text never marks it. A dropped submit
     // spends nothing: the retry still counts.
     const result = await next(e)
     if ('drop' in result && result.drop) return result
-    if (fill === null) return result
-    const carries = e.text.includes(fill.text) && (result.text ?? e.text).includes(fill.text)
+    if (fills.length === 0) return result
+    const sent = result.text ?? e.text
+    const texts = fills.map(fill => fill.text)
+    const kept = carriedIn(sent, texts)
+    const carried = carriedIn(e.text, texts).filter(text => kept.includes(text))
     // Submitted mid-turn, the prompt only waits in the queue: the person can still take it back.
-    // It's sent once it enters the conversation (session.append below).
-    if (carries && e.turnId !== undefined) return result
-    if ((await spendFill($, fill.text)) && carries) await markSent($, fill.ids)
+    // The fills it carries are sent once it enters the conversation (session.append below); one an
+    // earlier queued prompt carries waits for that prompt's row.
+    if (e.turnId !== undefined) {
+      const left = fills.filter(fill => !fill.isQueued && !carried.includes(fill.text)).map(fill => fill.text)
+      await setPane($, current => ({
+        ...current,
+        fills: current.fills.flatMap(fill => (carried.includes(fill.text) ? [{ ...fill, isQueued: true }] : left.includes(fill.text) ? [] : [fill])),
+      }))
+      return result
+    }
+    const spent = await spendFills($, texts)
+    const ids = spent.filter(fill => carried.includes(fill.text)).flatMap(fill => fill.ids)
+    if (ids.length > 0) await markSent($, ids)
     return result
   })
 
-  // A queued prompt that carries the fill enters the conversation as a row of the main loop's: the
+  // A queued prompt that carries fills enters the conversation as a row of the main loop's: the
   // note is sent now.
   on('session.append', async ($, e, next) => {
     const appended = await next(e)
     if (e.agentId !== undefined || e.message.role !== 'user' || !(e.door === 'prompt' || e.door === 'attachment' || e.door === 'delivery')) return appended
-    const fill = (await read($, pane)).lastFill
-    if (fill === null) return appended
+    const fills = (await read($, pane)).fills
     const text = e.message.content.map(block => (typeof block.text === 'string' ? block.text : '')).join('\n')
-    if (!text.includes(fill.text)) return appended
+    const texts = fills.map(fill => fill.text)
+    const carried = carriedIn(text, texts)
+    if (carried.length === 0) return appended
     $.ui.log(`ostrakon: sent on entry (${e.door}${e.message.name ? ` ${e.message.name}` : ''})`, { to: 'debug' })
-    spendFill($, fill.text)
-      .then(isSpent => (isSpent ? markSent($, fill.ids) : undefined))
+    spendFills($, carried)
+      .then(spent => {
+        const ids = spent.flatMap(fill => fill.ids)
+        return ids.length > 0 ? markSent($, ids) : undefined
+      })
       .catch(error => reportStorage($, error))
     return appended
   })

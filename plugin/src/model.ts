@@ -21,11 +21,26 @@ export const freshPane = (): PaneState => ({
   moving: null,
   capture: { draft: '', target: null, saved: [], error: null },
   stash: '',
-  lastFill: null,
+  fills: [],
   undo: [],
 })
 
 // ---- text ----
+
+// The fills a prompt carries, longest first: each counts only where a longer one doesn't hold it,
+// so a note whose text sits inside a kept note's is not carried once it's deleted on its own.
+export const carriedIn = (prompt: string, texts: string[]) => {
+  let left = prompt
+  const carried = new Set<string>()
+  for (const text of [...texts].sort((a, b) => b.length - a.length)) {
+    const at = left.indexOf(text)
+    if (at === -1) continue
+    carried.add(text)
+    // A gap no note holds, so the text either side never joins into another match.
+    left = `${left.slice(0, at)}\u0000${left.slice(at + text.length)}`
+  }
+  return texts.filter(text => carried.has(text))
+}
 
 export const oneLine = (text: string) => text.replaceAll(/\s*\n\s*/g, ' ').trim()
 

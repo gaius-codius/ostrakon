@@ -7,6 +7,7 @@ import {
   ageOf,
   bundleText,
   canEditInline,
+  carriedIn,
   cells,
   dispatchText,
   fitFooter,
@@ -57,6 +58,14 @@ const note = (text: string, project: NoteProject | null, minutes: number, extra:
 const ctxOf = (projects: NoteProject[] = [CC, INFRA]): Ctx => ({ now: NOW, current: CC, labels: labelsOf(projects) })
 
 describe('model', () => {
+  test('a prompt carries each fill it holds; one held only inside a longer fill is not carried', () => {
+    const texts = ['fix typo', 'fix typo in README', 'rename the store']
+    expect(carriedIn('fix typo in README', texts)).toEqual(['fix typo in README'])
+    expect(carriedIn('fix typo\n\nfix typo in README', texts)).toEqual(['fix typo', 'fix typo in README'])
+    expect(carriedIn('rename the store\n\nfix typo', texts)).toEqual(['fix typo', 'rename the store'])
+    expect(carriedIn('nothing here', texts)).toEqual([])
+  })
+
   test('ages read now, minutes, hours, days, weeks, years', () => {
     expect([0, 12, 180, 60 * 48, 60 * 24 * 20, 60 * 24 * 400].map(minutes => ageOf(ago(minutes), NOW))).toEqual(['now', '12m', '3h', '2d', '2w', '1y'])
   })
