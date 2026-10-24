@@ -34,11 +34,11 @@ export const carriedIn = (prompt: string, texts: string[]) => {
   let left = prompt
   const carried = new Set<string>()
   for (const text of [...texts].sort((a, b) => b.length - a.length)) {
-    const at = left.indexOf(text)
-    if (at === -1) continue
+    if (!left.includes(text)) continue
     carried.add(text)
-    // A gap no note holds, so the text either side never joins into another match.
-    left = `${left.slice(0, at)}\u0000${left.slice(at + text.length)}`
+    // Every copy becomes a gap no note holds, so a shorter fill counts only outside all of them, and
+    // the text either side never joins into another match.
+    left = left.split(text).join('\u0000')
   }
   return texts.filter(text => carried.has(text))
 }

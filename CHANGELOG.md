@@ -26,6 +26,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 - Two notes put into one prompt before you send it (two chips, `;1` then `;2`, or a chip and `t`) are both marked sent. Before, only the second was.
 - After `m` moves a note out of this project's list, the row that took its place is selected, as after an archive. Before, the search field took the keys.
 - After you leave an edit with Esc, the pane opens on the list again, not in the edit card. It opens in the edit card only if it closed while that was showing. `[ esc back ]` now keeps the draft as Esc does: `e` on that note picks it back up.
+- A note whose text sits inside another note's is no longer marked sent when you delete it from the prompt and the longer note is in the prompt twice.
 
 ## [0.7.0] - 2026-10-22
 
