@@ -676,14 +676,15 @@ const refocus = async ($: EngineInterface) => {
   focusKey($, SEARCH_KEY)
 }
 
-// Spends the pane's fills of these texts that are still held, and answers them: one submit or
-// entry marks a fill, never two.
-const spendFills = async ($: EngineInterface, texts: string[]) => {
+// Spends the pane's fills of these texts that are still held (only queued ones, for a row), and
+// answers them: one submit or entry marks a fill, never two.
+const spendFills = async ($: EngineInterface, texts: string[], isQueuedOnly = false) => {
   let spent: Fill[] = []
+  const spends = (fill: Fill) => texts.includes(fill.text) && (!isQueuedOnly || fill.isQueued)
   await setPane($, current => {
-    spent = current.fills.filter(fill => texts.includes(fill.text))
+    spent = current.fills.filter(spends)
     if (spent.length === 0) return current
-    return { ...current, fills: current.fills.filter(fill => !texts.includes(fill.text)) }
+    return { ...current, fills: current.fills.filter(fill => !spends(fill)) }
   })
   return spent
 }
@@ -1807,7 +1808,8 @@ export const register: Register = (on, options) => {
     ).filter(found => queued.has(found))
     if (carried.length === 0) return appended
     $.ui.log(`ostrakon: sent on entry (${e.door}${e.message.name ? ` ${e.message.name}` : ''})`, { to: 'debug' })
-    spendFills($, carried)
+    // A take-back since this row was read leaves its fill held.
+    spendFills($, carried, true)
       .then(spent => {
         const ids = spent.flatMap(fill => fill.ids)
         return ids.length > 0 ? markSent($, ids) : undefined
