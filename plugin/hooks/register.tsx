@@ -1824,17 +1824,11 @@ export const register: Register = (on, options) => {
     const changed = await next(e)
     const kind: string = e.origin.kind
     if (kind === 'history' || kind === 'clear' || kind === 'undo' || kind === 'plugin' || kind === 'app') return changed
-    const fills = (await read($, pane)).fills
-    if (!fills.some(fill => fill.isQueued)) return changed
-    const back = carriedIn(
-      e.text,
-      fills.map(fill => fill.text),
-    )
-    if (!fills.some(fill => fill.isQueued && back.includes(fill.text))) return changed
-    await setPane($, current => ({
-      ...current,
-      fills: current.fills.map(fill => (fill.isQueued && back.includes(fill.text) ? { ...fill, isQueued: false } : fill)),
-    }))
+    // Any copy counts, even inside a longer fill's: a queued fill wrongly put back leaves its note
+    // open, and one wrongly left queued could be marked by a row it never went in.
+    const isBack = (fill: Fill) => fill.isQueued && e.text.includes(fill.text)
+    if (!(await read($, pane)).fills.some(isBack)) return changed
+    await setPane($, current => ({ ...current, fills: current.fills.map(fill => (isBack(fill) ? { ...fill, isQueued: false } : fill)) }))
     return changed
   })
 

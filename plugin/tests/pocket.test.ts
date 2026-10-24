@@ -775,6 +775,28 @@ test('a queued prompt taken back and deleted leaves its note open, whatever row 
   await ui.unmount()
 })
 
+test('a queued note taken back inside a longer note held in the prompt is no longer queued', async ($, on) => {
+  const dir = nested()
+  const { world, clock } = await startSession($, on, dir)
+  const ui = await mountBand($)
+  await $.turn.start({ text: 'working on something', turnId: 'turn-3' })
+  await ui.press({ key: 'band-chip-2' })
+  await clock.advance(10)
+  // The person types the rest, so the queued prompt reads like the longer note.
+  await $.prompt.submit({ text: 'fix typo in README', wait: false, origin: { kind: 'composer' }, turnId: 'turn-3' })
+  world.box.text = ''
+  await ui.press({ key: 'band-chip-1' })
+  await clock.advance(10)
+  expect(world.box.text).toBe('fix typo in README')
+  await change($, 'fix typo in README\n\nfix typo in README', { kind: 'engine' })
+  await change($, '', { kind: 'engine' })
+  await $.turn.complete({ ...TURN_DONE, turnId: 'turn-3' })
+  await append($, 'fix typo', { door: 'attachment', name: 'nested_memory', origin: { kind: 'engine' } })
+  await clock.advance(10)
+  expect(noteIn(dir, SHORT).status).toBe('open')
+  await ui.unmount()
+})
+
 test('a queued prompt taken back and submitted again marks its note once its row enters', async ($, on) => {
   const { dir, ui, clock, text } = await queued($, on)
   await change($, text, { kind: 'engine' })
