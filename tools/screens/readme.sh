@@ -35,7 +35,7 @@ keys C-x s; sleep 2
 # The pane opens on all projects only if all was chosen before, and that choice lives in the mod's
 # store, which your own sessions share. Choose all for the shot, and choose again after to put the
 # store back.
-rescope=; T capture-pane -p -t rv | grep -q 'this project' && { keys C-s; rescope=1; }
+rescope=; T capture-pane -p -t rv | grep -q 'this project ·' && { keys C-s; rescope=1; }
 # The header sits left of the docked pane, and a notice (login expiry) can sit under it: paint both
 # over with the background instead of cropping.
 shot readme-pane "" >/dev/null

@@ -99,7 +99,7 @@ export const TEXT = {
   bundleIntro: 'Please look at these notes from my ostrakon:',
   editHint: 'draft kept if the pane closes',
   // The edit box's buttons carry their keys, since that's where the eye is while editing.
-  editCancel: 'esc cancel',
+  editBack: 'esc back',
   editSave: `${GLYPH.enter} save`,
   emptyTitle: (where: string) => `Nothing pending in ${where}.`,
   unfocused: [
@@ -110,6 +110,7 @@ export const TEXT = {
   keySheet: [
     ['↑ ↓ j k', 'move'],
     ['1–9', 'jump to a row'],
+    ['g', 'top, again bottom'],
     ['⏎ / t', 'to prompt'],
     ['a / r', 'keep / dismiss'],
     ['s', 'send'],
@@ -129,6 +130,16 @@ export const TEXT = {
     ['ctrl+x i', 'keys, from a text field too'],
     ['ctrl+x tab', 'to the prompt and back'],
     ['//', 'jot from the prompt'],
+  ] as [string, string][],
+  // After the keys in the sheet, under `symbolsTitle`: what a row's marker means (DESIGN.md §5).
+  symbolsTitle: 'symbols',
+  symbolSheet: [
+    [GLYPH.claude, 'from Claude'],
+    [GLYPH.phone, 'from the phone'],
+    [`${GLYPH.picked} ${GLYPH.unpicked}`, 'row picked / not picked'],
+    [GLYPH.sent, 'sent'],
+    [GLYPH.archived, 'archived, or a row past 9'],
+    [GLYPH.folded, 'folded group'],
   ] as [string, string][],
   keepAll: 'keep all',
   harvestTitle: `${GLYPH.claude} from this turn`,

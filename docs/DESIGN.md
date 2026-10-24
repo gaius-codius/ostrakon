@@ -1,6 +1,6 @@
 # Ostrakon design system
 
-Version: 4.0.0
+Version: 5.0.0
 
 What the terminal mod (the pane, the band and the prompt hint, in `plugin/`) and the phone (`server/public/`) must agree on: colour roles, the project palette, the phone's tokens, symbols, fixed copy, motion and the accessibility bar. [`SPEC.md`](SPEC.md) describes behaviour and points here for these values instead of repeating them. The code holds the values: `plugin/src/ui/look.ts` for the terminal, `style.css`, `app.js` and `index.html` for the phone.
 
@@ -197,6 +197,10 @@ Strings the surfaces or the docs depend on, each checked word for word in every 
 | `keep all` | plugin/src/ui/look.ts | the harvest band's `;0 keep all` |
 | `saves to` | plugin/src/ui/look.ts, docs/SPEC.md | the hint tail while a `/jot` draft is typed, and capture's line: `⏎ saves to <project>` |
 | `saved to` | plugin/src/ui/look.ts, docs/SPEC.md | the hint tail after a save: `✓ saved to <project>` |
+| `esc back` | plugin/src/ui/look.ts, docs/SPEC.md | the edit card's back button: `[ esc back ]`, the draft kept |
+| `all projects` | plugin/src/model.ts, docs/SPEC.md | the footer's `ctrl+s` in this project's scope |
+| `this project` | plugin/src/model.ts, plugin/src/ui/pane.tsx, docs/SPEC.md | the footer's `ctrl+s` in scope all, and the search row's scope |
+| `symbols` | plugin/src/ui/look.ts, docs/SPEC.md | the key sheet's heading over the row markers |
 | `Archived · u undo` | plugin/src/ui/look.ts, docs/SPEC.md | the pane's archive toast |
 | `Please look at these notes from my ostrakon:` | plugin/src/ui/look.ts, docs/SPEC.md | the bundle's first line |
 | `· waiting to sync` | server/public/app.js | after Save, until the hub has the note |
@@ -288,6 +292,14 @@ Keys, layout and behaviour are in [`SPEC.md`](SPEC.md). The terminal's spacing i
 ## 11. Changelog
 
 Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one or more `- Change:` lines and one or more `- Why:` lines. The newest entry ends with `Fingerprint: <hash>` of the design values in the code (`bun tools/check-design.ts --fingerprint` prints it). Versions: major when a meaning changes or something goes (a glyph means something else, a colour role moves); minor when something is added; patch for a value tweak or a doc fix. Entries are never removed.
+
+### 5.0.0 — 2026-10-24
+- Change: The edit card's back button reads `[ esc back ]` (was `[ esc cancel ]`).
+- Change: The footer's `ctrl+s` names where it goes, `all projects` or `this project`, in place of `scope`.
+- Change: With nothing open in this project but some history, the list shows the project's header with `0` in place of the empty inbox, and the footer leads with `↓ history`.
+- Change: The key sheet ends with the row markers under `symbols`, and lists `g` (top, again bottom).
+- Why: The button keeps the draft, which "cancel" didn't say. `scope` didn't say that it's the way to every project's notes. History was out of reach from the empty inbox, and the footer's `◆ from Claude` was the only legend for the row markers.
+Fingerprint: 58295af87f4e
 
 ### 4.0.0 — 2026-10-22
 - Change: The footer shows as many key pairs as the width takes, not four at most: on a row, `m move` and `y copy` follow the note's own four, then `v pick`, `z fold` and `h history`. The legend stays ahead of the pairs past the first four.

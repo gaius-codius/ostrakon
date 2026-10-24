@@ -10,15 +10,20 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 - `ostrakon jot [--project <name>] <text>` saves a note of yours from outside Claude Code: into this machine's notes, and to the hub at once if the mod has one set. `ostrakon jot --ask` asks for the note in a small desktop prompt; bind it to a key (README, Notes from the desktop).
 - The hub's `/api/jot` takes an optional `source`, for senders other than the phone (a Slack bot, a script): the note is yours, with the source as its origin. Without it, nothing changes.
+- In the pane, `g` goes to the top of the list, and pressed again to the bottom.
+- The key sheet (`i`) ends with what the row symbols mean (`◆ ▪ ● ○ ↗ · ▸`).
 
 ### Changed
 
 - In a new note (`ctrl+n`), `ctrl+s` opens a project picker instead of stepping through every project: type part of a name and press Enter. The picked project now lasts until the pane closes; the next time it opens, new notes go to this session's project again.
+- With nothing open in this project but some sent or archived notes, the pane shows the project's heading instead of the empty page: `↓` then `h` shows the history.
+- The footer's `ctrl+s` says where it goes (`all projects` or `this project`) instead of `scope`.
+- The edit card's `[ esc cancel ]` is now `[ esc back ]`: it keeps the draft.
 
 ### Fixed
 
 - Two notes put into one prompt before you send it (two chips, `;1` then `;2`, or a chip and `t`) are both marked sent. Before, only the second was.
-- After you leave an edit with Esc, the pane opens on the list again, not in the edit card. It opens in the edit card only if it closed while that was showing. `[ esc cancel ]` now keeps the draft as Esc does: `e` on that note picks it back up.
+- After you leave an edit with Esc, the pane opens on the list again, not in the edit card. It opens in the edit card only if it closed while that was showing. `[ esc back ]` now keeps the draft as Esc does: `e` on that note picks it back up.
 
 ## [0.7.0] - 2026-10-22
 

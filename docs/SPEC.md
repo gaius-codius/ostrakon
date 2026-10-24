@@ -143,7 +143,7 @@ Focus starts in the search field; no row is selected and the top result is previ
        ▎ the redis bump, only on the arm runners
        ▎ you · ~/Work/cc · main · 12m ago                          ← meta
 ──────────────────────────────────────────────────────────────────────
-ctrl+s scope  ctrl+n new  ctrl+q close                ctrl+x i keys  ← footer
+ctrl+s this project  ctrl+n new  ctrl+q close         ctrl+x i keys  ← footer
 ```
 - **Rows** are one line under their group header, indented two columns: selection bar, the row's number in the window (1–9, then `·`), a marker (`◆`, `▪`, `●`/`○`, `↗`), the text with search hits highlighted, then the age (`now`, `12m`, `3h`, `2d`, `5w`, `1y`).
 - **Preview** (docked only): the selected note's text, capped at 6 lines, then a meta line `who · path · branch · age ago`, all behind a dim `▎` bar. It's indented so the bar starts in the rows' text column; no blank row is added for it. A long path is cut, then dropped, before the age is.
@@ -152,9 +152,9 @@ ctrl+s scope  ctrl+n new  ctrl+q close                ctrl+x i keys  ← footer
 - **No match:** dim, `No notes match. ⏎ saves it to cc.` Enter saves the query as a note. The field drops its `⏎ to list`, which would be wrong here. A query too long for the field shows above that line, wrapped, as capture's draft does: up to 6 lines docked, its last line inline or in a body too short for the preview; one that fits isn't repeated. A storage problem's row stays above it.
 
 ### 4.3 Groups, history and picks
-- **Groups** have a header at the left edge: the project's dot and its label, dim, with the group's open count dim on the right and `▸` when folded. `proposed` (with `◆`) and the current project are bold accent. The notes under a header are indented two columns, so note text is the brightest thing in the list. Order: `proposed` first when harvest has any, then the current project, then others by latest activity, then `unfiled`. Within a group: open notes first, then history when shown. A query filters the notes and leaves `proposed` out; a group with none left isn't drawn, and a folded group shows its matches while the query lasts.
+- **Groups** have a header at the left edge: the project's dot and its label, dim, with the group's open count dim on the right (the current project's even at `0`) and `▸` when folded. `proposed` (with `◆`) and the current project are bold accent. The notes under a header are indented two columns, so note text is the brightest thing in the list. Order: `proposed` first when harvest has any, then the current project, then others by latest activity, then `unfiled`. Within a group: open notes first, then history when shown. A query filters the notes and leaves `proposed` out; a group with none left isn't drawn, and a folded group shows its matches while the query lasts.
 - **Headers are focusable;** `z` folds or unfolds a group.
-- **History:** `h` adds `sent` and `archived` notes (dimmed); `u` on one restores it.
+- **History:** `h` adds `sent` and `archived` notes (dimmed); `u` on one restores it. With nothing open in this project but history hidden, its header still shows, with a count of `0`, in place of the empty inbox, and the search field's footer leads with `↓ history`: `↓` (or ⏎) reaches the header and `h` (or ⏎ there) shows the history, unfolded. The bare header has nothing to fold, so it offers no `z`. A query hides it. A storage problem's row sits above it, and then the footer leaves `↓ history` out.
 - **Picking:** `v` picks or unpicks an open or proposed note. Once one is picked every row shows `●`/`○` and the footer leads with `3 picked`. Picks live in `$.state` until sent, cleared (`x`) or the session ends; a picked note that stops being open drops out with a toast. Bundles keep pick order.
 
 ### 4.4 Capture, `//` and the draft stash
@@ -183,6 +183,7 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 |---|---|
 | ↑ ↓ / Tab / `j` `k` | move; selection follows focus |
 | `1`–`9` | jump to that row in the window |
+| `g` | the top row; on the top row, the bottom one (`G` can't be a hotkey, §2.2). In the key sheet, not the footer |
 | ⏎ | in search: focus the first result. On a row: same as `t` |
 | `v` | pick or unpick |
 | `x` | clear the picks (in the bundle: back to the list) |
@@ -198,8 +199,8 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 | `z` | fold or unfold the group |
 | `f` / `ctrl+f` | focus search |
 | `n` / `ctrl+n` | new note |
-| `ctrl+s` | scope (search, list); in capture, the target project picker (§4.4) |
-| `i` / `ctrl+x i` | key sheet on/off (`ctrl+x i` also from a text field, which takes `i`; the sheet then has the keys, and gives them back to that field when it closes): a framed list of every key (unframed when the body is too short for a line inside the frame) (storage problems first; opened on a row, that row's own keys next, in its footer's order) between the search row and the footer; while it is up the pane takes the whole body and the footer its last row. It is at most 46 columns and never wider than the pane. When it's longer than the rows between, it pages: the footer shows `j more 2/3`, `j` turns to the next page and `k` back, both going round |
+| `ctrl+s` | scope (search, list); the footer names where it goes: `all projects`, or `this project` while scope is all. In capture, the target project picker (§4.4) |
+| `i` / `ctrl+x i` | key sheet on/off (`ctrl+x i` also from a text field, which takes `i`; the sheet then has the keys, and gives them back to that field when it closes): a framed list of every key (unframed when the body is too short for a line inside the frame) (storage problems first; opened on a row, that row's own keys next, in its footer's order) between the search row and the footer; while it is up the pane takes the whole body and the footer its last row. It is at most 46 columns and never wider than the pane. After the keys, under a bold `symbols`, what the row markers mean: `◆` from Claude, `▪` from the phone, `● ○` picked / not picked, `↗` sent, `·` archived (or a row past 9), `▸` folded group. When it's longer than the rows between, it pages: the footer shows `j more 2/3`, `j` turns to the next page and `k` back, both going round |
 | Esc | **back** one step: edit → the row (draft kept), move / bundle → the list, key sheet → the text field it was opened from, else the list, target picker → capture, capture → search, a row → the search field, a query → empty; at the top the keys go to the prompt and the pane stays open (Esc again, at an idle empty prompt, closes it). The close mark and `ctrl+x x` do the same as Esc (the mod can't tell them apart); the close mark closes a pane that isn't holding the keys |
 | `ctrl+x tab` | the keys go to the prompt and the pane stays open, keeping its search, selection and drafts (an open key sheet or move picker closes; the target picker goes back to capture); from the prompt, back to the pane where it was. On a closed pane it opens it. It replaces the engine's `ctrl+x tab` (focus the band); a click still focuses the band |
 | `q` / `ctrl+q` / `ctrl+x s` | close the pane from anywhere; drafts are kept. `ctrl+x s` closes it from the prompt too |
@@ -222,8 +223,8 @@ One blank row, then one line: as many key/label pairs for the focus as the width
 
 ### 4.7 Other states
 - **Bundle:** `⇢ bundle  3 notes into one prompt`, then the exact prompt in a quote box: `Please look at these notes from my ostrakon:`, a blank line, one `- ` line per note in pick order (other projects prefixed `[label] `). Focus goes to a `[ send ]` button; ⏎ sends and `t` fills the prompt instead. Picked notes are marked sent only once the prompt goes in.
-- **Edit:** the row becomes a `round` box with a one-line Input prefilled with the text. Newlines show as `↵` and turn back into newlines on save (a note that already contains `↵` can't round-trip, so `e` points you to the file). `[ esc cancel ]` and `[ ⏎ save ]` sit below, naming their keys where the eye is, then `draft kept if the pane closes` when it fits on the line; the draft is kept if the pane closes. `[ esc cancel ]` does what Esc does: back to the row, the draft kept for the next `e` on that note.
-- **Empty inbox:** `Nothing pending in cc.` (scope all: `Nothing pending in any project.`) and the ways in (`//`, `ctrl+n` new note, and the phone and harvest lines when those are configured) in a fixed key column. Docked, a small dim shard sits beside them; when the descriptions would be cut beside it, the shard is left out.
+- **Edit:** the row becomes a `round` box with a one-line Input prefilled with the text. Newlines show as `↵` and turn back into newlines on save (a note that already contains `↵` can't round-trip, so `e` points you to the file). `[ esc back ]` and `[ ⏎ save ]` sit below, naming their keys where the eye is, then `draft kept if the pane closes` when it fits on the line; the draft is kept if the pane closes. `[ esc back ]` does what Esc does: back to the row, the draft kept for the next `e` on that note.
+- **Empty inbox** (nothing open in scope, and no history in this project; with history, §4.3's bare header instead): `Nothing pending in cc.` (scope all: `Nothing pending in any project.`) and the ways in (`//`, `ctrl+n` new note, and the phone and harvest lines when those are configured) in a fixed key column. Docked, a small dim shard sits beside them; when the descriptions would be cut beside it, the shard is left out.
 - **Toasts** are short and calm (`Archived · u undo`, `Copied`, `note 2 in your prompt · ⏎ to send`). Never `$.ui.status`.
 
 ### 4.8 Paging and the inline pane

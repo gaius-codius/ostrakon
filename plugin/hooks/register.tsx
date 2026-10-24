@@ -475,7 +475,13 @@ const focusOf = (state: PaneState, lines: Line[], problemCount: number): Focus =
   const line = state.focus === 'line' ? lines.find(candidate => candidate.key === state.cursor) : undefined
   if (line) return { kind: 'line', line, picks: state.picks.length }
   if (lines.length === 0 && state.query.trim() === '') return { kind: 'empty' }
-  return { kind: 'search', hasResults: lines.some(candidate => candidate.kind === 'note'), hasQuery: state.query.trim() !== '' }
+  return {
+    kind: 'search',
+    hasResults: lines.some(candidate => candidate.kind === 'note'),
+    hasQuery: state.query.trim() !== '',
+    // Only when ↓ lands on it: a storage problem's row sits above it.
+    isBare: lines.length === 1 && lines[0]?.kind === 'group' && lines[0].isBare === true,
+  }
 }
 
 const viewOf = async ($: EngineInterface): Promise<PaneView> => {
@@ -491,7 +497,7 @@ const viewOf = async ($: EngineInterface): Promise<PaneView> => {
     else if (lines.length > 0) state = { ...state, cursor: lines[Math.min(lastCursorIndex, lines.length - 1)]?.key ?? null }
   }
   const focus = focusOf(state, lines, broken.length)
-  const keys = keysFor(focus)
+  const keys = keysFor(focus, state.scope)
   const noteLines = lines.filter((line): line is Extract<Line, { kind: 'note' }> => line.kind === 'note')
   const cursorNote = noteLines.find(line => line.key === state.cursor)?.note
   const preview = focus.kind === 'line' || state.mode !== 'browse' ? cursorNote : noteLines[0]?.note
@@ -958,6 +964,12 @@ const act = async ($: EngineInterface, action: Action) => {
       if (next) await focusLine($, next.key)
       return
     }
+    case 'top': {
+      // Pressed again on the top row, to the bottom: `G` can't be a hotkey (SPEC §2.2).
+      const next = at === 0 ? view.lines[view.lines.length - 1] : view.lines[0]
+      if (next) await focusLine($, next.key)
+      return
+    }
     case 'pick': {
       if (!note) return
       if (note.status !== 'open' && note.status !== 'proposed') return toast($, TOAST.onlyOpen)
@@ -1068,7 +1080,12 @@ const act = async ($: EngineInterface, action: Action) => {
       toast($, TOAST.copied)
       return
     case 'history':
-      await setPane($, current => ({ ...current, history: !current.history }))
+      // On a bare heading, the history shows unfolded, so `h` always shows something.
+      await setPane($, current => ({
+        ...current,
+        history: !current.history,
+        folded: line?.kind === 'group' && line.isBare ? current.folded.filter(group => group !== line.group) : current.folded,
+      }))
       return
     case 'fold': {
       const group = line?.kind === 'group' ? line.group : line?.kind === 'note' ? line.group : undefined
@@ -1144,7 +1161,9 @@ const searchInput = async ($: EngineInterface, value: string) => {
 
 const searchSubmit = async ($: EngineInterface, value: string) => {
   const view = await viewOf($)
-  const first = view.lines.find(line => line.kind === 'note')
+  // With only this project's bare heading, Enter goes to it, as `⏎ to list` says.
+  const first =
+    view.lines.find(line => line.kind === 'note') ?? (value.trim() === '' ? view.lines.find(line => line.kind === 'group' && line.isBare) : undefined)
   if (first) {
     // The field empties itself on Enter and only takes a value that differs from the last one
     // drawn; a trailing space (search trims it) draws the query back.
@@ -1271,7 +1290,7 @@ const pressSlot = async ($: EngineInterface, slot: number) => {
   const line = view.page.lines[slot]
   if (!line) return
   await setPane($, state => ({ ...state, cursor: line.key, focus: 'line' }))
-  await act($, line.kind === 'note' ? 'toPrompt' : line.kind === 'group' ? 'fold' : 'details')
+  await act($, line.kind === 'note' ? 'toPrompt' : line.kind === 'group' ? (line.isBare ? 'history' : 'fold') : 'details')
 }
 
 const digit = async ($: EngineInterface, n: number) => {
