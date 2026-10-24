@@ -20,7 +20,7 @@ import { randomTag } from '../plugin/src/store'
 import { ulid } from '../plugin/src/ulid'
 
 const HUB_TIMEOUT_MS = 3000
-const USAGE = 'usage: ostrakon jot [--project|-p <name>] <text>, or ostrakon jot --ask'
+const USAGE = 'usage: ostrakon jot [--project|-p <name>] <text>'
 
 export type JotDeps = {
   home: string
@@ -38,7 +38,8 @@ const text = (value: unknown) => (typeof value === 'string' && value.trim() !== 
 const path = (value: unknown) => (typeof value === 'string' && value !== '' ? value : undefined)
 
 // The plugin's options, under whichever name it was installed as (the same names bin/doctor tries).
-// All of them from one entry, as the mod gets its own: a leftover entry's URL never meets another's token.
+// The hub's URL and token as a pair, from the first entry that has both, so a leftover entry's URL
+// never meets another's token.
 export const settingsOf = (home: string): Settings => {
   let raw: string
   try {
@@ -49,10 +50,10 @@ export const settingsOf = (home: string): Settings => {
   const parsed = JSON.parse(raw) as unknown
   if (typeof parsed !== 'object' || parsed === null) return {}
   const s = parsed as { env?: Record<string, unknown>; pluginConfigs?: Record<string, { options?: Record<string, unknown> }> }
-  const options = ['ostrakon', 'ostrakon@inline', 'ostrakon@ostrakon']
-    .map(name => s.pluginConfigs?.[name]?.options)
-    .find(found => ['notesDir', 'hubUrl', 'hubToken'].some(key => text(found?.[key]) !== undefined))
-  return { envDir: path(s.env?.OSTRAKON_DIR), notesDir: path(options?.notesDir), hubUrl: text(options?.hubUrl), hubToken: text(options?.hubToken) }
+  const entries = ['ostrakon', 'ostrakon@inline', 'ostrakon@ostrakon'].map(name => s.pluginConfigs?.[name]?.options)
+  const hub = entries.find(options => text(options?.hubUrl) !== undefined && text(options?.hubToken) !== undefined)
+  const notesDir = entries.map(options => path(options?.notesDir)).find(value => value !== undefined)
+  return { envDir: path(s.env?.OSTRAKON_DIR), notesDir, hubUrl: text(hub?.hubUrl), hubToken: text(hub?.hubToken) }
 }
 
 // As the mod picks it (store.ts): OSTRAKON_DIR as a session sees it (the settings' env over the
@@ -202,7 +203,9 @@ export const jot = async (args: string[], deps: JotDeps): Promise<{ out: string[
   const later =
     !fromEnv || same(url) === same(settings.hubUrl)
       ? 'Claude Code sends it once a session runs here.'
-      : `Sessions here don't use that hub, so it stays only in ${dir}.`
+      : settings.hubUrl
+        ? `Sessions here send it to the mod's hub, not that one.`
+        : `No session here uses that hub, so it stays only in ${dir}.`
   return { out: [saved], err: [`Only on this machine for now: ${problem}. ${later}`], code: 0 }
 }
 

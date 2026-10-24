@@ -193,7 +193,31 @@ describe('ostrakon jot', () => {
     }
     const { deps } = setup(settings, {}, spy)
     await jot(['x'], deps)
-    expect(seen).toEqual([])
+    expect(seen).toEqual(['https://current/api/notes Bearer live-token'])
+  })
+
+  test("a leftover entry with only a folder doesn't hide another entry's hub", async () => {
+    const seen: string[] = []
+    const spy: JotDeps['fetch'] = async url => {
+      seen.push(url)
+      return new Response('{}', { status: 500 })
+    }
+    const old = temp()
+    const settings = { pluginConfigs: { ostrakon: { options: { notesDir: old } }, 'ostrakon@ostrakon': { options: { hubUrl: 'https://hub', hubToken: 't' } } } }
+    const { deps, notes } = setup(settings, {}, spy)
+    await jot(['x'], deps)
+    expect(seen).toEqual(['https://hub/api/notes'])
+    expect(readdirSync(join(old, 'notes'))).toHaveLength(1)
+    expect(() => notes()).toThrow()
+  })
+
+  test("with an env hub other than the mod's, says a session sends it to the mod's hub", async () => {
+    const down: JotDeps['fetch'] = async () => new Response('{}', { status: 500 })
+    const settings = { pluginConfigs: { ostrakon: { options: { hubUrl: 'https://mods', hubToken: 't' } } } }
+    const other = setup(settings, { OSTRAKON_HUB_URL: 'https://other', OSTRAKON_HUB_TOKEN: 'u' }, down)
+    expect((await jot(['x'], other.deps)).err[0]).toContain("send it to the mod's hub")
+    const same = setup(settings, { OSTRAKON_HUB_URL: 'https://mods/', OSTRAKON_HUB_TOKEN: 'u' }, down)
+    expect((await jot(['x'], same.deps)).err[0]).toContain('Claude Code sends it')
   })
 
   test('keeps the notesDir option as given, as the mod does', async () => {
@@ -208,7 +232,7 @@ describe('ostrakon jot', () => {
     const { deps } = setup({}, { OSTRAKON_HUB_URL: 'https://wrong', OSTRAKON_HUB_TOKEN: 't' }, html)
     const result = await jot(['x'], deps)
     expect(result.err[0]).toContain("https://wrong didn't answer as a hub (200)")
-    expect(result.err[0]).toContain("Sessions here don't use that hub")
+    expect(result.err[0]).toContain('No session here uses that hub')
   })
 
   test('refuses an empty project name and "all"', async () => {
