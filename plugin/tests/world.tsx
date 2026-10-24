@@ -115,6 +115,11 @@ export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '', w
     world.box.text = e.text
     return { isFilled: true }
   })
+  // The box as a write the engine reports (a queued prompt taken back): core echoes the text.
+  on('prompt.change', (_, e) => {
+    world.box.text = e.text
+    return { text: e.text }
+  })
   on('prompt.submit', async (_, e) => {
     world.submitted.push(e.text)
     // The engine starts the turn inside the submit, before the mod's submit hook returns.

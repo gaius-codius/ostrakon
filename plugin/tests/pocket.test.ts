@@ -614,12 +614,18 @@ test('keeping a proposal that was archived or kept elsewhere meanwhile changes n
 const append = (
   $: Engine,
   text: string,
-  row: { door: 'prompt' | 'delivery' | 'attachment' | 'tool-result'; role?: 'user' | 'assistant'; agentId?: string; name?: string } = { door: 'prompt' },
+  row: {
+    door: 'prompt' | 'delivery' | 'attachment' | 'tool-result'
+    role?: 'user' | 'assistant'
+    agentId?: string
+    name?: string
+    origin?: { kind: 'composer' } | { kind: 'engine' } | { kind: 'plugin'; name: string; asUser?: true }
+  } = { door: 'prompt' },
 ) =>
   $.session.append({
     message: { type: 'user', role: row.role ?? 'user', ...(row.name ? { name: row.name } : {}), content: [{ type: 'text', text }] },
     door: row.door,
-    origin: { kind: 'composer' },
+    origin: row.origin ?? { kind: 'composer' },
     uuid: `row-${text.length}-${row.door}`,
     ...(row.agentId ? { agentId: row.agentId } : {}),
   })
@@ -686,6 +692,139 @@ test('an idle submit and the prompt row for the same text mark the note once', a
   const after = noteIn(dir, ONE)
   expect(after.sentAt).toBe(first.sentAt)
   expect(after.updated).toBe(first.updated)
+  await ui.unmount()
+})
+
+// A short note and a longer one that contains its text.
+const SHORT = '01JA7K2M3Q9X4ZB6C8D0EFGH31'
+const LONG = '01JA7K2M3Q9X4ZB6C8D0EFGH32'
+const nested = () => {
+  const dir = new MemDir()
+  put(dir, LONG, 'fix typo in README', CC, 5)
+  put(dir, SHORT, 'fix typo', CC, 30)
+  return dir
+}
+
+test('a note left in the prompt is not marked sent by the row of a longer note sent with s', async ($, on) => {
+  const dir = nested()
+  const { world, clock } = await startSession($, on, dir)
+  const band = await mountBand($)
+  await band.press({ key: 'band-chip-2' })
+  await clock.advance(10)
+  await band.unmount()
+  expect(world.box.text).toBe('fix typo')
+  await run($, 'jot', '')
+  const pane = await mountPane($)
+  await pane.input({ key: 'q', text: '', kind: 'submit' })
+  await pane.press({ key: 'key-s' })
+  await clock.advance(10)
+  expect(world.submitted).toEqual(['fix typo in README'])
+  // The engine appends the plugin's prompt as a row of its own.
+  await append($, 'fix typo in README', { door: 'prompt', origin: { kind: 'plugin', name: 'ostrakon', asUser: true } })
+  await clock.advance(10)
+  expect(noteIn(dir, LONG).status).toBe('sent')
+  expect(noteIn(dir, SHORT).status).toBe('open')
+  // Still in the prompt: the person's own submit carrying it marks it.
+  expect(world.box.text).toBe('fix typo')
+  await composer($, world.box.text)
+  expect(noteIn(dir, SHORT).status).toBe('sent')
+  await pane.unmount()
+})
+
+test("a note held in the prompt is not marked sent by a person's row that carries its text", async ($, on) => {
+  const dir = fixture()
+  const { world, clock } = await startSession($, on, dir)
+  const ui = await mountBand($)
+  await ui.press({ key: 'band-chip-1' })
+  await clock.advance(10)
+  const text = world.box.text
+  await append($, `see ${text}`, { door: 'attachment', name: 'nested_memory', origin: { kind: 'engine' } })
+  await append($, text, { door: 'delivery', name: 'queued_command' })
+  await clock.advance(10)
+  expect(noteIn(dir, ONE).status).toBe('open')
+  await composer($, text)
+  expect(noteIn(dir, ONE).status).toBe('sent')
+  await ui.unmount()
+})
+
+test("a plugin's row carrying a queued note's text marks nothing; the queued prompt's own row still does", async ($, on) => {
+  const { dir, ui, clock, text } = await queued($, on)
+  await append($, text, { door: 'prompt', origin: { kind: 'plugin', name: 'other', asUser: true } })
+  await append($, text, { door: 'attachment', origin: { kind: 'plugin', name: 'other' } })
+  await clock.advance(10)
+  expect(noteIn(dir, ONE).status).toBe('open')
+  await append($, text, { door: 'delivery', name: 'queued_command', origin: { kind: 'engine' } })
+  await clock.advance(10)
+  expect(noteIn(dir, ONE).status).toBe('sent')
+  await ui.unmount()
+})
+
+// The engine puts a queued prompt taken back into the box, and says only that it wrote the box.
+type Change = (e: { text: string; cursor: number; origin: { kind: string; name?: string } }) => Promise<unknown>
+const change = ($: Engine, text: string, origin: { kind: string; name?: string }) =>
+  ($.prompt as unknown as { change: Change }).change({ text, cursor: text.length, origin })
+
+test('a queued prompt taken back and deleted leaves its note open, whatever row carries the text later', async ($, on) => {
+  const { dir, ui, clock, text } = await queued($, on)
+  await change($, text, { kind: 'engine' })
+  await change($, '', { kind: 'engine' })
+  await $.turn.complete({ ...TURN_DONE, turnId: 'turn-3' })
+  await append($, `the memory file says: ${text}`, { door: 'attachment', name: 'nested_memory', origin: { kind: 'engine' } })
+  await clock.advance(10)
+  expect(noteIn(dir, ONE).status).toBe('open')
+  await ui.unmount()
+})
+
+test('a queued note taken back inside a longer note held in the prompt is no longer queued', async ($, on) => {
+  const dir = nested()
+  const { world, clock } = await startSession($, on, dir)
+  const ui = await mountBand($)
+  await $.turn.start({ text: 'working on something', turnId: 'turn-3' })
+  await ui.press({ key: 'band-chip-2' })
+  await clock.advance(10)
+  // The person types the rest, so the queued prompt reads like the longer note.
+  await $.prompt.submit({ text: 'fix typo in README', wait: false, origin: { kind: 'composer' }, turnId: 'turn-3' })
+  world.box.text = ''
+  await ui.press({ key: 'band-chip-1' })
+  await clock.advance(10)
+  expect(world.box.text).toBe('fix typo in README')
+  await change($, 'fix typo in README\n\nfix typo in README', { kind: 'engine' })
+  await change($, '', { kind: 'engine' })
+  await $.turn.complete({ ...TURN_DONE, turnId: 'turn-3' })
+  await append($, 'fix typo', { door: 'attachment', name: 'nested_memory', origin: { kind: 'engine' } })
+  await clock.advance(10)
+  expect(noteIn(dir, SHORT).status).toBe('open')
+  await ui.unmount()
+})
+
+test('a queued prompt taken back and submitted again marks its note once its row enters', async ($, on) => {
+  const { dir, ui, clock, text } = await queued($, on)
+  await change($, text, { kind: 'engine' })
+  await $.prompt.submit({ text, wait: false, origin: { kind: 'composer' }, turnId: 'turn-3' })
+  expect(noteIn(dir, ONE).status).toBe('open')
+  await append($, text, { door: 'delivery', name: 'queued_command' })
+  await clock.advance(10)
+  expect(noteIn(dir, ONE).status).toBe('sent')
+  await ui.unmount()
+})
+
+test('a queued prompt taken back and submitted once idle marks its note at once', async ($, on) => {
+  const { dir, ui, clock, text } = await queued($, on)
+  await change($, text, { kind: 'engine' })
+  await $.turn.complete({ ...TURN_DONE, turnId: 'turn-3' })
+  await composer($, text)
+  await clock.advance(10)
+  expect(noteIn(dir, ONE).status).toBe('sent')
+  await ui.unmount()
+})
+
+test('a recalled history entry or a plugin fill holding a queued note leaves it queued', async ($, on) => {
+  const { dir, ui, clock, text } = await queued($, on)
+  await change($, text, { kind: 'history' })
+  await change($, text, { kind: 'plugin', name: 'ostrakon' })
+  await append($, text, { door: 'delivery', name: 'queued_command' })
+  await clock.advance(10)
+  expect(noteIn(dir, ONE).status).toBe('sent')
   await ui.unmount()
 })
 

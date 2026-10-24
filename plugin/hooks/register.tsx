@@ -676,14 +676,15 @@ const refocus = async ($: EngineInterface) => {
   focusKey($, SEARCH_KEY)
 }
 
-// Spends the pane's fills of these texts that are still held, and answers them: one submit or
-// entry marks a fill, never two.
-const spendFills = async ($: EngineInterface, texts: string[]) => {
+// Spends the pane's fills of these texts that are still held (only queued ones, for a row), and
+// answers them: one submit or entry marks a fill, never two.
+const spendFills = async ($: EngineInterface, texts: string[], isQueuedOnly = false) => {
   let spent: Fill[] = []
+  const spends = (fill: Fill) => texts.includes(fill.text) && (!isQueuedOnly || fill.isQueued)
   await setPane($, current => {
-    spent = current.fills.filter(fill => texts.includes(fill.text))
+    spent = current.fills.filter(spends)
     if (spent.length === 0) return current
-    return { ...current, fills: current.fills.filter(fill => !texts.includes(fill.text)) }
+    return { ...current, fills: current.fills.filter(fill => !spends(fill)) }
   })
   return spent
 }
@@ -1791,23 +1792,49 @@ export const register: Register = (on, options) => {
   })
 
   // A queued prompt that carries fills enters the conversation as a row of the main loop's: the
-  // note is sent now.
+  // note is sent now. Only a queued fill counts: one still in the prompt waits for its own submit,
+  // and a plugin's row (a note sent with `s`) is that plugin's, whatever text it holds.
   on('session.append', async ($, e, next) => {
     const appended = await next(e)
     if (e.agentId !== undefined || e.message.role !== 'user' || !(e.door === 'prompt' || e.door === 'attachment' || e.door === 'delivery')) return appended
+    if (e.origin.kind === 'plugin') return appended
     const fills = (await read($, pane)).fills
     const text = e.message.content.map(block => (typeof block.text === 'string' ? block.text : '')).join('\n')
-    const texts = fills.map(fill => fill.text)
-    const carried = carriedIn(text, texts)
+    // Every fill masks its copies, so a queued fill held only inside another's text doesn't count.
+    const queued = new Set(fills.filter(fill => fill.isQueued).map(fill => fill.text))
+    const carried = carriedIn(
+      text,
+      fills.map(fill => fill.text),
+    ).filter(found => queued.has(found))
     if (carried.length === 0) return appended
     $.ui.log(`ostrakon: sent on entry (${e.door}${e.message.name ? ` ${e.message.name}` : ''})`, { to: 'debug' })
-    spendFills($, carried)
+    // A take-back since this row was read leaves its fill held.
+    spendFills($, carried, true)
       .then(spent => {
         const ids = spent.flatMap(fill => fill.ids)
         return ids.length > 0 ? markSent($, ids) : undefined
       })
       .catch(error => reportStorage($, error))
     return appended
+  })
+
+  // A queued prompt taken back from the queue lands in the box again. The engine raises no event
+  // of its own for that, only this change, stamped as its own write (`engine`, the kind any newer
+  // one is read as): a queued fill the box now holds is back in the prompt, waiting for a submit.
+  // A recalled history entry or a plugin's fill (the pocket filling a queued note again) isn't one.
+  on('prompt.change', async ($, e, next) => {
+    const changed = await next(e)
+    const kind: string = e.origin.kind
+    if (kind === 'history' || kind === 'clear' || kind === 'undo' || kind === 'plugin' || kind === 'app') return changed
+    // Any copy counts, even inside a longer fill's: a queued fill wrongly put back leaves its note
+    // open, and one wrongly left queued could be marked by a row it never went in.
+    const isBack = (fill: Fill) => fill.isQueued && e.text.includes(fill.text)
+    if (!(await read($, pane)).fills.some(isBack)) return changed
+    $.ui.log(`ostrakon: queued fill back in the prompt (${kind})`, { to: 'debug' })
+    await setPane($, current => ({ ...current, fills: current.fills.map(fill => (isBack(fill) ? { ...fill, isQueued: false } : fill)) })).catch(error =>
+      reportStorage($, error),
+    )
+    return changed
   })
 
   on('turn.start', async ($, e, next) => {
