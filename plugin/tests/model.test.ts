@@ -89,6 +89,9 @@ describe('model', () => {
     expect(carriedIn('fix typo\n\nfix typo in README', texts)).toEqual(['fix typo', 'fix typo in README'])
     expect(carriedIn('rename the store\n\nfix typo', texts)).toEqual(['fix typo', 'rename the store'])
     expect(carriedIn('nothing here', texts)).toEqual([])
+    // A repeated longer fill hides the shorter one in each copy.
+    expect(carriedIn('fix typo in README\n\nfix typo in README', texts)).toEqual(['fix typo in README'])
+    expect(carriedIn('fix typo in README\n\nfix typo in README\n\nfix typo', texts)).toEqual(['fix typo', 'fix typo in README'])
   })
 
   test('ages read now, minutes, hours, days, weeks, years', () => {
