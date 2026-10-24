@@ -28,6 +28,8 @@ import manifest from '../plugin/.claude-plugin/plugin.json'
 export const VERSION: string = manifest.version
 
 const MAX_WAIT_S = 25
+// What /api/jot takes as a note's source, kept to what reads as a host name in `origin`.
+const SOURCE = /^[A-Za-z0-9._-]{1,64}$/
 const MAX_BATCH = 500
 const KEEP_BACKUPS = 7
 export const PAIR_TTL_MS = 5 * 60 * 1000
@@ -314,11 +316,14 @@ export const handler = (hub: Hub, auth: { token?: string; login?: string }, { no
         return json({ code, expiresIn: PAIR_TTL_MS / 1000 })
       }
       if (path === '/api/projects' && request.method === 'GET') return json({ projects: hub.projects() })
-      // A note from one line of text: what an iOS Shortcut or a curl sends (docs/phone.md).
+      // A note from one line of text: what an iOS Shortcut or a curl sends (docs/phone.md). Without a
+      // `source` it's the phone's; with one (`slack`, a script) it's yours, and the source is its origin.
       if (path === '/api/jot' && request.method === 'POST') {
-        const body = (await request.json()) as { text?: unknown; project?: unknown }
+        const body = (await request.json()) as { text?: unknown; project?: unknown; source?: unknown }
         const text = typeof body.text === 'string' ? body.text.trim() : ''
         if (text === '') return json({ error: 'expected { text }' }, 400)
+        const source = body.source === undefined ? undefined : typeof body.source === 'string' ? body.source.trim() : ''
+        if (source !== undefined && !SOURCE.test(source)) return json({ error: 'source: expected a short name (letters, digits, . _ -)' }, 400)
         const key = typeof body.project === 'string' ? body.project : ''
         const project = key === '' ? null : (hub.projects().find(known => known.key === key || known.name === key) ?? null)
         const stamp = nextStamp(Date.now())
@@ -326,10 +331,10 @@ export const handler = (hub: Hub, auth: { token?: string; login?: string }, { no
           toNote({
             id: ulid(Date.now()),
             status: 'open',
-            by: 'phone',
+            by: source === undefined ? 'phone' : 'you',
             created: stamp,
             updated: stamp,
-            origin: 'iphone',
+            origin: source ?? 'iphone',
             text,
             project: project && { key: project.key, name: project.name, path: project.path },
           }),

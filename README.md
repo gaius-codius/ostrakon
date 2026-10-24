@@ -24,6 +24,7 @@ Notes are kept per project, and the pane shows all of them. Syncing between mach
 - **Dispatch** a note into the prompt. This project's open notes sit in a row of numbered chips above the prompt (the "pocket"); type `;` and a note's number (`;2`) in an empty prompt to pull it in. A lone number is left alone, so it still answers Claude's numbered questions. Mid-prompt, find the note in the pane and press `t`: it goes in under what you've typed.
 - **Harvest** (opt-in): after each turn, an extra review looks for side issues that came up and offers them as notes, which you keep or dismiss. It doesn't change what Claude is doing.
 - **Sync**: two-way sync enabled by multiple methods. Through a small hub, a plain folder, Obsidian or a combination of methods ([Sync](#sync)).
+- **Desktop**: save a note from a key on your desktop, or from a script, without opening Claude Code: `ostrakon jot` ([Notes from the desktop](#notes-from-the-desktop)).
 - **Phone**: capture and triage from your phone with the hub's web app, installed to the Home Screen, or send a note from the share sheet or Siri with an iOS Shortcut.
 
 Notes are plain Markdown files with some YAML. One per note, in `~/.local/share/ostrakon/` by default, so they are yours to read, grep and back up.
@@ -55,7 +56,7 @@ Use one or the other. The install script offers to add the [keybindings](#keybin
 
 - **Claude Code** with mods support (see the [mods docs](https://code.claude.com/docs/en/plugins/mods/overview)). Tested with 2.1.308; mods are still changing, so a much older or newer version may not work.
 - **git**, and **python3** for the install script (without it, the script tells you the one line to add yourself).
-- **For the hub:** [Bun](https://bun.sh) (tested with 1.4.3) to run the hub and to use `ostrakon pair`, and `qrencode` for the pairing QR code. `install.sh --hub` sets the hub up as a systemd service, so that part is Linux-only for now; elsewhere, run `ostrakon hub` however you like to keep things running.
+- **For the hub:** [Bun](https://bun.sh) (tested with 1.4.3) to run the hub and to use `ostrakon pair` and `ostrakon jot`, and `qrencode` for the pairing QR code. `install.sh --hub` sets the hub up as a systemd service, so that part is Linux-only for now; elsewhere, run `ostrakon hub` however you like to keep things running.
 
 Tested on Linux. macOS should work for the mod but hasn't been tried yet; reports are welcome.
 
@@ -179,6 +180,31 @@ To run the hub in the foreground instead: `HUB_TOKEN=$(openssl rand -hex 24) ost
 Not using Tailscale? Any HTTPS reverse proxy, tunnel or VPN works too; see [Open it](docs/phone.md#open-it).
 
 The service runs `~/.local/bin/ostrakon hub`, so it doesn't matter where the repo lives. Phone setup, the Home Screen app and the iOS Shortcut are covered in [`docs/phone.md`](docs/phone.md). Read [`SECURITY.md`](SECURITY.md) before making the hub reachable from other devices.
+
+## Notes from the desktop
+
+`ostrakon jot` saves a note of yours from outside Claude Code (it needs [Bun](https://bun.sh)):
+
+```sh
+ostrakon jot call the plumber
+ostrakon jot --project cc fix the flaky test
+```
+
+The note goes into this machine's notes folder, the one the mod uses, so it shows in your sessions here. If the mod has a hub set (`hubUrl` and `hubToken`), it goes to the hub at once too, so your phone and other machines have it within seconds. If the hub can't be reached, the note stays here and a session sends it later. `--project` takes a project your notes already know, by name or key. On a machine without the mod's settings, set `OSTRAKON_HUB_URL` and `OSTRAKON_HUB_TOKEN` instead.
+
+**A quick-note key.** `ostrakon jot --ask` asks for one line in a small prompt, saves it and shows a notification. Start the line with `@name` to file it under a project: `@cc fix the flaky test`. It uses whichever of walker, fuzzel, rofi, wofi or zenity is installed (on macOS, a dialog). Bind it to a key. On Omarchy, add this to `~/.config/hypr/bindings.lua`:
+
+```lua
+o.bind("SUPER + SHIFT + J", "Ostrakon note", "~/.local/bin/ostrakon jot --ask")
+```
+
+On Hyprland with a `.conf` setup, the same in `bindings.conf`:
+
+```
+bindd = SUPER SHIFT, J, Ostrakon note, exec, ~/.local/bin/ostrakon jot --ask
+```
+
+Other senders, such as a Slack bot or a script on another machine, can post to the hub's `/api/jot` with a `source` (see [`docs/phone.md`](docs/phone.md#ios-shortcut-jot-to-ostrakon)): the note is yours, with the source as where it came from.
 
 ## Known limitations
 

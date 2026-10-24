@@ -17,6 +17,10 @@ usage: ostrakon <command>
                5 minutes (needs the hub running here). --token prints one that carries the
                hub token itself instead. url: the hub's https address, default this
                machine's Tailscale name on port 8443
+  jot [--project <name>] <text>
+               save a note of yours from outside Claude Code: into this machine's notes, and
+               to the hub at once if one is set up. --ask asks for it in a desktop prompt
+               (bind that to a key; README)
   hub          run the hub in the foreground
   update       update this checkout (newest release, or pull its branch) and restart the
                hub if it's installed; --release / --main to switch (update.sh)
@@ -48,6 +52,10 @@ case ${1:-help} in
     v=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$ROOT/plugin/.claude-plugin/plugin.json" | head -n 1)
     echo "ostrakon $v ($(git -C "$ROOT" describe --tags --always --dirty 2>/dev/null || echo 'not a git checkout'))" ;;
   pair) shift; need_bun; load_env; exec bun "$ROOT/server/hub.ts" pair "$@" ;;
+  jot)
+    shift
+    if [ "${1:-}" = --ask ]; then exec "$ROOT/bin/jot-ask"; fi
+    need_bun; exec bun "$ROOT/server/jot.ts" "$@" ;;
   hub) shift; need_bun; load_env; exec bun "$ROOT/server/hub.ts" "$@" ;;
   help | -h | --help) usage ;;
   *) echo "ostrakon: unknown command: $1" >&2; usage >&2; exit 1 ;;

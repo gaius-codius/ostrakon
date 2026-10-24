@@ -6,6 +6,11 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Added
+
+- `ostrakon jot [--project <name>] <text>` saves a note of yours from outside Claude Code: into this machine's notes, and to the hub at once if the mod has one set. `ostrakon jot --ask` asks for the note in a small desktop prompt; bind it to a key (README, Notes from the desktop).
+- The hub's `/api/jot` takes an optional `source`, for senders other than the phone (a Slack bot, a script): the note is yours, with the source as its origin. Without it, nothing changes.
+
 ## [0.7.0] - 2026-10-22
 
 ### Added

@@ -140,3 +140,9 @@ The same thing from a terminal:
 ```
 curl -H 'Authorization: Bearer <HUB_TOKEN>' -d '{"text":"check the backup job"}' https://<host>.<tailnet>.ts.net:8443/api/jot
 ```
+
+A note sent this way is the phone's. Anything else that sends notes, such as a Slack bot or a script, adds a `source`: the note is then yours, and the source shows as where it came from.
+
+```
+curl -H 'Authorization: Bearer <HUB_TOKEN>' -d '{"text":"reply to the landlord","source":"slack"}' https://<host>.<tailnet>.ts.net:8443/api/jot
+```
