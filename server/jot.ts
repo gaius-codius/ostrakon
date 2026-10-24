@@ -5,7 +5,8 @@
 // the mod has that hub.
 //
 // The folder and the hub come from Claude Code's settings, as the mod sees them (bin/doctor reads
-// them the same way); OSTRAKON_HUB_URL and OSTRAKON_HUB_TOKEN go over the settings' hub.
+// them the same way): settings.json in CLAUDE_CONFIG_DIR, else ~/.claude. OSTRAKON_HUB_URL and
+// OSTRAKON_HUB_TOKEN go over the settings' hub.
 
 import { mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
@@ -20,6 +21,7 @@ import { randomTag } from '../plugin/src/store'
 import { ulid } from '../plugin/src/ulid'
 
 const HUB_TIMEOUT_MS = 3000
+const REFUSED = 'the hub refused the token'
 const USAGE = 'usage: ostrakon jot [--project|-p <name>] <text>'
 
 export type JotDeps = {
@@ -40,10 +42,10 @@ const path = (value: unknown) => (typeof value === 'string' && value !== '' ? va
 // The plugin's options, under whichever name it was installed as (the same names bin/doctor tries).
 // The hub's URL and token as a pair, from the first entry that has both, so a leftover entry's URL
 // never meets another's token.
-export const settingsOf = (home: string): Settings => {
+export const settingsOf = (file: string): Settings => {
   let raw: string
   try {
-    raw = readFileSync(join(home, '.claude', 'settings.json'), 'utf8')
+    raw = readFileSync(file, 'utf8')
   } catch {
     return {}
   }
@@ -55,6 +57,10 @@ export const settingsOf = (home: string): Settings => {
   const notesDir = entries.map(options => path(options?.notesDir)).find(value => value !== undefined)
   return { envDir: path(s.env?.OSTRAKON_DIR), notesDir, hubUrl: text(hub?.hubUrl), hubToken: text(hub?.hubToken) }
 }
+
+// Where Claude Code keeps its settings: CLAUDE_CONFIG_DIR when set, as the sessions here see it.
+// Appended as given, not join()ed: join would fold a `..` the filesystem resolves after a symlink.
+export const settingsFileOf = (home: string, env: JotDeps['env']) => `${path(env.CLAUDE_CONFIG_DIR) ?? `${home}/.claude`}/settings.json`
 
 // As the mod picks it (store.ts): OSTRAKON_DIR as a session sees it (the settings' env over the
 // shell's), else the notesDir option, else the default; the notes are in its notes/.
@@ -118,7 +124,7 @@ const sendToHub = async (deps: JotDeps, url: string, token: string, note: Note) 
       body: JSON.stringify({ notes: [note] }),
       signal: AbortSignal.timeout(HUB_TIMEOUT_MS),
     })
-    if (response.status === 401) return 'the hub refused the token'
+    if (response.status === 401) return REFUSED
     // A body that isn't the hub's JSON is something else answering at that address (a wrong URL).
     const body = (await response.json().catch(() => undefined)) as
       | { notes?: { id?: unknown }[]; rejected?: { reason?: unknown }[]; error?: unknown }
@@ -136,11 +142,12 @@ const sendToHub = async (deps: JotDeps, url: string, token: string, note: Note) 
 export const jot = async (args: string[], deps: JotDeps): Promise<{ out: string[]; err: string[]; code: number }> => {
   const parsed = parseArgs(args)
   if ('error' in parsed) return { out: [], err: [`ostrakon jot: ${parsed.error}`, USAGE], code: 2 }
+  const file = settingsFileOf(deps.home, deps.env)
   let settings: Settings
   try {
-    settings = settingsOf(deps.home)
+    settings = settingsOf(file)
   } catch {
-    return { out: [], err: [`ostrakon jot: ${deps.home}/.claude/settings.json isn't valid JSON`], code: 1 }
+    return { out: [], err: [`ostrakon jot: ${file} isn't valid JSON`], code: 1 }
   }
   const dir = notesDirOf(deps.home, deps.env, settings)
 
@@ -198,14 +205,19 @@ export const jot = async (args: string[], deps: JotDeps): Promise<{ out: string[
     return { out: [saved], err: fromEnv ? ['OSTRAKON_HUB_URL and OSTRAKON_HUB_TOKEN go together; the note is only in this folder.'] : [], code: 0 }
   const problem = await sendToHub(deps, url, token, note)
   if (problem === undefined) return { out: [saved], err: [], code: 0 }
-  // Sessions here push it later only when the mod itself has that hub.
+  // Sessions here push it later only when the mod itself has that hub, and a token it takes.
   const same = (a: string | undefined) => a?.replace(/\/+$/, '')
+  const sessionsHub = !fromEnv || same(url) === same(settings.hubUrl)
   const later =
-    !fromEnv || same(url) === same(settings.hubUrl)
-      ? 'Claude Code sends it once a session runs here.'
-      : settings.hubUrl
-        ? `Sessions here send it to the mod's hub, not that one.`
-        : `No session here uses that hub, so it stays only in ${dir}.`
+    sessionsHub && problem === REFUSED
+      ? token === settings.hubToken
+        ? "Sessions here use that token too: copy HUB_TOKEN from the hub's env file into hubToken."
+        : 'Sessions here use the hubToken in the settings.'
+      : sessionsHub
+        ? 'Claude Code sends it once a session runs here.'
+        : settings.hubUrl
+          ? `Sessions here send it to the mod's hub, not that one.`
+          : `No session here uses that hub, so it stays only in ${dir}.`
   return { out: [saved], err: [`Only on this machine for now: ${problem}. ${later}`], code: 0 }
 }
 

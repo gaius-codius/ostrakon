@@ -220,6 +220,44 @@ describe('ostrakon jot', () => {
     expect((await jot(['x'], same.deps)).err[0]).toContain('Claude Code sends it')
   })
 
+  test('reads the settings from CLAUDE_CONFIG_DIR when it is set, as the sessions do', async () => {
+    const seen: string[] = []
+    const spy: JotDeps['fetch'] = async url => {
+      seen.push(url)
+      return new Response('{}', { status: 500 })
+    }
+    const moved = temp()
+    const folder = temp()
+    writeFileSync(
+      join(moved, 'settings.json'),
+      JSON.stringify({ pluginConfigs: { ostrakon: { options: { notesDir: folder, hubUrl: 'https://moved', hubToken: 't' } } } }),
+    )
+    const { deps, notes } = setup({ pluginConfigs: { ostrakon: { options: { hubUrl: 'https://home', hubToken: 't' } } } }, { CLAUDE_CONFIG_DIR: moved }, spy)
+    expect((await jot(['x'], deps)).out).toEqual(['Saved.'])
+    expect(readdirSync(join(folder, 'notes'))).toHaveLength(1)
+    expect(seen).toEqual(['https://moved/api/notes'])
+    expect(() => notes()).toThrow()
+
+    writeFileSync(join(moved, 'settings.json'), '{')
+    expect((await jot(['y'], deps)).err).toEqual([`ostrakon jot: ${join(moved, 'settings.json')} isn't valid JSON`])
+  })
+
+  test("doesn't say a session sends it later when the hub refused the token the sessions use", async () => {
+    const refusing: JotDeps['fetch'] = async () => new Response('{"error":"unauthorized"}', { status: 401 })
+    const settings = { pluginConfigs: { ostrakon: { options: { hubUrl: 'https://hub', hubToken: 'stale' } } } }
+    const fromSettings = setup(settings, {}, refusing)
+    const refused = await jot(['x'], fromSettings.deps)
+    expect(refused.code).toBe(0)
+    expect(refused.err[0]).toContain('refused the token')
+    expect(refused.err[0]).not.toContain('Claude Code sends it')
+    expect(refused.err[0]).toContain('copy HUB_TOKEN')
+
+    const otherToken = setup(settings, { OSTRAKON_HUB_URL: 'https://hub', OSTRAKON_HUB_TOKEN: 'typo' }, refusing)
+    const envRefused = (await jot(['y'], otherToken.deps)).err[0]
+    expect(envRefused).not.toContain('Claude Code sends it')
+    expect(envRefused).toContain('hubToken in the settings')
+  })
+
   test('keeps the notesDir option as given, as the mod does', async () => {
     const custom = `${temp()} `
     const { deps } = setup({ pluginConfigs: { ostrakon: { options: { notesDir: custom } } } })
