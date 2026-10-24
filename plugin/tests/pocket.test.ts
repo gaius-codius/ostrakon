@@ -793,6 +793,29 @@ test('of two fills queued mid-turn, one deleted from the prompt stays open, and 
   expect(noteIn(dir, ONE).status).toBe('open')
 })
 
+test('two prompts queued in one turn, each carrying its own fill, mark both notes once their rows enter', async ($, on) => {
+  const dir = fixture()
+  const { world, clock } = await startSession($, on, dir)
+  const ui = await mountBand($)
+  await $.turn.start({ text: 'working on something', turnId: 'turn-3' })
+  await ui.press({ key: 'band-chip-1' })
+  await clock.advance(10)
+  const first = world.box.text
+  await $.prompt.submit({ text: first, wait: false, origin: { kind: 'composer' }, turnId: 'turn-3' })
+  world.box.text = ''
+  await ui.press({ key: 'band-chip-2' })
+  await clock.advance(10)
+  const second = world.box.text
+  expect(second).toBe('rename the store helpers')
+  await $.prompt.submit({ text: second, wait: false, origin: { kind: 'composer' }, turnId: 'turn-3' })
+  await append($, first, { door: 'delivery', name: 'queued_command' })
+  await append($, second, { door: 'delivery', name: 'queued_command' })
+  await clock.advance(10)
+  expect(noteIn(dir, ONE).status).toBe('sent')
+  expect(noteIn(dir, TWO).status).toBe('sent')
+  await ui.unmount()
+})
+
 test('a slow sent write that turns start during still ends with the note sent', async ($, on) => {
   const dir = fixture()
   const { world, clock } = await startSession($, on, dir, '1')

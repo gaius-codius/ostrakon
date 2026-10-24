@@ -913,7 +913,7 @@ const fillPrompt = async ($: EngineInterface, text: string, ids: string[], isFro
 // the prompt holds the keys then, so the pane is beside the prompt, kept there to write with.
 const afterFill = async ($: EngineInterface, text: string, ids: string[], isFromBand = false) => {
   // Added to the fills since the last submit; the same text filled again counts once.
-  await setPane($, current => ({ ...current, stash: '', fills: [...current.fills.filter(fill => fill.text !== text), { text, ids }] }))
+  await setPane($, current => ({ ...current, stash: '', fills: [...current.fills.filter(fill => fill.text !== text), { text, ids, isQueued: false }] }))
   if (!isFromBand && (await read($, isOpen))) await closePane($)
 }
 
@@ -1693,10 +1693,14 @@ export const register: Register = (on, options) => {
     const texts = fills.map(fill => fill.text)
     const carried = texts.filter(text => e.text.includes(text) && sent.includes(text))
     // Submitted mid-turn, the prompt only waits in the queue: the person can still take it back.
-    // The fills it carries are sent once it enters the conversation (session.append below).
+    // The fills it carries are sent once it enters the conversation (session.append below); one an
+    // earlier queued prompt carries waits for that prompt's row.
     if (e.turnId !== undefined) {
-      const left = texts.filter(text => !carried.includes(text))
-      await spendFills($, left)
+      const left = fills.filter(fill => !fill.isQueued && !carried.includes(fill.text)).map(fill => fill.text)
+      await setPane($, current => ({
+        ...current,
+        fills: current.fills.flatMap(fill => (carried.includes(fill.text) ? [{ ...fill, isQueued: true }] : left.includes(fill.text) ? [] : [fill])),
+      }))
       return result
     }
     const spent = await spendFills($, texts)

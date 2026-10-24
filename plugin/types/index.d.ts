@@ -77,7 +77,8 @@ export type PaneState = {
   undo: Undo[]
 }
 
-export type Fill = { text: string; ids: string[] }
+// A queued fill is carried by a prompt waiting in the queue: a later queued prompt leaves it.
+export type Fill = { text: string; ids: string[]; isQueued: boolean }
 
 export type SyncState = { isOn: boolean; isOnline: boolean; queued: number; problem: string }
 
