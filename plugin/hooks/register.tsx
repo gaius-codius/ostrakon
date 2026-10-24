@@ -8,6 +8,7 @@ import type { Action, Ctx, Focus, Line } from '../src/model'
 import {
   bundleText,
   canEditInline,
+  carriedIn,
   dispatchText,
   freshPane,
   fromField,
@@ -912,8 +913,13 @@ const fillPrompt = async ($: EngineInterface, text: string, ids: string[], isFro
 // `ids` sent. The pane closes if it's open, except on a fill from the band (SPEC §10): the band or
 // the prompt holds the keys then, so the pane is beside the prompt, kept there to write with.
 const afterFill = async ($: EngineInterface, text: string, ids: string[], isFromBand = false) => {
-  // Added to the fills since the last submit; the same text filled again counts once.
-  await setPane($, current => ({ ...current, stash: '', fills: [...current.fills.filter(fill => fill.text !== text), { text, ids, isQueued: false }] }))
+  // Added to the fills since the last submit. The same text filled again counts once, for every
+  // note that filled it.
+  await setPane($, current => {
+    const same = current.fills.find(fill => fill.text === text)?.ids ?? []
+    const fill = { text, ids: [...new Set([...same, ...ids])], isQueued: false }
+    return { ...current, stash: '', fills: [...current.fills.filter(other => other.text !== text), fill] }
+  })
   if (!isFromBand && (await read($, isOpen))) await closePane($)
 }
 
@@ -1691,7 +1697,8 @@ export const register: Register = (on, options) => {
     if (fills.length === 0) return result
     const sent = result.text ?? e.text
     const texts = fills.map(fill => fill.text)
-    const carried = texts.filter(text => e.text.includes(text) && sent.includes(text))
+    const kept = carriedIn(sent, texts)
+    const carried = carriedIn(e.text, texts).filter(text => kept.includes(text))
     // Submitted mid-turn, the prompt only waits in the queue: the person can still take it back.
     // The fills it carries are sent once it enters the conversation (session.append below); one an
     // earlier queued prompt carries waits for that prompt's row.
@@ -1716,7 +1723,8 @@ export const register: Register = (on, options) => {
     if (e.agentId !== undefined || e.message.role !== 'user' || !(e.door === 'prompt' || e.door === 'attachment' || e.door === 'delivery')) return appended
     const fills = (await read($, pane)).fills
     const text = e.message.content.map(block => (typeof block.text === 'string' ? block.text : '')).join('\n')
-    const carried = fills.filter(fill => text.includes(fill.text)).map(fill => fill.text)
+    const texts = fills.map(fill => fill.text)
+    const carried = carriedIn(text, texts)
     if (carried.length === 0) return appended
     $.ui.log(`ostrakon: sent on entry (${e.door}${e.message.name ? ` ${e.message.name}` : ''})`, { to: 'debug' })
     spendFills($, carried)

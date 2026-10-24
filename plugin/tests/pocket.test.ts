@@ -816,6 +816,23 @@ test('two prompts queued in one turn, each carrying its own fill, mark both note
   await ui.unmount()
 })
 
+test('two notes with the same text, each put into the prompt, are both marked sent', async ($, on) => {
+  const dir = fixture()
+  put(dir, OTHER, 'rename the store helpers', CC, 90)
+  const { world, clock } = await startSession($, on, dir)
+  const ui = await mountBand($)
+  await ui.press({ key: 'band-chip-2' })
+  await clock.advance(10)
+  world.box.text = ''
+  await ui.press({ key: 'band-chip-3' })
+  await clock.advance(10)
+  expect(world.box.text).toBe('rename the store helpers')
+  await composer($, world.box.text)
+  expect(noteIn(dir, TWO).status).toBe('sent')
+  expect(noteIn(dir, OTHER).status).toBe('sent')
+  await ui.unmount()
+})
+
 test('a slow sent write that turns start during still ends with the note sent', async ($, on) => {
   const dir = fixture()
   const { world, clock } = await startSession($, on, dir, '1')
