@@ -265,6 +265,32 @@ test('an edit draft survives closing the pane and comes back on open', async ($,
   await ui.unmount()
 })
 
+test('an edit closed on a note sent meanwhile opens on the list, its draft kept for the next e', async ($, on) => {
+  const dir = fixture()
+  const { clock } = await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-e' })
+  await ui.input({ key: 'edit', text: 'half-edited text', kind: 'change' })
+  await ui.press({ key: 'key-pane:previous' })
+  const file = '/data/notes/01JA7K2M3Q9X4ZB6C8D0EFGH01.md'
+  dir.put(file, dir.get(file)?.replace('status: open', 'status: sent') ?? '')
+  await clock.advance(2000)
+  await run($, 'jot', '')
+  expect(await ui.find({ type: 'Input', key: 'edit' })).toBeUndefined()
+  expect((await texts(ui)).some(text => /draft kept/.test(text))).toBe(false)
+  expect(await ui.find({ type: 'Text', text: /rename the store helpers/ })).toBeDefined()
+  // Back on the list, the note picks the draft up again.
+  dir.put(file, dir.get(file)?.replace('status: sent', 'status: open') ?? '')
+  await clock.advance(2000)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-e' })
+  const field = await ui.find({ type: 'Input', key: 'edit' })
+  expect((field?.props as { value?: string } | undefined)?.value).toBe('half-edited text')
+  await ui.unmount()
+})
+
 // The kit can't raise Esc; Tab off the card leaves the same state (the list, the draft kept).
 type Leave = ($: Engine, ui: Awaited<ReturnType<typeof mountPane>>) => Promise<unknown>
 const leftEdit = async ($: Engine, on: Parameters<typeof startSession>[1], leave: Leave) => {
