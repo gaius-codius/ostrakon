@@ -370,14 +370,16 @@ describe('model', () => {
       ['i', 'keys'],
     ]
     expect(fitOneLine(pairs, '', 30).map(([key]) => key)).toEqual(['v', 't', 'i'])
-    // In a text field the pair is the chord's, kept the same way.
-    const field: [string, string][] = [
-      ['ctrl+s', 'scope'],
+    // In a text field the pair is the chord's, kept the same way: the search field's own pairs.
+    const field = footerPairs(keysFor({ kind: 'search', hasResults: true, hasQuery: false }))
+    expect(field).toEqual([
+      ['ctrl+s', 'all projects'],
       ['ctrl+n', 'new'],
       ['ctrl+q', 'close'],
       ['ctrl+x i', 'keys'],
-    ]
-    expect(fitOneLine(field, '', 40).map(([key]) => key)).toEqual(['ctrl+s', 'ctrl+n', 'ctrl+x i'])
+    ])
+    expect(fitOneLine(field, '', 46).map(([key]) => key)).toEqual(['ctrl+s', 'ctrl+n', 'ctrl+x i'])
+    expect(fitOneLine(field, '', 45).map(([key]) => key)).toEqual(['ctrl+s', 'ctrl+x i'])
   })
 
   test('the footer fits as many pairs as the width allows, the legend before all but the first four', () => {
