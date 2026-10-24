@@ -699,6 +699,100 @@ test('pocketMax sets how many chips the band offers', { options: { pocketMax: 2 
   await ui.unmount()
 })
 
+// Two notes put into one prompt, three ways; answers what the prompt holds then. The person's
+// prompt is empty and nothing runs when each starts.
+const TWO_FILLS = {
+  'two chip presses': async ($: Engine, world: World, clock: Clock) => {
+    const ui = await mountBand($)
+    await ui.press({ key: 'band-chip-1' })
+    await clock.advance(10)
+    await ui.press({ key: 'band-chip-2' })
+    await clock.advance(10)
+    await ui.unmount()
+    return world.box.text
+  },
+  // A key fills only an empty prompt: the person cuts note 1, types ;2, then pastes note 1 back.
+  'two ;n keys': async ($: Engine) => {
+    const ui = await mountBand($)
+    await type($, '', ';')
+    const first = (await type($, ';', '1')).text
+    await type($, '', ';')
+    const second = (await type($, ';', '2')).text
+    await ui.unmount()
+    return (await type($, second, `\n\n${first}`, true)).text
+  },
+  'a chip, then t from the pane': async ($: Engine, world: World, clock: Clock) => {
+    await run($, 'jot', '')
+    const pane = await mountPane($)
+    const band = await mountBand($)
+    await band.press({ key: 'band-chip-2' })
+    await clock.advance(10)
+    await pane.input({ key: 'q', text: '', kind: 'submit' })
+    await pane.press({ key: 'key-t' })
+    await band.unmount()
+    await pane.unmount()
+    return world.box.text
+  },
+}
+
+type World = Awaited<ReturnType<typeof startSession>>['world']
+type Clock = Awaited<ReturnType<typeof startSession>>['clock']
+
+for (const [how, fill] of Object.entries(TWO_FILLS)) {
+  test(`${how}, then a submit carrying both: both notes are marked sent`, async ($, on) => {
+    editor(on)
+    const dir = fixture()
+    const { world, clock } = await startSession($, on, dir)
+    const text = await fill($, world, clock)
+    expect(text).toContain('check why the cache test is flaky')
+    expect(text).toContain('rename the store helpers')
+    await composer($, text)
+    expect(noteIn(dir, ONE).status).toBe('sent')
+    expect(noteIn(dir, TWO).status).toBe('sent')
+  })
+
+  test(`${how}, then a submit queued mid-turn: both notes are marked sent once it enters`, async ($, on) => {
+    editor(on)
+    const dir = fixture()
+    const { world, clock } = await startSession($, on, dir)
+    const text = await fill($, world, clock)
+    await $.turn.start({ text: 'working on something', turnId: 'turn-3' })
+    await $.prompt.submit({ text, wait: false, origin: { kind: 'composer' }, turnId: 'turn-3' })
+    expect(noteIn(dir, ONE).status).toBe('open')
+    expect(noteIn(dir, TWO).status).toBe('open')
+    await append($, text, { door: 'delivery', name: 'queued_command' })
+    await clock.advance(10)
+    expect(noteIn(dir, ONE).status).toBe('sent')
+    expect(noteIn(dir, TWO).status).toBe('sent')
+  })
+}
+
+test('of two fills, one deleted from the prompt before the submit stays open, and the submit spends it', async ($, on) => {
+  const dir = fixture()
+  const { world, clock } = await startSession($, on, dir)
+  await TWO_FILLS['two chip presses']($, world, clock)
+  await composer($, 'rename the store helpers')
+  expect(noteIn(dir, TWO).status).toBe('sent')
+  expect(noteIn(dir, ONE).status).toBe('open')
+  // Spent: a later prompt that carries the deleted note's text doesn't mark it.
+  await composer($, 'check why the cache test is flaky')
+  expect(noteIn(dir, ONE).status).toBe('open')
+})
+
+test('of two fills queued mid-turn, one deleted from the prompt stays open, and the entry of its text later marks nothing', async ($, on) => {
+  const dir = fixture()
+  const { world, clock } = await startSession($, on, dir)
+  await TWO_FILLS['two chip presses']($, world, clock)
+  await $.turn.start({ text: 'working on something', turnId: 'turn-3' })
+  await $.prompt.submit({ text: 'rename the store helpers', wait: false, origin: { kind: 'composer' }, turnId: 'turn-3' })
+  await append($, 'rename the store helpers', { door: 'delivery', name: 'queued_command' })
+  await clock.advance(10)
+  expect(noteIn(dir, TWO).status).toBe('sent')
+  await append($, 'check why the cache test is flaky', { door: 'prompt' })
+  await clock.advance(10)
+  expect(noteIn(dir, ONE).status).toBe('open')
+})
+
 test('a slow sent write that turns start during still ends with the note sent', async ($, on) => {
   const dir = fixture()
   const { world, clock } = await startSession($, on, dir, '1')

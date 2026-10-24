@@ -71,10 +71,13 @@ export type PaneState = {
   capture: { draft: string; target: string | null; saved: string[]; error: string | null }
   // The person's prompt draft, held while the pane has the keyboard (SPEC §4.4).
   stash: string
-  // What the pane last put into the prompt, so a submit containing it marks those notes sent.
-  lastFill: { text: string; ids: string[] } | null
+  // What the pane put into the prompt since the last submit, so a submit containing a fill's text
+  // marks its notes sent.
+  fills: Fill[]
   undo: Undo[]
 }
+
+export type Fill = { text: string; ids: string[] }
 
 export type SyncState = { isOn: boolean; isOnline: boolean; queued: number; problem: string }
 
