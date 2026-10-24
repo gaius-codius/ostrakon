@@ -14,6 +14,7 @@ import {
   fromField,
   keysFor,
   labelOf,
+  placesOf,
   targetsOf,
   labelsOf,
   linesOf,
@@ -507,6 +508,7 @@ const viewOf = async ($: EngineInterface): Promise<PaneView> => {
   const searched = unfiltered.filter(({ note }) => note.status !== 'proposed').length
   const byId = new Map(all.map(note => [note.id, note]))
   const shownIds = new Set(noteLines.map(line => line.key))
+  const movingNote = state.mode === 'move' ? noteLines.find(line => line.key === state.moving)?.note : undefined
   const target = state.capture.target
   const captureProject = target === 'unfiled' ? null : (projects.find(candidate => candidate.key === target) ?? project)
   const partial = {
@@ -526,6 +528,7 @@ const viewOf = async ($: EngineInterface): Promise<PaneView> => {
     projects,
     captureLabel: labelOf(ctx, captureProject),
     targets: state.mode === 'target' ? targetsOf(ctx, projects, state.capture.find) : [],
+    places: movingNote ? placesOf(ctx, projects, movingNote, state.moveFind) : [],
     showLegend: state.picks.length === 0 && noteLines.some(line => line.note.by === 'claude'),
     syncStatus: [syncStatusOf(await read($, syncState), 'hub offline'), syncStatusOf(await read($, mirrorState), 'mirror unavailable')]
       .filter(text => text !== '')
@@ -1071,7 +1074,7 @@ const act = async ($: EngineInterface, action: Action) => {
     }
     case 'move':
       if (!note) return
-      await setPane($, current => ({ ...current, mode: 'move', moving: note.id }))
+      await setPane($, current => ({ ...current, mode: 'move', moving: note.id, moveFind: '' }))
       focusKey($, MOVE_KEY)
       return
     case 'copy':
@@ -1264,15 +1267,24 @@ const targetSubmit = async ($: EngineInterface, value: string) => {
   await leaveTarget($)
 }
 
-const moveTo = async ($: EngineInterface, value: string) => {
+// Enter in the move picker: the note goes to the first place that matches. With nothing matching,
+// the picker stays, its text drawn again (the field emptied itself on Enter).
+const moveSubmit = async ($: EngineInterface, value: string) => {
+  // An Enter that lands after Esc already went back moves nothing.
+  if ((await read($, pane)).mode !== 'move') return
   const view = await viewOf($)
-  // The note fixed when the Select opened: if it left the list meanwhile, nothing moves.
+  // The note fixed when the picker opened: if it left the list meanwhile, nothing moves.
   const note = view.lines.find(line => line.key === view.pane.moving)
   if (note?.kind !== 'note') {
     await setPane($, state => ({ ...state, mode: 'browse', moving: null }))
     return
   }
-  const into = value === 'unfiled' ? null : (view.projects.find(item => item.key === value) ?? null)
+  const first = placesOf(view.ctx, view.projects, note.note, value)[0]
+  if (!first) {
+    await setPane($, current => ({ ...current, moveFind: redrawn(value) }))
+    return
+  }
+  const into = first.value === 'unfiled' ? null : (view.projects.find(item => item.key === first.value) ?? null)
   const before = note.note.project
   const changed = await changeNote($, note.note.id, item => ({ ...item, project: into }))
   await setPane($, state => ({
@@ -1939,7 +1951,8 @@ export const register: Register = (on, options) => {
       editInput: value => run(setPane($, state => ({ ...state, edit: state.edit ? { ...state.edit, draft: value } : null }))),
       editSubmit: value => run(serially(() => editSubmit($, value))),
       editCancel: () => run(serially(() => act($, 'back'))),
-      moveTo: value => run(serially(() => moveTo($, value))),
+      moveInput: value => run(setPane($, state => ({ ...state, moveFind: value }))),
+      moveSubmit: value => run(serially(() => moveSubmit($, value))),
     }
     return <Pane el={el} view={view} handlers={handlers} hasHub={hubOptions.url !== ''} hasHarvest={harvestOptions.isOn} />
   })

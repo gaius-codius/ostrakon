@@ -41,7 +41,8 @@ export type Handlers = {
   editInput: (value: string) => void
   editSubmit: (value: string) => void
   editCancel: () => void
-  moveTo: (value: string) => void
+  moveInput: (value: string) => void
+  moveSubmit: (value: string) => void
 }
 
 export type PaneView = {
@@ -64,6 +65,8 @@ export type PaneView = {
   captureLabel: string
   // What capture's target picker offers for what's typed, first the one Enter picks.
   targets: { value: string; label: string }[]
+  // What the move picker offers for what's typed, the same way; the note's own place left out.
+  places: { value: string; label: string }[]
   showLegend: boolean
   // The rows the engine gives the pane's body.
   bodyRows: number
@@ -125,8 +128,8 @@ const Hits = ({ el, text, hits, isDim }: { el: E; text: string; hits: number[]; 
 // A row's focus target: a one-space Button in column 0 that the ring inverts. While the move
 // picker or the edit card has the ring, the rows draw a plain space instead. The terminal keeps
 // the ring at its place among the controls across a redraw, so a row added or dropped above them
-// (a poll, a sync) would otherwise leave the ring on a row: the picker closed and its arrow-key
-// choice gone, or the card's typing going to the list.
+// (a poll, a sync) would otherwise leave the ring on a row: the picker closed and what was typed
+// in it gone, or the card's typing going to the list.
 const Target = ({ el, view, id, isDim, onPress }: { el: E; view: PaneView; id: string; isDim?: boolean; onPress: () => void }) => {
   const { Button, Text } = el
   const isHeld = view.pane.mode === 'move' || view.pane.mode === 'edit'
@@ -350,21 +353,22 @@ const TargetRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Ha
   )
 }
 
-// The projects the picker offers, as many as the rows take: the first, which Enter picks, in the
-// accent; the one capture saves to now marked.
-const Targets = ({ el, view, rows }: { el: E; view: PaneView; rows: number }) => {
+type Picker = { options: { value: string; label: string }[]; rows: number; width: number; now?: string; paddingY?: number; paddingLeft?: number }
+
+// The projects a picker offers, as many as `rows` take: the first, which Enter picks, in the
+// accent; `now`, the one capture saves to, marked.
+const Places = ({ el, options, rows, width, now, paddingY, paddingLeft }: Picker & { el: E }) => {
   const { Box, Text } = el
-  const now = view.pane.capture.target ?? view.ctx.current.key
-  const shown = view.targets.slice(0, Math.max(1, rows - (view.isInline ? 0 : 2)))
+  const shown = options.slice(0, Math.max(1, rows))
   return (
-    <Box flexDirection='column' paddingY={view.isInline ? 0 : 1}>
+    <Box flexDirection='column' paddingY={paddingY} paddingLeft={paddingLeft}>
       {shown.length === 0 ? (
         <Text dimColor>{TEXT.noTarget}</Text>
       ) : (
         shown.map((option, i) => (
           <Text>
             <Text color={i === 0 ? COLOUR.accent : undefined} bold={i === 0}>
-              {cut(option.label, view.width - 8)}
+              {cut(option.label, width - 8)}
             </Text>
             {option.value === now && <Text dimColor> · now</Text>}
           </Text>
@@ -373,6 +377,17 @@ const Targets = ({ el, view, rows }: { el: E; view: PaneView; rows: number }) =>
     </Box>
   )
 }
+
+const Targets = ({ el, view, rows }: { el: E; view: PaneView; rows: number }) => (
+  <Places
+    el={el}
+    options={view.targets}
+    rows={rows - (view.isInline ? 0 : 2)}
+    width={view.width}
+    now={view.pane.capture.target ?? view.ctx.current.key}
+    paddingY={view.isInline ? 0 : 1}
+  />
+)
 
 const metaParts = (view: PaneView, note: Note) => {
   const age = ageOf(note.updated, view.ctx.now)
@@ -736,20 +751,39 @@ const Bundle = ({ el, view, handlers, rows }: { el: E; view: PaneView; handlers:
   )
 }
 
+// The move picker (m) sits under the rows, so the note being moved stays in view: a field, and
+// the places it narrows to under it, as capture's target picker. Enter moves to the first.
 const Move = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handlers }) => {
-  const { Box, Select } = el
-  const all = [...view.projects.map(project => ({ value: project.key, label: labelOf(view.ctx, project) })), { value: 'unfiled', label: 'unfiled' }]
-  // Where the note is now isn't offered, and the picker starts on the first place it can go.
-  const moving = view.lines.find(line => line.key === view.pane.moving)
-  const now = moving?.kind === 'note' ? (moving.note.project?.key ?? 'unfiled') : undefined
-  const elsewhere = all.filter(option => option.value !== now)
-  const options = elsewhere.length > 0 ? elsewhere : all
+  const { Box, Text, Input } = el
+  const lead = `${TEXT.moveLabel} `
   return (
-    <Box width={view.width}>
-      <Select key={MOVE_KEY} label='move to' options={options} value={options[0]?.value} onSelect={value => handlers.moveTo(value)} />
+    <Box flexDirection='column' width={view.width}>
+      <Box>
+        <Box flexShrink={0}>
+          <Text color={COLOUR.accent} bold>
+            {lead}
+          </Text>
+        </Box>
+        <Box width={Math.max(10, view.width - cells(lead))}>
+          <Input
+            key={MOVE_KEY}
+            placeholder={TEXT.targetPlaceholder}
+            value={view.pane.moveFind}
+            submitLabel=''
+            autoFocus
+            onInput={value => handlers.moveInput(value)}
+            onSubmit={value => handlers.moveSubmit(value)}
+          />
+        </Box>
+      </Box>
+      <Places el={el} options={view.places} rows={placeRows(view)} width={view.width - cells(lead)} paddingLeft={cells(lead)} />
     </Box>
   )
 }
+// The rows the move picker lists places on: as many as there are, up to a few, and as many while
+// typing narrows them, so the rows above keep their window.
+const MOVE_PLACES = 5
+const placeRows = (view: { projects: NoteProject[] }) => Math.max(1, Math.min(MOVE_PLACES, view.projects.length))
 
 // The key sheet sits under the search row and above the footer, framed. It pages to fit the rows
 // between (SPEC §4.5): the problems first, then the keys. Too short for a line inside the frame
@@ -819,7 +853,7 @@ export const chromeRows = (view: Omit<PaneView, 'page'>) => {
   const preview = hasPreview(view) ? previewRows(view) : 0
   const footer = view.isInline ? FOOTER_ROWS : 1 + FOOTER_ROWS
   const edit = view.pane.mode === 'edit' ? EDIT_ROWS : 0
-  const move = view.pane.mode === 'move' ? 1 : 0
+  const move = view.pane.mode === 'move' ? 1 + placeRows(view) : 0
   return header + preview + footer + edit + move
 }
 

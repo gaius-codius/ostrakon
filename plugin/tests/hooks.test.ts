@@ -16,6 +16,9 @@ const fixture = () => {
   return dir
 }
 
+// The file a note was saved to, by its text.
+const savedFile = (dir: MemDir, text: string) => [...dir.files.values()].find(file => file.text.includes(text))?.text ?? ''
+
 test('the pane opens on this project, searches everywhere once typing, and Enter saves a failed search', async ($, on) => {
   const dir = fixture()
   const { world } = await startSession($, on, dir)
@@ -831,17 +834,61 @@ test('with harvest on, the empty pane says Claude can leave notes', { options: {
   await ui.unmount()
 })
 
-test("m offers every place but the note's own, starting on the first", async ($, on) => {
-  await startSession($, on, fixture())
+// A third project, so typing has something to narrow.
+const API = { key: 'github.com/me/api', name: 'api', path: '/home/me/code/api' }
+
+// The move picker on the flaky note (this project's), with the list searched everywhere so the
+// note stays listed once it moves.
+const movingFlaky = async ($: Engine, on: Parameters<typeof startSession>[1]) => {
+  const dir = fixture()
+  put(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH05', 'pin the api client', API, 30)
+  const { world } = await startSession($, on, dir)
   await run($, 'jot', '')
   const ui = await mountPane($)
   await ui.input({ key: 'q', text: 'flaky', kind: 'change' })
   await ui.input({ key: 'q', text: 'flaky', kind: 'submit' })
   await ui.press({ key: 'key-m' })
-  const picker = await ui.find({ type: 'Select' })
-  const values = ((picker?.props.options ?? []) as { value: string }[]).map(option => option.value)
-  expect(values).toEqual([INFRA.key, 'unfiled'])
-  expect(picker?.props.value).toBe(INFRA.key)
+  return { dir, world, ui }
+}
+
+test("m offers every place but the note's own, and Enter with nothing typed moves to the first", async ($, on) => {
+  const { dir, ui } = await movingFlaky($, on)
+  expect(await ui.find({ type: 'Input', key: 'move' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^api$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^infra$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^unfiled$/ })).toBeDefined()
+  // cc, where the note is, isn't offered: infra is first (the row's header names cc, so it can't
+  // be looked for).
+  await ui.input({ key: 'move', text: '', kind: 'submit' })
+  expect(savedFile(dir, 'flaky')).toContain(INFRA.key)
+  await ui.unmount()
+})
+
+test('in the move picker, typing narrows the places and Enter moves the note to the first, selected', async ($, on) => {
+  const { dir, world, ui } = await movingFlaky($, on)
+  await ui.input({ key: 'move', text: 'INF', kind: 'change' })
+  expect(await ui.find({ type: 'Text', text: /^infra$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^api$/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^unfiled$/ })).toBeUndefined()
+  await ui.input({ key: 'move', text: 'INF', kind: 'submit' })
+  expect(savedFile(dir, 'flaky')).toContain(INFRA.key)
+  expect(world.toasts.some(toast => toast.includes('infra'))).toBe(true)
+  expect(await ui.find({ type: 'Input', key: 'move' })).toBeUndefined()
+  // The moved note is the selected row: e edits it.
+  await ui.press({ key: 'key-e' })
+  const field = await ui.find({ type: 'Input', key: 'edit' })
+  expect((field?.props as { value?: string } | undefined)?.value).toBe('check why the cache test is flaky')
+  await ui.unmount()
+})
+
+test('in the move picker, nothing matching, Enter keeps the picker and the typed text', async ($, on) => {
+  const { dir, ui } = await movingFlaky($, on)
+  await ui.input({ key: 'move', text: 'zzz', kind: 'change' })
+  expect(await ui.find({ type: 'Text', text: /No project matches/ })).toBeDefined()
+  await ui.input({ key: 'move', text: 'zzz', kind: 'submit' })
+  const picker = await ui.find({ type: 'Input', key: 'move' })
+  expect(((picker?.props as { value?: string } | undefined)?.value ?? '').trim()).toBe('zzz')
+  expect(savedFile(dir, 'flaky')).toContain(CC.key)
   await ui.unmount()
 })
 
@@ -856,8 +903,8 @@ const ringOf = (node: unknown): string[] => {
 }
 
 // The terminal keeps the ring at its place in this order across a redraw: a row added above the
-// move picker or the edit card would leave the ring on that row, the picker closed and its
-// arrow-key choice gone, or the card's typing going to the list.
+// move picker or the edit card would leave the ring on that row, the picker closed and what was
+// typed in it gone, or the card's typing going to the list.
 for (const [press, control] of [
   ['key-m', 'move'],
   ['key-e', 'edit'],
@@ -890,9 +937,6 @@ test('a narrow docked empty pane drops the shard before cutting the ways in', as
   expect(await ui.find({ type: 'Text', text: /^jot a note from the prompt, even mid-turn$/ })).toBeDefined()
   await ui.unmount()
 })
-
-// The file a note was saved to, by its text.
-const savedFile = (dir: MemDir, text: string) => [...dir.files.values()].find(file => file.text.includes(text))?.text ?? ''
 
 test('in capture, ctrl+s opens a picker: typing narrows the projects and Enter picks the first, the draft kept', async ($, on) => {
   const dir = fixture()

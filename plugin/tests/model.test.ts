@@ -24,6 +24,7 @@ import {
   ownKeys,
   pageOf,
   parseQuery,
+  placesOf,
   sheetLines,
   targetsOf,
   toField,
@@ -70,6 +71,16 @@ describe('model', () => {
     expect(apis.length).toBe(2)
     expect(new Set(apis).size).toBe(2)
     expect(targetsOf(ctx, projects, 'zzz')).toEqual([])
+  })
+
+  test("the move picker offers the projects then unfiled, not the note's own, narrowed by label", () => {
+    const projects = [CC, INFRA, API_A, API_B]
+    const ctx: Ctx = { now: NOW, current: CC, labels: labelsOf(projects) }
+    expect(placesOf(ctx, projects, note('a', INFRA, 1), '').map(option => option.value)).toEqual([CC.key, API_A.key, API_B.key, 'unfiled'])
+    expect(placesOf(ctx, projects, note('a', null, 1), '').map(option => option.value)).toEqual([CC.key, INFRA.key, API_A.key, API_B.key])
+    expect(placesOf(ctx, projects, note('a', CC, 1), ' INF ').map(option => option.label)).toEqual(['infra'])
+    expect(placesOf(ctx, projects, note('a', CC, 1), 'unf').map(option => option.value)).toEqual(['unfiled'])
+    expect(placesOf(ctx, projects, note('a', INFRA, 1), 'infra')).toEqual([])
   })
 
   test('a prompt carries each fill it holds; one held only inside a longer fill is not carried', () => {

@@ -19,6 +19,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 - With nothing open in this project but some sent or archived notes, the pane shows the project's heading instead of the empty page: `↓` then `h` shows the history.
 - The footer's `ctrl+s` says where it goes (`all projects` or `this project`) instead of `scope`.
 - The edit card's `[ esc cancel ]` is now `[ esc back ]`: it keeps the draft.
+- The move picker (`m`) is a field like the new-note project picker: type part of a project's name and press Enter to move the note there. It used to be a list you stepped through with the arrow keys.
 
 ### Fixed
 

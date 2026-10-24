@@ -66,8 +66,9 @@ export type PaneState = {
   // The text field the key sheet was opened from, which it hands the keys back to; null off a row.
   sheetFrom: 'search' | 'capture' | 'edit' | null
   edit: { id: string; draft: string } | null
-  // The note a move (m) applies to, fixed when the Select opens.
+  // The note a move (m) applies to, fixed when the picker opens, and what's typed in the picker.
   moving: string | null
+  moveFind: string
   // `target`: the project capture saves to; null until capture first sets it, and again once the
   // pane closes. `find`: what's typed in its picker (ctrl+s).
   capture: { draft: string; target: string | null; find: string; saved: string[]; error: string | null }
