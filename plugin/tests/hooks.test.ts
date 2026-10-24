@@ -5,7 +5,8 @@ import { MemDir } from './memdir'
 import { cells } from '../src/model'
 import { FOOTER_KEY, PREVIEW_ROWS, TEXT_COLUMN } from '../src/ui/pane'
 import { COLOUR, GLYPH, JOT_CONTEXT } from '../src/ui/look'
-import { CC, INFRA, PANE, mountPane, noteIn, put, run, startSession, texts } from './world'
+import { CC, INFRA, NOTE, PANE, mountPane, noteIn, put, run, startSession, texts } from './world'
+import { serializeNote } from '../src/frontmatter'
 
 const fixture = () => {
   const dir = new MemDir()
@@ -372,29 +373,30 @@ test('the key sheet pages to fit the inline body, j and k turning the pages roun
   const ui = await $.ui.mount({ plugin: 'ostrakon', surface: 'terminal', ...PANE, props })
   await ui.input({ key: 'q', text: '', kind: 'submit' })
   await ui.press({ key: 'key-i' })
-  // 11 rows less the search row, the footer and the frame: 7 a page, so 21 keys take 3 and the
-  // symbols (a title and 6 lines) a fourth. Opened on a row, its own seven keys (copy the last but
+  // 11 rows less the search row, the footer and the frame: 7 a page, so 22 keys and the symbols
+  // (a title and 6 lines) take 5. Opened on a row, its own seven keys (copy the last but
   // one) are the first page.
   expect(await ui.find({ type: 'Text', text: /^copy$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ close keys$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^ more 1\/4$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ more 1\/5$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^jump to a row$/ })).toBeUndefined()
   await ui.press({ key: 'key-j' })
   expect(await ui.find({ type: 'Text', text: /^jump to a row$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^copy$/ })).toBeUndefined()
   await ui.press({ key: 'key-k' })
   await ui.press({ key: 'key-k' })
-  expect(await ui.find({ type: 'Text', text: /^ more 4\/4$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^symbols$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^from the phone$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ more 5\/5$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^folded group$/ })).toBeDefined()
   await ui.press({ key: 'key-k' })
   expect(await ui.find({ type: 'Text', text: /^jot from the prompt/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^symbols$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^from the phone$/ })).toBeDefined()
   // At 40 columns the sheet is narrower than its 46, and no label line is wider than the pane.
   for (const text of await texts(ui)) expect(text.length).toBeLessThanOrEqual(39)
   await ui.press({ key: 'key-i' })
   expect(await ui.find({ type: 'Text', text: /^ close keys$/ })).toBeUndefined()
   await ui.press({ key: 'key-i' })
-  expect(await ui.find({ type: 'Text', text: /^ more 1\/4$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ more 1\/5$/ })).toBeDefined()
   await ui.unmount()
 })
 
@@ -764,6 +766,58 @@ test('the empty pane names its scope and offers ctrl+n for a new note', async ($
   expect(await ui.find({ type: 'Text', text: /open this pane/ })).toBeUndefined()
   await ui.press({ key: 'key-app:toggleDiffPreSession' })
   expect(await ui.find({ type: 'Text', text: /^Nothing pending in any project\.$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('with nothing open here but history, the heading shows: ↓ reaches it and h shows the history', async ($, on) => {
+  const dir = new MemDir()
+  const stamp = '2026-10-09T11:00:00.000Z'
+  const id = '01JA7K2M3Q9X4ZB6C8D0EFGH09'
+  dir.put(`/data/notes/${id}.md`, serializeNote({ ...NOTE, status: 'archived', id, text: 'an old cc note', project: CC, created: stamp, updated: stamp }))
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  expect(await ui.find({ type: 'Text', text: /^Nothing pending in cc\.$/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^cc$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^0$/ })).toBeDefined()
+  // The footer says how: ↓ to the heading, where `h` is history; ctrl+s names where it goes.
+  expect(await ui.find({ type: 'Text', text: /^↓$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ history$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ all projects$/ })).toBeDefined()
+  await $.ui.focus({ component: 'Pane', requestId: PANE.requestId, element: 'slot-0', origin: { kind: 'person' } })
+  await ui.press({ key: 'key-h' })
+  expect(await ui.find({ type: 'Text', text: /an old cc note/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('with no history here, the empty pane stays, and ctrl+s names where it goes', async ($, on) => {
+  await startSession($, on, new MemDir())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  expect(await ui.find({ type: 'Text', text: /^Nothing pending in cc\.$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ all projects$/ })).toBeDefined()
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  expect(await ui.find({ type: 'Text', text: /^ this project$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('g goes to the top row, and pressed there to the bottom', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-j' })
+  expect(await ui.find({ type: 'Text', text: /^ to prompt$/ })).toBeDefined()
+  // The top row is cc's heading, whose footer leads with fold, not a note's actions.
+  await ui.press({ key: 'key-g' })
+  expect(await ui.find({ type: 'Text', text: /^ to prompt$/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^ fold$/ })).toBeDefined()
+  // The bottom row is infra's one note: d archives that one.
+  await ui.press({ key: 'key-g' })
+  await ui.press({ key: 'key-d' })
+  expect(noteIn(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH03').status).toBe('archived')
   await ui.unmount()
 })
 

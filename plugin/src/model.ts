@@ -261,7 +261,8 @@ export const scoreOf = (ctx: Ctx, note: Note, query: string) => {
 
 export type Line =
   | { kind: 'problem'; key: 'problem'; count: number }
-  | { kind: 'group'; key: string; group: string; project: NoteProject | null; isFolded: boolean; count: number }
+  // `isBare`: this project's heading drawn with nothing under it, so `h` on it reaches its history.
+  | { kind: 'group'; key: string; group: string; project: NoteProject | null; isFolded: boolean; count: number; isBare?: true }
   | { kind: 'note'; key: string; note: Note; group: string; hits: number[] }
 
 export const groupKeyOf = (note: Note) => (note.status === 'proposed' ? PROPOSED : (note.project?.key ?? UNFILED))
@@ -318,6 +319,16 @@ export const linesOf = (ctx: Ctx, pane: PaneState, notes: Note[], problems: Note
     lines.push({ kind: 'group', key: `group:${group}`, group, project, isFolded, count: live.length })
     if (isFolded) continue
     for (const { note, hits } of [...live, ...past]) lines.push({ kind: 'note', key: note.id, note, group, hits })
+  }
+  // With nothing waiting here but history hidden, this project's heading still shows, so its
+  // history is a ↓ and an `h` away rather than behind the scope.
+  const here = ctx.current.key
+  const hasPast = notes.some(note => !note.deleted && note.project?.key === here && isHistory(note))
+  if (!isSearching && !groups.has(here) && hasPast) {
+    const project = notes.find(note => note.project?.key === here)?.project ?? null
+    const at = lines.findIndex(line => line.kind === 'group' && line.group !== PROPOSED)
+    const bare: Line = { kind: 'group', key: `group:${here}`, group: here, project, isFolded: pane.folded.includes(here), count: 0, isBare: true }
+    lines.splice(at < 0 ? lines.length : at, 0, bare)
   }
   return lines
 }
@@ -393,6 +404,7 @@ export type Action =
   | 'back'
   | 'down'
   | 'up'
+  | 'top'
   | 'toggle'
 
 // A key the pane answers: `hotkey` is a letter for the hidden action layer, `chord` a borrowed
@@ -406,6 +418,9 @@ const chord = (action: Action, which: keyof typeof CHORD, label: string, isShown
   shown: isShown ? [CHORD[which].keys, label] : undefined,
 })
 
+// The scope chord's footer label: where it goes, not where the pane is.
+const scopeLabel = (scope: PaneState['scope']) => (scope === 'project' ? 'all projects' : 'this project')
+
 // Answered everywhere in the pane (chords work with an Input focused too).
 const CHORDS = (isShown: boolean): Key[] => [
   chord('scope', 'scope', 'scope', isShown),
@@ -416,7 +431,8 @@ const CHORDS = (isShown: boolean): Key[] => [
 
 export type Focus =
   | { kind: 'unfocused' }
-  | { kind: 'search'; hasResults: boolean; hasQuery: boolean }
+  // `isBare`: the list is only this project's heading, with history hidden.
+  | { kind: 'search'; hasResults: boolean; hasQuery: boolean; isBare?: boolean }
   | { kind: 'line'; line: Line; picks: number }
   | { kind: 'capture' }
   | { kind: 'target' }
@@ -429,8 +445,9 @@ export type Focus =
 
 // The keys answered in a focus, footer order. The hidden action layer mounts exactly these, so a
 // key the footer shows always works and nothing else is advertised.
-export const keysFor = (focus: Focus): Key[] => {
-  const nav = [k('down', 'j', 'down', false), k('up', 'k', 'up', false)]
+export const keysFor = (focus: Focus, scope: PaneState['scope'] = 'project'): Key[] => {
+  const nav = [k('down', 'j', 'down', false), k('up', 'k', 'up', false), k('top', 'g', 'top', false)]
+  const where = scopeLabel(scope)
   // A text field takes `i`, so there the footer's `keys` is the chord; elsewhere it's only answered.
   const fieldKeys = chord('keys', 'keys', 'keys')
   switch (focus.kind) {
@@ -440,15 +457,22 @@ export const keysFor = (focus: Focus): Key[] => {
       if (focus.hasQuery && !focus.hasResults) {
         return [
           { action: 'new', shown: ['⏎', 'save as note'] },
-          chord('scope', 'scope', 'scope'),
+          chord('scope', 'scope', where),
           chord('close', 'close', 'close'),
           chord('new', 'new', '', false),
           fieldKeys,
         ]
       }
-      return [chord('scope', 'scope', 'scope'), chord('new', 'new', 'new'), chord('close', 'close', 'close'), fieldKeys]
+      return [
+        // ↓ is the field's own move to the heading; the pair only says where history is.
+        ...(focus.isBare ? [{ action: 'down', shown: ['↓', 'history'] } as Key] : []),
+        chord('scope', 'scope', where),
+        chord('new', 'new', 'new'),
+        chord('close', 'close', 'close'),
+        fieldKeys,
+      ]
     case 'empty':
-      return [chord('new', 'new', 'new'), chord('scope', 'scope', 'scope'), chord('close', 'close', 'close'), fieldKeys]
+      return [chord('new', 'new', 'new'), chord('scope', 'scope', where), chord('close', 'close', 'close'), fieldKeys]
     case 'capture':
       return [
         { action: 'new', shown: ['⏎', 'save'] },

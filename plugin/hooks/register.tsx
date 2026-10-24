@@ -475,7 +475,12 @@ const focusOf = (state: PaneState, lines: Line[], problemCount: number): Focus =
   const line = state.focus === 'line' ? lines.find(candidate => candidate.key === state.cursor) : undefined
   if (line) return { kind: 'line', line, picks: state.picks.length }
   if (lines.length === 0 && state.query.trim() === '') return { kind: 'empty' }
-  return { kind: 'search', hasResults: lines.some(candidate => candidate.kind === 'note'), hasQuery: state.query.trim() !== '' }
+  return {
+    kind: 'search',
+    hasResults: lines.some(candidate => candidate.kind === 'note'),
+    hasQuery: state.query.trim() !== '',
+    isBare: lines.some(candidate => candidate.kind === 'group' && candidate.isBare === true) && !lines.some(candidate => candidate.kind === 'note'),
+  }
 }
 
 const viewOf = async ($: EngineInterface): Promise<PaneView> => {
@@ -491,7 +496,7 @@ const viewOf = async ($: EngineInterface): Promise<PaneView> => {
     else if (lines.length > 0) state = { ...state, cursor: lines[Math.min(lastCursorIndex, lines.length - 1)]?.key ?? null }
   }
   const focus = focusOf(state, lines, broken.length)
-  const keys = keysFor(focus)
+  const keys = keysFor(focus, state.scope)
   const noteLines = lines.filter((line): line is Extract<Line, { kind: 'note' }> => line.kind === 'note')
   const cursorNote = noteLines.find(line => line.key === state.cursor)?.note
   const preview = focus.kind === 'line' || state.mode !== 'browse' ? cursorNote : noteLines[0]?.note
@@ -955,6 +960,12 @@ const act = async ($: EngineInterface, action: Action) => {
         return
       }
       const next = view.lines[Math.max(0, Math.min(view.lines.length - 1, (at < 0 ? -1 : at) + step))]
+      if (next) await focusLine($, next.key)
+      return
+    }
+    case 'top': {
+      // Pressed again on the top row, to the bottom: `G` can't be a hotkey (SPEC §2.2).
+      const next = at === 0 ? view.lines[view.lines.length - 1] : view.lines[0]
       if (next) await focusLine($, next.key)
       return
     }

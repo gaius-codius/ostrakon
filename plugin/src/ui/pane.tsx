@@ -187,7 +187,7 @@ const GroupRow = ({ el, view, line, slot, handlers }: { el: E; view: PaneView; l
       </Text>
       {line.isFolded && <Text dimColor> {GLYPH.folded}</Text>}
       <Box flexGrow={1} />
-      {line.count > 0 && <Text dimColor>{String(line.count)}</Text>}
+      {(line.count > 0 || line.isBare) && <Text dimColor>{String(line.count)}</Text>}
     </Box>
   )
 }

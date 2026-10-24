@@ -27,6 +27,7 @@ const VIEWS = [
   'capture',
   'edit',
   'empty',
+  'empty-history',
 ]
 
 // ---- sample data ----
@@ -340,7 +341,8 @@ const Preview = ({ el, dir, width, note }: { el: E; dir: Direction; width: numbe
 type Key = [string, string]
 // The pane's footers as keysFor (plugin/src/model.ts) shows them: a text field's `keys` is the chord.
 const FIELD_KEYS: Key = ['ctrl+x i', 'keys']
-const SEARCH_KEYS: Key[] = [['ctrl+s', 'scope'], ['ctrl+n', 'new'], ['ctrl+q', 'close'], FIELD_KEYS]
+// `ctrl+s` names where it goes: all projects from this project's scope, this project from all.
+const SEARCH_KEYS: Key[] = [['ctrl+s', 'all projects'], ['ctrl+n', 'new'], ['ctrl+q', 'close'], FIELD_KEYS]
 // Nothing picked: the note's own actions lead, then move and copy, as the pane's row does.
 const ROW_KEYS: Key[] = [
   ['t', 'to prompt'],
@@ -531,7 +533,15 @@ const SearchView = (ctx: Ctx, query: string, isUnfocused = false) => {
         el={ctx.el}
         dir={ctx.dir}
         width={ctx.width}
-        keys={isUnfocused ? UNFOCUSED_KEYS : found.length === 0 ? [['⏎', 'save as note'], ['ctrl+s', 'scope'], ['ctrl+q', 'close'], FIELD_KEYS] : SEARCH_KEYS}
+        keys={
+          isUnfocused
+            ? UNFOCUSED_KEYS
+            : found.length === 0
+              ? [['⏎', 'save as note'], ['ctrl+s', 'this project'], ['ctrl+q', 'close'], FIELD_KEYS]
+              : query === ''
+                ? SEARCH_KEYS
+                : [['ctrl+s', 'this project'], ...SEARCH_KEYS.slice(1)]
+        }
         legend={legendFor(found)}
       />
     </Box>
@@ -702,7 +712,20 @@ const EmptyView = (ctx: Ctx) => {
           </Text>
         ))}
       </Box>
-      <Footer el={ctx.el} dir={ctx.dir} width={ctx.width} keys={[['ctrl+n', 'new'], ['ctrl+s', 'scope'], ['ctrl+q', 'close'], FIELD_KEYS]} />
+      <Footer el={ctx.el} dir={ctx.dir} width={ctx.width} keys={[['ctrl+n', 'new'], ['ctrl+s', 'all projects'], ['ctrl+q', 'close'], FIELD_KEYS]} />
+    </Box>
+  )
+}
+
+// Nothing open here, but some history: this project's heading stands in for the empty page.
+const EmptyHistoryView = (ctx: Ctx) => {
+  const { Box } = ctx.el
+  return (
+    <Box flexDirection="column" width={ctx.width}>
+      <HeaderLine el={ctx.el} dir={ctx.dir} width={ctx.width} header={{ mode: 'search', query: '', right: 'this project · 0 open', isFocused: true }} />
+      <GroupHeader el={ctx.el} dir={ctx.dir} width={ctx.width} project={CURRENT} count={0} />
+      <Box height={1} />
+      <Footer el={ctx.el} dir={ctx.dir} width={ctx.width} keys={[['↓', 'history'], ...SEARCH_KEYS]} />
     </Box>
   )
 }
@@ -731,6 +754,8 @@ const render = (ctx: Ctx, name: string) => {
       return CaptureView(ctx)
     case 'edit':
       return EditView(ctx)
+    case 'empty-history':
+      return EmptyHistoryView(ctx)
     default:
       return EmptyView(ctx)
   }

@@ -110,6 +110,7 @@ export const TEXT = {
   keySheet: [
     ['↑ ↓ j k', 'move'],
     ['1–9', 'jump to a row'],
+    ['g', 'top, again bottom'],
     ['⏎ / t', 'to prompt'],
     ['a / r', 'keep / dismiss'],
     ['s', 'send'],
