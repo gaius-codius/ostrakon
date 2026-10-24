@@ -201,7 +201,7 @@ if has bun; then
   bv=$(bun --version 2>/dev/null)
   if [ "$bv" = "$(tested bun)" ]; then ok "bun $bv"; else note "bun $bv; tested with $(tested bun)"; fi
 else
-  note "bun not found; only the hub and ostrakon pair need it"
+  note "bun not found; only the hub, ostrakon pair and ostrakon jot need it"
 fi
 has git || bad "git not found; ostrakon update needs it"
 case :$PATH: in

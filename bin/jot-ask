@@ -26,7 +26,7 @@ ask() {
   elif has zenity; then zenity --entry --title ostrakon --text "$prompt"
   elif has osascript; then osascript -e "text returned of (display dialog \"$prompt\" default answer \"\" with title \"ostrakon\")"
   else
-    tell "ostrakon: not saved" "jot --ask needs one of walker, fuzzel, rofi, wofi or zenity"
+    tell "ostrakon: not saved" "jot --ask needs Omarchy's prompt, or one of walker, fuzzel, rofi, wofi, zenity or osascript"
     return 1
   fi
 }

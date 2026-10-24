@@ -91,7 +91,7 @@ declare module 'claude-code' {
       isOpen: boolean
       notes: Record<string, Note>
       problems: NoteProblem[]
-      pane: PaneState
+      pane: Shaped<PaneState>
       // The proposals of the last turn that left some, and the turn they belong to (its prompt's
       // turn) with that turn's order (SPEC §10). The band shows them only while that turn is the latest.
       harvest: Shaped<{ turnId: string; generation: number; seq: number; ids: string[] } | null>
