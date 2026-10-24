@@ -7,6 +7,7 @@ import type { Note } from '../plugin/types'
 import { parseNote, serializeNote } from '../plugin/src/frontmatter'
 import { handler, openHub } from './hub'
 import { type JotDeps, jot, parseArgs } from './jot'
+import { ulid } from '../plugin/src/ulid'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -291,7 +292,115 @@ describe('ostrakon jot', () => {
     expect(parseNote(readFileSync(join(dir, name ?? ''), 'utf8')).text).toBe('-5 degrees outside')
   })
 
+  test('says why when the hub answers but rejects the note, and keeps it here', async () => {
+    const rejecting: JotDeps['fetch'] = async () => new Response('{"notes":[],"rejected":[{"reason":"too old"}]}', { status: 200 })
+    const { deps, notes } = setup({}, { OSTRAKON_HUB_URL: 'https://hub', OSTRAKON_HUB_TOKEN: 't' }, rejecting)
+    const result = await jot(['x'], deps)
+    expect(result.code).toBe(0)
+    expect(result.out).toEqual(['Saved.'])
+    expect(result.err[0]).toContain('the hub refused it: too old')
+    expect(notes()).toHaveLength(1)
+
+    const silent = setup({}, { OSTRAKON_HUB_URL: 'https://hub', OSTRAKON_HUB_TOKEN: 't' }, async () => new Response('{"notes":[]}', { status: 200 }))
+    expect((await jot(['y'], silent.deps)).err[0]).toContain('the hub refused it: no reason given')
+  })
+
+  test("an unreadable note file doesn't hide the projects of the others", async () => {
+    const { deps, home } = setup()
+    const dir = join(home, '.local/share/ostrakon/notes')
+    seed(dir, [existing('01JA7K2M3Q9X4ZB6C8D0EFGHJK', cc)])
+    writeFileSync(join(dir, '01JA7K2M3Q9X4ZB6C8D0EFGHJM.md'), 'not a note\n')
+    expect((await jot(['-p', 'cc', 'x'], deps)).out).toEqual(['Saved to cc.'])
+  })
+
+  test("says where it couldn't save when the folder can't be made", async () => {
+    const { deps, home } = setup()
+    // A file where the notes folder goes: no permission bits involved, so it fails as root too.
+    const dir = join(home, '.local/share/ostrakon/notes')
+    mkdirSync(join(home, '.local/share/ostrakon'), { recursive: true })
+    writeFileSync(dir, '')
+    const result = await jot(['x'], deps)
+    expect(result.code).toBe(1)
+    expect(result.out).toEqual([])
+    expect(result.err[0]).toStartWith(`ostrakon jot: couldn't save to ${dir}: `)
+  })
+
+  test('removes the temp file when the rename into place fails', async () => {
+    const { deps, home } = setup()
+    const dir = join(home, '.local/share/ostrakon/notes')
+    // A time no other test uses, its random part zeroed: the note's id is the next one in that millisecond.
+    const now = NOW + 7
+    const first = ulid(now, n => new Uint8Array(n))
+    const id = `${first.slice(0, -1)}1`
+    // A folder where the note goes, with something in it, so the rename can't replace it.
+    mkdirSync(join(dir, `${id}.md`), { recursive: true })
+    writeFileSync(join(dir, `${id}.md`, 'keep'), '')
+    const result = await jot(['x'], { ...deps, now })
+    expect(result.code).toBe(1)
+    expect(result.err[0]).toStartWith(`ostrakon jot: couldn't save to ${dir}: `)
+    expect(readdirSync(dir)).toEqual([`${id}.md`])
+  })
+
   test('reads text after -- as it is', () => {
     expect(parseArgs(['--', '--project', 'is', 'text'])).toEqual({ text: '--project is text' })
+  })
+})
+
+// bin/jot-ask with a stand-in prompt and notifier first on PATH: the prompt prints ASKED, or exits 1
+// when DISMISSED is set; the notifier prints its title and body.
+describe('ostrakon jot --ask', () => {
+  const ask = (asked: string | undefined, seeded: Note[] = []) => {
+    const home = temp()
+    const fakes = temp()
+    writeFileSync(join(fakes, 'omarchy-menu-input'), '#!/bin/sh\n[ -z "$DISMISSED" ] || exit 1\nprintf \'%s\\n\' "$ASKED"\n', { mode: 0o755 })
+    writeFileSync(join(fakes, 'notify-send'), '#!/bin/sh\nshift 2\nprintf \'%s\\n\' "$@"\n', { mode: 0o755 })
+    const dir = join(home, '.local/share/ostrakon/notes')
+    if (seeded.length > 0) seed(dir, seeded)
+    const env: Record<string, string> = { HOME: home, PATH: `${fakes}:${process.env.PATH ?? ''}` }
+    if (asked === undefined) env.DISMISSED = '1'
+    else env.ASKED = asked
+    const run = Bun.spawnSync(['bash', join(import.meta.dir, '../bin/ostrakon'), 'jot', '--ask'], { env })
+    const saved = () => {
+      try {
+        return readdirSync(dir).map(name => parseNote(readFileSync(join(dir, name), 'utf8')))
+      } catch {
+        return []
+      }
+    }
+    return { code: run.exitCode, shown: run.stdout.toString(), saved: saved().filter(note => note.text !== 'older') }
+  }
+
+  test('files a line starting with @name under that project', () => {
+    const run = ask('@cc fix the flaky test', [existing('01JA7K2M3Q9X4ZB6C8D0EFGHJK', cc)])
+    expect(run.code).toBe(0)
+    expect(run.shown).toBe('ostrakon\nSaved to cc.\n')
+    expect(run.saved.map(note => [note.text, note.project?.key])).toEqual([['fix the flaky test', cc.key]])
+  })
+
+  test('saves any other line unfiled, as typed', () => {
+    const run = ask('  -5 degrees, @cc later  ')
+    expect(run.shown).toBe('ostrakon\nSaved.\n')
+    expect(run.saved.map(note => [note.text, note.project])).toEqual([['-5 degrees, @cc later', null]])
+  })
+
+  test('a bare @name saves nothing and says a note goes after it', () => {
+    const run = ask('@cc', [existing('01JA7K2M3Q9X4ZB6C8D0EFGHJK', cc)])
+    expect(run.code).toBe(1)
+    expect(run.shown).toBe('ostrakon: not saved\n@cc needs a note after it\n')
+    expect(run.saved).toEqual([])
+  })
+
+  test('a dismissed or empty prompt saves nothing, quietly', () => {
+    for (const asked of [undefined, '', '   ']) {
+      const run = ask(asked)
+      expect(run).toEqual({ code: 0, shown: '', saved: [] })
+    }
+  })
+
+  test('a refused note shows why and the text, so it is not lost', () => {
+    const run = ask('@nope call the plumber', [existing('01JA7K2M3Q9X4ZB6C8D0EFGHJK', cc)])
+    expect(run.code).toBe(1)
+    expect(run.shown).toBe('ostrakon: not saved\nNo single project named "nope". Known: cc.\n@nope call the plumber\n')
+    expect(run.saved).toEqual([])
   })
 })
