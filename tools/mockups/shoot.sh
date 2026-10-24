@@ -11,7 +11,7 @@ TMP=${TMPD:-/tmp/spmock-shots}; mkdir -p $TMP
 M() { tmux -L spmock "$@"; }
 SET=""; [ "$THEME" = light ] && SET="--settings '{\"theme\":\"light\"}'"
 M kill-server 2>/dev/null
-M new-session -d -s m -x $COLS -y $ROWS -c "${SCREENS_CWD:-$HOME}" "COLORTERM=truecolor claude --plugin-dir $HERE --debug-file $TMP/debug.log $SET"
+M new-session -d -s m -x $COLS -y $ROWS -c "${SCREENS_CWD:-$ROOT}" "COLORTERM=truecolor claude --plugin-dir $HERE --debug-file $TMP/debug.log $SET"
 for _ in $(seq 1 40); do M capture-pane -p -t m | grep -q "shift+tab" && break; sleep 1; done; sleep 3
 # A clean transcript column: clear once, then every command's row scrolls under the pane.
 shot() {
