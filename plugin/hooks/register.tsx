@@ -487,6 +487,13 @@ const focusOf = (state: PaneState, lines: Line[], problemCount: number): Focus =
   }
 }
 
+// Whether a note has a row on the list this state draws: one sent, archived or filtered out has none.
+const isListed = async ($: EngineInterface, state: PaneState, id: string | undefined) => {
+  const all = Object.values(await read($, notes))
+  const ctx: Ctx = { now: await $.clock.now(), current: project, labels: labelsOf(projectsOf(all)) }
+  return linesOf(ctx, state, all, await read($, problems)).some(line => line.key === id)
+}
+
 const viewOf = async ($: EngineInterface): Promise<PaneView> => {
   let state = await read($, pane)
   const all = Object.values(await read($, notes))
@@ -603,7 +610,7 @@ const closeSheet = async ($: EngineInterface) => {
   const state = await read($, pane)
   const from = state.sheetFrom ?? null
   // The note being edited may have gone meanwhile (archived elsewhere): then back to the list.
-  const isEditGone = from === 'edit' && !(await viewOf($)).lines.some(line => line.key === state.edit?.id)
+  const isEditGone = from === 'edit' && !(await isListed($, state, state.edit?.id))
   if (isEditGone) {
     await setPane($, current => ({ ...current, mode: 'browse', sheetFrom: null, focus: 'search' }))
     return focusKey($, SEARCH_KEY)
@@ -791,7 +798,7 @@ const handOff = async ($: EngineInterface) => {
   const state = await read($, pane)
   if (state.mode === 'sheet') {
     const from = state.sheetFrom ?? null
-    const isEditGone = from === 'edit' && !(await viewOf($)).lines.some(line => line.key === state.edit?.id)
+    const isEditGone = from === 'edit' && !(await isListed($, state, state.edit?.id))
     const back = (from === 'capture' || from === 'edit') && !isEditGone ? from : 'browse'
     await setPane($, current => ({ ...current, mode: back, sheetFrom: null, ...(back === 'browse' && from !== null ? { focus: 'search' as const } : {}) }))
   } else if (state.mode === 'move') {
@@ -859,18 +866,21 @@ const openPane = async ($: EngineInterface, mode: 'browse' | 'capture') => {
     }
   }
   const all = await read($, notes)
-  // The edit card comes back only if it was showing (under the key sheet too) when the pane closed.
-  const wasEditing = before.mode === 'edit' || (before.mode === 'sheet' && before.sheetFrom === 'edit')
-  const resumesEdit = mode === 'browse' && wasEditing && before.edit !== null && all[before.edit.id] !== undefined
-  // A note of another project needs scope all to be on the list again.
-  const editsOther = resumesEdit && before.edit !== null && all[before.edit.id]?.project?.key !== project.key
-  const orphan = heldOverReset
-  heldOverReset = ''
   // The person's saved preference (ctrl+s to all): a closed pane opens on it.
   const isAllSaved = !wasOpen && (await $.store.get(SCOPE_KEY).catch(() => undefined)) === 'all'
+  // The edit card comes back only if it was showing (under the key sheet too) when the pane closed.
+  const wasEditing = before.mode === 'edit' || (before.mode === 'sheet' && before.sheetFrom === 'edit')
+  const editing = mode === 'browse' && wasEditing ? before.edit : null
+  // A note of another project needs scope all to be on the list again.
+  const editsOther = editing !== null && all[editing.id] !== undefined && all[editing.id]?.project?.key !== project.key
+  // And only over its row: a note sent or archived meanwhile (its Pocket chip, another session)
+  // leaves the pane on the list, the draft kept for the next `e`.
+  const resumesEdit = editing !== null && (await isListed($, { ...before, scope: editsOther || isAllSaved ? 'all' : before.scope }, editing.id))
+  const orphan = heldOverReset
+  heldOverReset = ''
   await setPane($, state => ({
     ...state,
-    scope: editsOther || isAllSaved ? 'all' : state.scope,
+    scope: (resumesEdit && editsOther) || isAllSaved ? 'all' : state.scope,
     scopeChosen: state.scopeChosen || isAllSaved,
     mode: resumesEdit ? 'edit' : mode,
     sheetFrom: resumesEdit ? null : state.sheetFrom,
