@@ -6,6 +6,11 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Added
+
+- `ostrakon jot [--project <name>] <text>` saves a note of yours from outside Claude Code: into this machine's notes, and to the hub at once if the mod has one set. `ostrakon jot --ask` asks for the note in a small desktop prompt; bind it to a key (README, Notes from the desktop).
+- The hub's `/api/jot` takes an optional `source`, for senders other than the phone (a Slack bot, a script): the note is yours, with the source as its origin. Without it, nothing changes.
+
 ### Changed
 
 - In a new note (`ctrl+n`), `ctrl+s` opens a project picker instead of stepping through every project: type part of a name and press Enter. The picked project now lasts until the pane closes; the next time it opens, new notes go to this session's project again.
