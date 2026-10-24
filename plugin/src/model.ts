@@ -19,6 +19,7 @@ export const freshPane = (): PaneState => ({
   sheetFrom: null,
   edit: null,
   moving: null,
+  moveFind: '',
   capture: { draft: '', target: null, find: '', saved: [], error: null },
   stash: '',
   fills: [],
@@ -185,8 +186,24 @@ export const targetsOf = (ctx: Ctx, projects: NoteProject[], find: string) => {
     { value: UNFILED, label: UNFILED },
     ...projects.filter(item => item.key !== ctx.current.key).map(item => ({ value: item.key, label: labelOf(ctx, item) })),
   ]
+  return narrowed(all, find)
+}
+
+// The move picker (m, SPEC §4.5): the projects, then unfiled, but not where the note is now,
+// narrowed the same way.
+export const placesOf = (ctx: Ctx, projects: NoteProject[], note: Note, find: string) => {
+  const all = [...projects.map(item => ({ value: item.key, label: labelOf(ctx, item) })), { value: UNFILED, label: UNFILED }]
+  const now = note.project?.key ?? UNFILED
+  return narrowed(
+    all.filter(option => option.value !== now),
+    find,
+  )
+}
+
+// A picker's options whose labels hold what's typed, in their order; all of them with nothing typed.
+const narrowed = (options: { value: string; label: string }[], find: string) => {
   const words = find.trim().toLowerCase()
-  return words === '' ? all : all.filter(option => option.label.toLowerCase().includes(words))
+  return words === '' ? options : options.filter(option => option.label.toLowerCase().includes(words))
 }
 
 export const isOther = (ctx: Ctx, note: Note) => note.project !== null && note.project.key !== ctx.current.key

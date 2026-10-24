@@ -110,7 +110,7 @@ describe('focus', () => {
     expect(after(land(person(undefined), SEARCH_KEY)).focus).toBe('none')
   })
 
-  test('leaving the edit card or the move Select ends that mode, keeping the draft; other modes stay', () => {
+  test('leaving the edit card or the move picker ends that mode, keeping the draft; other modes stay', () => {
     for (const to of [EDIT_KEY, 'edit-cancel', 'edit-save']) expect(leaveMode(editing(), to).mode).toBe('edit')
     const left = leaveMode(editing(), SEARCH_KEY)
     expect(left).toMatchObject({ mode: 'browse', moving: null, edit: { id: 'n1', draft: 'half typed' } })

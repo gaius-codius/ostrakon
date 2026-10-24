@@ -33,7 +33,7 @@ export const focusMove = (e: FocusEvent): FocusMove => {
 // Only a redirect, a page or a row needs the view.
 export const needsView = (move: FocusMove) => move.kind === 'layer' || move.kind === 'edge' || (move.kind === 'land' && move.slot !== undefined)
 
-// Leaving the edit card or the move Select ends that mode (the edit draft is kept), whichever route
+// Leaving the edit card or the move picker ends that mode (the edit draft is kept), whichever route
 // the ring takes.
 export const leaveMode = (state: PaneState, to: string | undefined): PaneState => {
   const stays =

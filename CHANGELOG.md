@@ -19,10 +19,12 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 - With nothing open in this project but some sent or archived notes, the pane shows the project's heading instead of the empty page: `↓` then `h` shows the history.
 - The footer's `ctrl+s` says where it goes (`all projects` or `this project`) instead of `scope`.
 - The edit card's `[ esc cancel ]` is now `[ esc back ]`: it keeps the draft.
+- The move picker (`m`) is a field like the new-note project picker: type part of a project's name and press Enter to move the note there. It used to be a list you stepped through with the arrow keys.
 
 ### Fixed
 
 - Two notes put into one prompt before you send it (two chips, `;1` then `;2`, or a chip and `t`) are both marked sent. Before, only the second was.
+- After `m` moves a note out of this project's list, the row that took its place is selected, as after an archive. Before, the search field took the keys.
 - After you leave an edit with Esc, the pane opens on the list again, not in the edit card. It opens in the edit card only if it closed while that was showing. `[ esc back ]` now keeps the draft as Esc does: `e` on that note picks it back up.
 
 ## [0.7.0] - 2026-10-22
