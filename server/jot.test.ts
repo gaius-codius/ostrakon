@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -313,20 +313,16 @@ describe('ostrakon jot', () => {
     expect((await jot(['-p', 'cc', 'x'], deps)).out).toEqual(['Saved to cc.'])
   })
 
-  test("says where it couldn't save, and leaves no temp file behind", async () => {
+  test("says where it couldn't save when the folder can't be made", async () => {
     const { deps, home } = setup()
+    // A file where the notes folder goes: no permission bits involved, so it fails as root too.
     const dir = join(home, '.local/share/ostrakon/notes')
-    mkdirSync(dir, { recursive: true })
-    chmodSync(dir, 0o555)
-    try {
-      const result = await jot(['x'], deps)
-      expect(result.code).toBe(1)
-      expect(result.out).toEqual([])
-      expect(result.err[0]).toStartWith(`ostrakon jot: couldn't save to ${dir}: `)
-    } finally {
-      chmodSync(dir, 0o755)
-    }
-    expect(readdirSync(dir)).toEqual([])
+    mkdirSync(join(home, '.local/share/ostrakon'), { recursive: true })
+    writeFileSync(dir, '')
+    const result = await jot(['x'], deps)
+    expect(result.code).toBe(1)
+    expect(result.out).toEqual([])
+    expect(result.err[0]).toStartWith(`ostrakon jot: couldn't save to ${dir}: `)
   })
 
   test('removes the temp file when the rename into place fails', async () => {

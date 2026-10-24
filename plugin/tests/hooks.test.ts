@@ -1124,7 +1124,7 @@ test('a project folded before its last open note went shows its history on h', a
   await ui.unmount()
 })
 
-test('under a storage problem, the footer drops ↓ history: ↓ lands on the problem row', async ($, on) => {
+test('under a storage problem, the footer drops ↓ history: the problem row is first, not the heading', async ($, on) => {
   const dir = historyOnly()
   dir.put('/data/notes/broken.md', 'not a note')
   await startSession($, on, dir)

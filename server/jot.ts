@@ -192,7 +192,10 @@ export const jot = async (args: string[], deps: JotDeps): Promise<{ out: string[
     writeFileSync(tmp, serializeNote(note))
     renameSync(tmp, join(dir, `${note.id}.md`))
   } catch (error) {
-    rmSync(tmp, { force: true })
+    // Best effort: with no folder (a file in its place) there's no temp file, and rm throws ENOTDIR.
+    try {
+      rmSync(tmp, { force: true })
+    } catch {}
     return { out: [], err: [`ostrakon jot: couldn't save to ${dir}: ${error instanceof Error ? error.message : String(error)}`], code: 1 }
   }
 
