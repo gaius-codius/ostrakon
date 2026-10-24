@@ -1294,7 +1294,10 @@ const moveSubmit = async ($: EngineInterface, value: string) => {
     undo: changed ? [...state.undo, { kind: 'project' as const, id: note.note.id, before }].slice(-50) : state.undo,
   }))
   if (changed) toast($, TOAST.moved(labelOf(view.ctx, into)))
-  await focusLine($, note.note.id)
+  // Moved out of the list (this project's scope), the line that took its place is selected, as
+  // after an archive (SPEC §4.8); none left, the search field.
+  await setPane($, state => ({ ...state, cursor: note.note.id, focus: 'line' }))
+  await focusLine($, (await viewOf($)).pane.cursor)
 }
 
 const pressSlot = async ($: EngineInterface, slot: number) => {

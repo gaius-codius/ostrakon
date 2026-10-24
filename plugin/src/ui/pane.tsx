@@ -353,22 +353,31 @@ const TargetRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Ha
   )
 }
 
-type Picker = { options: { value: string; label: string }[]; rows: number; width: number; now?: string; paddingY?: number; paddingLeft?: number }
+type Picker = {
+  options: { value: string; label: string }[]
+  rows: number
+  width: number
+  now?: string
+  paddingY?: number
+  paddingLeft?: number
+  height?: number
+}
 
 // The projects a picker offers, as many as `rows` take: the first, which Enter picks, in the
 // accent; `now`, the one capture saves to, marked.
-const Places = ({ el, options, rows, width, now, paddingY, paddingLeft }: Picker & { el: E }) => {
+const Places = ({ el, options, rows, width, now, paddingY, paddingLeft, height }: Picker & { el: E }) => {
   const { Box, Text } = el
   const shown = options.slice(0, Math.max(1, rows))
+  const room = width - (now === undefined ? 0 : cells(' · now'))
   return (
-    <Box flexDirection='column' paddingY={paddingY} paddingLeft={paddingLeft}>
+    <Box flexDirection='column' paddingY={paddingY} paddingLeft={paddingLeft} height={height} flexShrink={0}>
       {shown.length === 0 ? (
         <Text dimColor>{TEXT.noTarget}</Text>
       ) : (
         shown.map((option, i) => (
           <Text>
             <Text color={i === 0 ? COLOUR.accent : undefined} bold={i === 0}>
-              {cut(option.label, width - 8)}
+              {cut(option.label, room)}
             </Text>
             {option.value === now && <Text dimColor> · now</Text>}
           </Text>
@@ -383,7 +392,7 @@ const Targets = ({ el, view, rows }: { el: E; view: PaneView; rows: number }) =>
     el={el}
     options={view.targets}
     rows={rows - (view.isInline ? 0 : 2)}
-    width={view.width}
+    width={view.width - 8}
     now={view.pane.capture.target ?? view.ctx.current.key}
     paddingY={view.isInline ? 0 : 1}
   />
@@ -418,9 +427,25 @@ const hasPreview = (view: { isInline: boolean; bodyRows: number }) => !view.isIn
 // The edit card is three rows taller than its row, so editing in a body too short for both, the
 // preview gives up text lines (the draft keeps its end) rather than be cut at the footer.
 const EDIT_ROWS = 3
-const previewLinesOf = (view: { pane: PaneState; bodyRows: number }) =>
-  view.pane.mode === 'edit' ? Math.max(1, Math.min(WIDTH.previewLines, view.bodyRows - (2 + 2 + 3 + EDIT_ROWS + 1 + FOOTER_ROWS))) : WIDTH.previewLines
-const previewRows = (view: { pane: PaneState; bodyRows: number }) => 1 + previewLinesOf(view) + 1
+// The move picker lists places on as many rows as there are places, up to a few, and keeps them
+// while typing narrows the list, so the rows above keep their window. In a short body the preview
+// gives up text lines first, then the places give up rows, down to one.
+const MOVE_PLACES = 5
+type Sized = { pane: PaneState; bodyRows: number; isInline: boolean; projects: NoteProject[] }
+const wantedPlaces = (view: Sized) => Math.max(1, Math.min(MOVE_PLACES, view.projects.length))
+// Docked: the header, three rows, the field, the places, the preview's frame and the footer.
+const movePreviewLines = (view: Sized) => Math.max(1, Math.min(WIDTH.previewLines, view.bodyRows - (2 + 3 + 1 + wantedPlaces(view) + 2 + 1 + FOOTER_ROWS)))
+const placeRows = (view: Sized) => {
+  const preview = hasPreview(view) ? 2 + movePreviewLines(view) : 0
+  const chrome = view.isInline ? 1 + 3 + 1 + FOOTER_ROWS : 2 + 3 + 1 + preview + 1 + FOOTER_ROWS
+  return Math.max(1, Math.min(wantedPlaces(view), view.bodyRows - chrome))
+}
+const previewLinesOf = (view: Sized) => {
+  if (view.pane.mode === 'edit') return Math.max(1, Math.min(WIDTH.previewLines, view.bodyRows - (2 + 2 + 3 + EDIT_ROWS + 1 + FOOTER_ROWS)))
+  if (view.pane.mode === 'move') return movePreviewLines(view)
+  return WIDTH.previewLines
+}
+const previewRows = (view: Sized) => 1 + previewLinesOf(view) + 1
 
 // A draft being typed, wrapped: the one-line field cuts it off, so this is where it reads whole.
 // Too long for `rows`, it shows its end (where the typing is), led by …
@@ -776,14 +801,10 @@ const Move = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
           />
         </Box>
       </Box>
-      <Places el={el} options={view.places} rows={placeRows(view)} width={view.width - cells(lead)} paddingLeft={cells(lead)} />
+      <Places el={el} options={view.places} rows={placeRows(view)} width={view.width - cells(lead)} paddingLeft={cells(lead)} height={placeRows(view)} />
     </Box>
   )
 }
-// The rows the move picker lists places on: as many as there are, up to a few, and as many while
-// typing narrows them, so the rows above keep their window.
-const MOVE_PLACES = 5
-const placeRows = (view: { projects: NoteProject[] }) => Math.max(1, Math.min(MOVE_PLACES, view.projects.length))
 
 // The key sheet sits under the search row and above the footer, framed. It pages to fit the rows
 // between (SPEC §4.5): the problems first, then the keys. Too short for a line inside the frame

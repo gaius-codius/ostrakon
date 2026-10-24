@@ -560,6 +560,37 @@ test("docked at short heights, editing a note in a long list keeps the draft's e
   await ui.unmount()
 })
 
+test('docked from 9 rows, the move picker keeps a place on screen, and its height while typing', async ($, on) => {
+  const dir = new MemDir()
+  for (let i = 10; i < 40; i += 1) put(dir, `01JA7K2M3Q9X4ZB6C8D0EFGH${i}`, `note number ${i}`, CC, i)
+  for (const [i, name] of ['infra', 'api', 'web', 'docs', 'ops', 'data'].entries()) {
+    put(dir, `01JA7K2M3Q9X4ZB6C8D0EFGP${i}`, `a note for ${name}`, { key: `github.com/me/${name}`, name, path: `/home/me/code/${name}` }, 50 + i)
+  }
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  for (let i = 0; i < 12; i += 1) await ui.press({ key: 'key-j' })
+  await ui.press({ key: 'key-m' })
+  const middleRows = async () => {
+    const [root] = await ui.findAll({ type: 'Box' })
+    const middle = ((root?.children ?? []) as Drawn[]).find(child => child.props?.overflow === 'hidden')
+    return rowsOf(middle?.children?.[0])
+  }
+  for (let bodyRows = 8; bodyRows <= 22; bodyRows += 1) {
+    await ui.input({ key: 'move', text: '', kind: 'change' })
+    await dockAt(ui, bodyRows)
+    expect(await footerRow(ui)).toBe(bodyRows - 1)
+    // At 8 rows a row and its two counts leave the field no room for a place under it.
+    expect(await spill(ui)).toBeLessThanOrEqual(bodyRows > 8 ? 0 : 1)
+    expect(await ui.find({ type: 'Text', text: /^infra$/ })).toBeDefined()
+    const before = await middleRows()
+    await ui.input({ key: 'move', text: 'zzz', kind: 'change' })
+    expect(await middleRows()).toBe(before)
+  }
+  await ui.unmount()
+})
+
 test('docked in a very short body, a failed capture save still says why', async ($, on) => {
   const dir = fixture()
   await startSession($, on, dir)
@@ -878,6 +909,22 @@ test('in the move picker, typing narrows the places and Enter moves the note to 
   await ui.press({ key: 'key-e' })
   const field = await ui.find({ type: 'Input', key: 'edit' })
   expect((field?.props as { value?: string } | undefined)?.value).toBe('check why the cache test is flaky')
+  await ui.unmount()
+})
+
+test("a note moved out of this project's list leaves the line that took its place selected", async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-m' })
+  await ui.input({ key: 'move', text: 'infra', kind: 'submit' })
+  expect(savedFile(dir, 'flaky')).toContain(INFRA.key)
+  expect(await ui.find({ type: 'Text', text: /check why the cache test is flaky/ })).toBeUndefined()
+  await ui.press({ key: 'key-e' })
+  const field = await ui.find({ type: 'Input', key: 'edit' })
+  expect((field?.props as { value?: string } | undefined)?.value).toBe('rename the store helpers')
   await ui.unmount()
 })
 
