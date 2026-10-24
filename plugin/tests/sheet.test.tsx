@@ -73,6 +73,21 @@ test('from the edit card the sheet closes back to the card, the draft as it was'
   await ui.unmount()
 })
 
+test('closed with the sheet over the edit card, the pane opens on the card again, the draft as it was', async ($, on) => {
+  const { ui } = await opened($, on)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-e' })
+  await ui.input({ key: 'edit', text: 'check why the cache test is flaky on CI', kind: 'change' })
+  await ui.press({ key: CHORD_KEY })
+  expect(await sheetUp(ui)).toBe(true)
+  await ui.press({ key: 'key-pane:previous' })
+  await run($, 'jot', '')
+  expect(await sheetUp(ui)).toBe(false)
+  const field = await ui.find({ type: 'Input', key: 'edit' })
+  expect(field?.props.value).toBe('check why the cache test is flaky on CI')
+  await ui.unmount()
+})
+
 test('opened on a row with `i`, the chord closes the sheet too', async ($, on) => {
   const { ui } = await opened($, on)
   await ui.input({ key: 'q', text: '', kind: 'submit' })

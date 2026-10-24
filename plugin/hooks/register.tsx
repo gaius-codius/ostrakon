@@ -734,10 +734,13 @@ const giveBack = async ($: EngineInterface) => {
 const cleanUp = async ($: EngineInterface) => {
   generation += 1
   await giveBack($)
+  // Closed on the edit card (or the key sheet over it), the pane opens on it again; anywhere else,
+  // on the list, with any edit draft kept for the next `e` on that note.
   await setPane($, current => ({
     ...current,
     moving: null,
-    mode: 'browse',
+    mode: current.mode === 'edit' || (current.mode === 'sheet' && current.sheetFrom === 'edit') ? 'edit' : 'browse',
+    sheetFrom: null,
     query: '',
     scope: 'project',
     scopeChosen: false,
@@ -835,7 +838,9 @@ const openPane = async ($: EngineInterface, mode: 'browse' | 'capture') => {
     }
   }
   const all = await read($, notes)
-  const resumesEdit = mode === 'browse' && before.edit !== null && all[before.edit.id] !== undefined
+  // The edit card comes back only if it was showing (under the key sheet too) when the pane closed.
+  const wasEditing = before.mode === 'edit' || (before.mode === 'sheet' && before.sheetFrom === 'edit')
+  const resumesEdit = mode === 'browse' && wasEditing && before.edit !== null && all[before.edit.id] !== undefined
   // A note of another project needs scope all to be on the list again.
   const editsOther = resumesEdit && before.edit !== null && all[before.edit.id]?.project?.key !== project.key
   const orphan = heldOverReset
@@ -847,6 +852,7 @@ const openPane = async ($: EngineInterface, mode: 'browse' | 'capture') => {
     scope: editsOther || isAllSaved ? 'all' : state.scope,
     scopeChosen: state.scopeChosen || isAllSaved,
     mode: resumesEdit ? 'edit' : mode,
+    sheetFrom: resumesEdit ? null : state.sheetFrom,
     focus: mode === 'capture' || resumesEdit ? 'control' : 'search',
     cursor: resumesEdit ? (state.edit?.id ?? state.cursor) : state.cursor,
     stash: joined(orphan, state.stash, taken),
@@ -1107,7 +1113,8 @@ const act = async ($: EngineInterface, action: Action) => {
       if (note) await setStatus($, note.id, 'dismissed')
       return
     case 'back':
-      await setPane($, current => ({ ...current, mode: 'browse', edit: null }))
+      // An edit draft is kept, as Esc keeps it: editing the note again picks it back up.
+      await setPane($, current => ({ ...current, mode: 'browse' }))
       if (state.cursor !== null) await focusLine($, state.cursor)
       else focusKey($, SEARCH_KEY)
       return
