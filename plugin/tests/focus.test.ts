@@ -118,7 +118,7 @@ describe('focus', () => {
     expect(leaveMode(moving, MOVE_KEY)).toBe(moving)
     expect(leaveMode(moving, 'slot-0')).toMatchObject({ mode: 'browse', moving: null })
     expect(leaveMode({ ...freshPane(), mode: 'sheet', sheetFrom: 'capture' }, 'slot-0')).toMatchObject({ mode: 'browse', sheetFrom: null })
-    for (const mode of ['capture', 'bundle', 'browse'] as const) expect(leaveMode({ ...freshPane(), mode }, 'slot-0').mode).toBe(mode)
+    for (const mode of ['capture', 'target', 'bundle', 'browse'] as const) expect(leaveMode({ ...freshPane(), mode }, 'slot-0').mode).toBe(mode)
     // Through every route: the layer, an edge, a row.
     expect(after(land(person('key-e'), 'slot-1'), editing()).mode).toBe('browse')
     expect(after(land(person(DOWN_KEY), 'slot-3', viewAt(2)), editing()).mode).toBe('browse')

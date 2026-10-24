@@ -36,6 +36,8 @@ export type Handlers = {
   searchSubmit: (value: string) => void
   captureInput: (value: string) => void
   captureSubmit: (value: string) => void
+  targetInput: (value: string) => void
+  targetSubmit: (value: string) => void
   editInput: (value: string) => void
   editSubmit: (value: string) => void
   editCancel: () => void
@@ -60,6 +62,8 @@ export type PaneView = {
   bundle: Note[]
   projects: NoteProject[]
   captureLabel: string
+  // What capture's target picker offers for what's typed, first the one Enter picks.
+  targets: { value: string; label: string }[]
   showLegend: boolean
   // The rows the engine gives the pane's body.
   bodyRows: number
@@ -74,6 +78,7 @@ export const CAPTURE_KEY = 'capture'
 export const EDIT_KEY = 'edit'
 export const SEND_KEY = 'bundle-send'
 export const MOVE_KEY = 'move'
+export const TARGET_KEY = 'target'
 export const slotKey = (slot: number) => `slot-${slot}`
 export const UP_KEY = 'more-up'
 export const DOWN_KEY = 'more-down'
@@ -312,6 +317,59 @@ const CaptureRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: H
           {cut(view.captureLabel, WIDTH.label)}
         </Text>
       </Box>
+    </Box>
+  )
+}
+
+// Capture's target picker (ctrl+s) takes capture's row, framed the same: typing narrows the projects
+// under it, and Enter picks the first.
+const TargetRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handlers }) => {
+  const { Box, Text, Input } = el
+  const isFramed = !view.isInline
+  const inner = view.width - (isFramed ? 4 : 0)
+  const lead = `${GLYPH.capture} ${TEXT.targetLabel} `
+  return (
+    <Box width={view.width} borderStyle={isFramed ? 'round' : undefined} borderColor={isFramed ? COLOUR.accent : undefined} paddingX={isFramed ? 1 : 0}>
+      <Box flexShrink={0}>
+        <Text color={COLOUR.accent} bold>
+          {lead}
+        </Text>
+      </Box>
+      <Box width={Math.max(10, inner - cells(lead))}>
+        <Input
+          key={TARGET_KEY}
+          placeholder={TEXT.targetPlaceholder}
+          value={view.pane.capture.find}
+          submitLabel=''
+          autoFocus
+          onInput={value => handlers.targetInput(value)}
+          onSubmit={value => handlers.targetSubmit(value)}
+        />
+      </Box>
+    </Box>
+  )
+}
+
+// The projects the picker offers, as many as the rows take: the first, which Enter picks, in the
+// accent; the one capture saves to now marked.
+const Targets = ({ el, view, rows }: { el: E; view: PaneView; rows: number }) => {
+  const { Box, Text } = el
+  const now = view.pane.capture.target ?? view.ctx.current.key
+  const shown = view.targets.slice(0, Math.max(1, rows - (view.isInline ? 0 : 2)))
+  return (
+    <Box flexDirection='column' paddingY={view.isInline ? 0 : 1}>
+      {shown.length === 0 ? (
+        <Text dimColor>{TEXT.noTarget}</Text>
+      ) : (
+        shown.map((option, i) => (
+          <Text>
+            <Text color={i === 0 ? COLOUR.accent : undefined} bold={i === 0}>
+              {cut(option.label, view.width - 8)}
+            </Text>
+            {option.value === now && <Text dimColor> · now</Text>}
+          </Text>
+        ))
+      )}
     </Box>
   )
 }
@@ -701,7 +759,7 @@ const sheetTop = (isInline: boolean) => (isInline ? 1 : 2)
 // docked. The bundle has neither.
 const topRows = (mode: PaneState['mode'], isInline: boolean) => {
   if (mode === 'bundle') return 0
-  if (mode === 'capture') return isInline ? 1 : 3 + 1
+  if (mode === 'capture' || mode === 'target') return isInline ? 1 : 3 + 1
   return sheetTop(isInline)
 }
 const isSheetFramed = (bodyRows: number, isInline: boolean) => bodyRows - sheetTop(isInline) - FOOTER_ROWS - 2 >= 1
@@ -775,6 +833,7 @@ export const Pane = ({ el, view, handlers, hasHub, hasHarvest }: { el: E; view: 
   const hasNotes = view.lines.some(line => line.kind !== 'group')
   const body = () => {
     if (pane.mode === 'capture') return <Capture el={el} view={view} />
+    if (pane.mode === 'target') return <Targets el={el} view={view} rows={middleRows} />
     if (pane.mode === 'bundle') return <Bundle el={el} view={view} handlers={handlers} rows={middleRows} />
     // A storage problem's row stays above the no-match line.
     if (isNoMatch(view)) return [view.lines.length > 0 && <Rows el={el} view={view} handlers={handlers} />, <NoMatch el={el} view={view} />]
@@ -791,6 +850,8 @@ export const Pane = ({ el, view, handlers, hasHub, hasHarvest }: { el: E; view: 
     <Box flexDirection='column' width={view.width} height={isFilled ? view.bodyRows : undefined}>
       {pane.mode === 'bundle' ? null : pane.mode === 'capture' ? (
         <CaptureRow el={el} view={view} handlers={handlers} />
+      ) : pane.mode === 'target' ? (
+        <TargetRow el={el} view={view} handlers={handlers} />
       ) : (
         <SearchRow el={el} view={view} handlers={handlers} />
       )}

@@ -25,6 +25,7 @@ import {
   pageOf,
   parseQuery,
   sheetLines,
+  targetsOf,
   toField,
   uniqueKeys,
   wrap,
@@ -58,6 +59,19 @@ const note = (text: string, project: NoteProject | null, minutes: number, extra:
 const ctxOf = (projects: NoteProject[] = [CC, INFRA]): Ctx => ({ now: NOW, current: CC, labels: labelsOf(projects) })
 
 describe('model', () => {
+  test("capture's target picker offers this project, unfiled, then the others, narrowed by label", () => {
+    const projects = [CC, INFRA, API_A, API_B]
+    const ctx: Ctx = { now: NOW, current: CC, labels: labelsOf(projects) }
+    const all = targetsOf(ctx, projects, '')
+    expect(all.map(option => option.value)).toEqual([CC.key, 'unfiled', INFRA.key, API_A.key, API_B.key])
+    expect(targetsOf(ctx, projects, ' INF ').map(option => option.label)).toEqual(['infra'])
+    // Labels tell two projects of one name apart, and the match reads them.
+    const apis = targetsOf(ctx, projects, 'api').map(option => option.label)
+    expect(apis.length).toBe(2)
+    expect(new Set(apis).size).toBe(2)
+    expect(targetsOf(ctx, projects, 'zzz')).toEqual([])
+  })
+
   test('a prompt carries each fill it holds; one held only inside a longer fill is not carried', () => {
     const texts = ['fix typo', 'fix typo in README', 'rename the store']
     expect(carriedIn('fix typo in README', texts)).toEqual(['fix typo in README'])
