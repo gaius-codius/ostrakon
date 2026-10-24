@@ -47,8 +47,10 @@ T kill-session -t rv
 
 # The phone: the same notes, synced through the hub, at an iPhone's width.
 # A fixed wait, not "until the network is idle": the page holds a long poll open, so it never is.
+# --force-dark-mode: the page follows prefers-color-scheme, which headless Chromium takes from the
+# desktop, so a light desktop gave a light shot beside the dark pane.
 rm -rf "$R/chromium-readme"
-timeout 60 chromium --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=3 --window-size=390,780 \
+timeout 60 chromium --headless=new --disable-gpu --hide-scrollbars --force-dark-mode --force-device-scale-factor=3 --window-size=390,780 \
   --timeout=6000 --user-data-dir="$R/chromium-readme" \
   --screenshot="$OUT/phone.png" "http://127.0.0.1:$PORT/?token=$TOKEN" >/dev/null 2>&1
 T kill-session -t hub
