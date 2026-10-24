@@ -30,7 +30,9 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 - In the move picker and the new-note project picker, a project's whole name typed comes first, so Enter can pick `api` even when `api-server` is listed above it.
 - A note put into the prompt again while it waits in the queue is still marked sent when that queued prompt goes in.
 - A session open while the mod updates keeps marking notes sent; before, the pane's state from the older version broke it until a restart.
-- `ostrakon jot` reads the hub's address and token from one plugin entry in the settings, never one from each.
+- `ostrakon jot` and `ostrakon doctor` read the hub's address and token from one plugin entry in the settings, never one from each.
+- `ostrakon jot` and `ostrakon doctor` read the settings from `CLAUDE_CONFIG_DIR` when it's set, as Claude Code does.
+- When the hub refuses the token, `ostrakon jot` no longer says a session will send the note later: sessions use that token too.
 
 ## [0.7.0] - 2026-10-22
 
