@@ -90,6 +90,26 @@ describe('ostrakon jot', () => {
     expect((await jot(['-p', 'cc', 'x'], deps)).err).toEqual(['ostrakon jot: No project named "cc": no note here has a project yet.'])
   })
 
+  test('a conflict copy that lost the merge brings no project of its own', async () => {
+    const { deps, home } = setup()
+    const other = { key: 'github.com/old/cc', name: 'cc', path: '/old/cc' }
+    const dir = join(home, '.local/share/ostrakon/notes')
+    seed(dir, [existing('01JA7K2M3Q9X4ZB6C8D0EFGHJK', cc, { updated: '2026-10-11T00:00:00.000Z' })])
+    writeFileSync(join(dir, '01JA7K2M3Q9X4ZB6C8D0EFGHJK (conflict).md'), serializeNote(existing('01JA7K2M3Q9X4ZB6C8D0EFGHJK', other)))
+    expect((await jot(['-p', 'cc', 'x'], deps)).out).toEqual(['Saved to cc.'])
+  })
+
+  test('trims the hub settings, as the mod does', async () => {
+    const seen: string[] = []
+    const spy: JotDeps['fetch'] = async url => {
+      seen.push(url)
+      return new Response('{}', { status: 500 })
+    }
+    const { deps } = setup({ pluginConfigs: { ostrakon: { options: { hubUrl: ' https://hub/ ', hubToken: ' t ' } } } }, {}, spy)
+    await jot(['x'], deps)
+    expect(seen).toEqual(['https://hub/api/notes'])
+  })
+
   test('uses the folder the mod uses: the settings env, the shell env, then the notesDir option', async () => {
     const custom = temp()
     const fromOption = setup({ pluginConfigs: { ostrakon: { options: { notesDir: custom } } } })

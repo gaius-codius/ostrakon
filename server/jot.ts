@@ -13,6 +13,7 @@ import { join } from 'node:path'
 import type { Note, NoteProject } from '../plugin/types'
 import { parseNote, serializeNote } from '../plugin/src/frontmatter'
 import { projectNamed, unknownProject } from '../plugin/src/harvest'
+import { mergeAll } from '../plugin/src/merge'
 import { labelOf, labelsOf } from '../plugin/src/model'
 import { randomTag } from '../plugin/src/store'
 import { ulid } from '../plugin/src/ulid'
@@ -30,7 +31,8 @@ export type JotDeps = {
 
 type Settings = { envDir?: string; notesDir?: string; hubUrl?: string; hubToken?: string }
 
-const text = (value: unknown) => (typeof value === 'string' && value !== '' ? value : undefined)
+// Trimmed, as the mod reads its options (register.tsx).
+const text = (value: unknown) => (typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined)
 
 // The plugin's options, under whichever name it was installed as (the same names bin/doctor tries).
 export const settingsOf = (home: string): Settings => {
@@ -55,9 +57,11 @@ export const notesDirOf = (home: string, env: JotDeps['env'], settings: Settings
   return `${chosen.replace(/^~(?=\/)/, home).replace(/\/+$/, '')}/notes`
 }
 
-// The projects the notes here know, each as its newest live note has it.
+// The projects the notes here know, each as its newest live note has it. Copies of one note (a
+// sync's conflict copy) are merged first, as the store does, so a losing copy's project doesn't count.
 export const knownProjects = (dir: string): NoteProject[] => {
   const newest = new Map<string, { project: NoteProject; updated: string }>()
+  const read: Note[] = []
   let names: string[] = []
   try {
     names = readdirSync(dir).filter(name => name.endsWith('.md') && !name.startsWith('.'))
@@ -65,12 +69,11 @@ export const knownProjects = (dir: string): NoteProject[] => {
     return []
   }
   for (const name of names) {
-    let note: Note
     try {
-      note = parseNote(readFileSync(join(dir, name), 'utf8'))
-    } catch {
-      continue
-    }
+      read.push(parseNote(readFileSync(join(dir, name), 'utf8')))
+    } catch {}
+  }
+  for (const note of mergeAll(read).values()) {
     if (note.deleted || note.project === null) continue
     const seen = newest.get(note.project.key)
     if (seen === undefined || seen.updated < note.updated) newest.set(note.project.key, { project: note.project, updated: note.updated })
@@ -183,8 +186,8 @@ export const jot = async (args: string[], deps: JotDeps): Promise<{ out: string[
   const saved = project === null ? 'Saved.' : `Saved to ${label}.`
   // The URL and token as a pair, from one place: the settings' token never goes to the env's URL.
   const fromEnv = Boolean(deps.env.OSTRAKON_HUB_URL || deps.env.OSTRAKON_HUB_TOKEN)
-  const url = fromEnv ? deps.env.OSTRAKON_HUB_URL : settings.hubUrl
-  const token = fromEnv ? deps.env.OSTRAKON_HUB_TOKEN : settings.hubToken
+  const url = fromEnv ? text(deps.env.OSTRAKON_HUB_URL) : settings.hubUrl
+  const token = fromEnv ? text(deps.env.OSTRAKON_HUB_TOKEN) : settings.hubToken
   if (!url || !token)
     return { out: [saved], err: fromEnv ? ['OSTRAKON_HUB_URL and OSTRAKON_HUB_TOKEN go together; the note is only in this folder.'] : [], code: 0 }
   const problem = await sendToHub(deps, url, token, note)

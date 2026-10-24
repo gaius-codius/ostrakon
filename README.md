@@ -47,7 +47,7 @@ Sync is optional and works both ways. Add, edit, move or archive a note on one m
 
 There are two ways to install it:
 
-- **The install script** gets you the mod and the `ostrakon` command: `update`, `doctor`, `pair`, and the hub for syncing and the phone app. Updates come through `ostrakon update`.
+- **The install script** gets you the mod and the `ostrakon` command: `jot`, `update`, `doctor`, `pair`, and the hub for syncing and the phone app. Updates come through `ostrakon update`.
 - **Claude Code's plugin marketplace** gets you the mod only. There's no `ostrakon` command, so you can't run the hub or pair a phone from it; folder sync, and a hub set up on another machine, still work. Updates come through Claude Code.
 
 Use one or the other. The install script offers to add the [keybindings](#keybindings); with the marketplace, add them yourself.
@@ -192,7 +192,7 @@ ostrakon jot --project cc fix the flaky test
 
 The note goes into this machine's notes folder, the one the mod uses, so it shows in your sessions here. If the mod has a hub set (`hubUrl` and `hubToken`), it goes to the hub at once too, so your phone and other machines have it within seconds. If the hub can't be reached, the note stays here and a session sends it later. `--project` (or `-p`) takes a project your notes already know, by name or key. On a machine without the mod's settings, set `OSTRAKON_HUB_URL` and `OSTRAKON_HUB_TOKEN` instead; set either and both are read from there, never one from each place.
 
-**A quick-note key.** `ostrakon jot --ask` asks for one line in a small prompt, saves it and shows a notification. Start the line with `@name` to file it under a project: `@cc fix the flaky test`. It uses Omarchy's own prompt, or else whichever of walker, fuzzel, rofi, wofi or zenity is installed (on macOS, a dialog). Bind it to a key. On Omarchy, add this to `~/.config/hypr/bindings.lua`:
+**A quick-note key.** `ostrakon jot --ask` asks for one line in a small prompt, saves it and shows a notification. Start the line with `@name` to file it under a project: `@cc fix the flaky test`. It uses Omarchy's own prompt, or else whichever of walker, fuzzel, rofi, wofi or zenity is installed. Bind it to a key. On Omarchy, add this to `~/.config/hypr/bindings.lua`:
 
 ```lua
 o.bind("SUPER + SHIFT + J", "Ostrakon note", "~/.local/bin/ostrakon jot --ask")
