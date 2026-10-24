@@ -784,7 +784,9 @@ test('with nothing open here but history, the heading shows: ↓ reaches it and 
   expect(await ui.find({ type: 'Text', text: /^↓$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ history$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ all projects$/ })).toBeDefined()
-  await $.ui.focus({ component: 'Pane', requestId: PANE.requestId, element: 'slot-0', origin: { kind: 'person' } })
+  // Enter, as `⏎ to list` says, goes to the heading; there, `h` leads and nothing is to fold.
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  expect(await ui.find({ type: 'Text', text: /^ fold$/ })).toBeUndefined()
   await ui.press({ key: 'key-h' })
   expect(await ui.find({ type: 'Text', text: /an old cc note/ })).toBeDefined()
   await ui.unmount()

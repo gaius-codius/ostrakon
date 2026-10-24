@@ -327,7 +327,8 @@ export const linesOf = (ctx: Ctx, pane: PaneState, notes: Note[], problems: Note
   if (!isSearching && !groups.has(here) && hasPast) {
     const project = notes.find(note => note.project?.key === here)?.project ?? null
     const at = lines.findIndex(line => line.kind === 'group' && line.group !== PROPOSED)
-    const bare: Line = { kind: 'group', key: `group:${here}`, group: here, project, isFolded: pane.folded.includes(here), count: 0, isBare: true }
+    // Never folded: there's nothing under it to fold, and `h` on it unfolds the history.
+    const bare: Line = { kind: 'group', key: `group:${here}`, group: here, project, isFolded: false, count: 0, isBare: true }
     lines.splice(at < 0 ? lines.length : at, 0, bare)
   }
   return lines
@@ -516,6 +517,18 @@ export const keysFor = (focus: Focus, scope: PaneState['scope'] = 'project'): Ke
         chord('keys', 'keys', '', false),
       ]
       if (line.kind === 'problem') return [{ action: 'details', shown: ['⏎', 'details'] }, k('search', 'f', 'search'), ...always]
+      if (line.kind === 'group' && line.isBare) {
+        return [
+          k('history', 'h', 'history'),
+          k('search', 'f', 'search'),
+          k('keys', 'i', 'keys'),
+          ...nav,
+          k('close', 'q', 'close', false),
+          k('new', 'n', 'new', false),
+          ...CHORDS(false),
+          chord('keys', 'keys', '', false),
+        ]
+      }
       if (line.kind === 'group') {
         return [
           k('fold', 'z', line.isFolded ? 'unfold' : 'fold'),

@@ -108,6 +108,25 @@ describe('model', () => {
     expect(keys(typing)).toEqual([`group:${CC.key}`, 'flaky cache test', `group:${INFRA.key}`, 'cache metric'])
   })
 
+  test("with nothing open here but history, this project's heading still shows, bare, after proposed and problems", () => {
+    const keys = (lines: Line[]) => lines.map(line => (line.kind === 'note' ? line.note.text : line.key))
+    const ctx = ctxOf([CC, INFRA])
+    const past = note('old cc note', CC, 30, { status: 'archived' })
+    const pane = { ...freshPane(), scope: 'all' as const, folded: [CC.key] }
+    const lines = linesOf(
+      ctx,
+      pane,
+      [past, note('cache metric', INFRA, 20), note('idea', CC, 5, { status: 'proposed', by: 'claude' })],
+      [{ file: 'bad.md', reason: 'no front matter' }],
+    )
+    expect(keys(lines)).toEqual(['problem', 'group:proposed', 'idea', `group:${CC.key}`, `group:${INFRA.key}`, 'cache metric'])
+    expect(lines[3]).toMatchObject({ isBare: true, count: 0, isFolded: false })
+    // A query, or history already on, draws no bare heading; nor does a project with no history.
+    expect(keys(linesOf(ctx, { ...pane, query: 'old' }, [past], []))).toEqual([])
+    expect(linesOf(ctx, { ...pane, history: true }, [past], []).some(line => line.kind === 'group' && line.isBare)).toBe(false)
+    expect(linesOf(ctx, freshPane(), [note('cache metric', INFRA, 20, { status: 'archived' })], [])).toEqual([])
+  })
+
   test('the list groups proposed, this project, others by activity, then unfiled; empty and folded groups', () => {
     const notes = [
       note('old infra', INFRA, 600),

@@ -136,7 +136,7 @@ export const TEXT = {
   symbolSheet: [
     [GLYPH.claude, 'from Claude'],
     [GLYPH.phone, 'from the phone'],
-    [`${GLYPH.picked} ${GLYPH.unpicked}`, 'picked / not picked'],
+    [`${GLYPH.picked} ${GLYPH.unpicked}`, 'row picked / not picked'],
     [GLYPH.sent, 'sent'],
     [GLYPH.archived, 'archived, or a row past 9'],
     [GLYPH.folded, 'folded group'],
