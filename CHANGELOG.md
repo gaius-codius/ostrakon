@@ -6,6 +6,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Changed
+
+- In a new note (`ctrl+n`), `ctrl+s` opens a project picker instead of stepping through every project: type part of a name and press Enter. The picked project now lasts until the pane closes; the next time it opens, new notes go to this session's project again.
+
 ### Fixed
 
 - Two notes put into one prompt before you send it (two chips, `;1` then `;2`, or a chip and `t`) are both marked sent. Before, only the second was.

@@ -14,6 +14,7 @@ import {
   fromField,
   keysFor,
   labelOf,
+  targetsOf,
   labelsOf,
   linesOf,
   ownKeys,
@@ -73,7 +74,7 @@ import { HarvestRow, PocketRow, SwitchKey, harvestOf, openerOf, pocketOf } from 
 import type { BandHandlers, Drawn } from '../src/ui/band'
 import { BAND_KEY, HINT, JOT_CONTEXT, MS, TEXT, TOAST, WIDTH, toneOf } from '../src/ui/look'
 import type { Tone } from '../src/ui/look'
-import { CAPTURE_KEY, EDIT_KEY, MOVE_KEY, Pane, SEARCH_KEY, SEND_KEY, SHEET_KEY, chromeRows, sheetPages, slotKey } from '../src/ui/pane'
+import { CAPTURE_KEY, EDIT_KEY, MOVE_KEY, Pane, SEARCH_KEY, SEND_KEY, SHEET_KEY, TARGET_KEY, chromeRows, sheetPages, slotKey } from '../src/ui/pane'
 import type { Handlers, PaneView } from '../src/ui/pane'
 
 const PANE = 'ostrakon'
@@ -469,7 +470,8 @@ const focusOf = (state: PaneState, lines: Line[], problemCount: number): Focus =
     const lead = row ? ownKeys(keysFor({ kind: 'line', line: row, picks: state.picks.length })) : []
     return { kind: 'sheet', page: Math.min(Math.max(0, state.sheetPage ?? 0), pages - 1), pages, lead }
   }
-  if (state.mode === 'capture' || state.mode === 'edit' || state.mode === 'bundle' || state.mode === 'move') return { kind: state.mode }
+  if (state.mode === 'capture' || state.mode === 'target' || state.mode === 'edit' || state.mode === 'bundle' || state.mode === 'move')
+    return { kind: state.mode }
   const line = state.focus === 'line' ? lines.find(candidate => candidate.key === state.cursor) : undefined
   if (line) return { kind: 'line', line, picks: state.picks.length }
   if (lines.length === 0 && state.query.trim() === '') return { kind: 'empty' }
@@ -517,6 +519,7 @@ const viewOf = async ($: EngineInterface): Promise<PaneView> => {
     bundle: state.picks.map(id => byId.get(id)).filter((note): note is Note => note !== undefined),
     projects,
     captureLabel: labelOf(ctx, captureProject),
+    targets: state.mode === 'target' ? targetsOf(ctx, projects, state.capture.find) : [],
     showLegend: state.picks.length === 0 && noteLines.some(line => line.note.by === 'claude'),
     syncStatus: [syncStatusOf(await read($, syncState), 'hub offline'), syncStatusOf(await read($, mirrorState), 'mirror unavailable')]
       .filter(text => text !== '')
@@ -577,9 +580,9 @@ const markSent = async ($: EngineInterface, ids: string[]) => {
 // keys and hands them back to that field on close; opened on a row, the row keeps them.
 const openSheet = async ($: EngineInterface) => {
   const state = await read($, pane)
-  // The bundle and the move picker answer the chord so it doesn't reach the engine's own action,
-  // and keep their place: the sheet would drop them.
-  if (state.mode === 'bundle' || state.mode === 'move') return
+  // The bundle and the pickers answer the chord so it doesn't reach the engine's own action, and
+  // keep their place: the sheet would drop them.
+  if (state.mode === 'bundle' || state.mode === 'move' || state.mode === 'target') return
   const from = state.mode === 'capture' || state.mode === 'edit' ? state.mode : state.focus === 'search' ? 'search' : null
   await setPane($, current => ({ ...current, mode: 'sheet', sheetPage: 0, sheetFrom: from }))
   if (from !== null) focusKey($, SHEET_KEY)
@@ -623,6 +626,7 @@ const goBack = async ($: EngineInterface) => {
     else focusKey($, SEARCH_KEY)
     return true
   }
+  if (state.mode === 'target') return leaveTarget($)
   if (state.mode === 'capture') {
     await setPane($, current => ({ ...current, mode: 'browse', focus: 'search', capture: { ...current.capture, error: null } }))
     focusKey($, SEARCH_KEY)
@@ -651,6 +655,7 @@ const refocus = async ($: EngineInterface) => {
   const state = await read($, pane)
   // The key sheet closed back to capture or the edit card (Esc): their field takes the keys again.
   if (state.mode === 'capture') return focusKey($, CAPTURE_KEY)
+  if (state.mode === 'target') return focusKey($, TARGET_KEY)
   if (state.mode === 'edit') return focusKey($, EDIT_KEY)
   if (state.mode === 'bundle') return focusKey($, SEND_KEY)
   // The selected note may have left the list while the prompt had the keys: the line that took its
@@ -746,6 +751,8 @@ const cleanUp = async ($: EngineInterface) => {
     scopeChosen: false,
     focus: 'search',
     offset: 0,
+    // The next note goes to this project again, whatever the last capture picked (SPEC §4.4).
+    capture: { ...current.capture, target: null, find: '' },
   }))
   await update($, isOpen, () => false)
 }
@@ -777,6 +784,8 @@ const handOff = async ($: EngineInterface) => {
     await setPane($, current => ({ ...current, mode: back, sheetFrom: null, ...(back === 'browse' && from !== null ? { focus: 'search' as const } : {}) }))
   } else if (state.mode === 'move') {
     await setPane($, current => ({ ...current, mode: 'browse', moving: null }))
+  } else if (state.mode === 'target') {
+    await setPane($, current => ({ ...current, mode: 'capture', capture: { ...current.capture, find: '' } }))
   }
   isReopening = true
   let why: string | undefined
@@ -1080,18 +1089,17 @@ const act = async ($: EngineInterface, action: Action) => {
         ...current,
         mode: 'capture',
         focus: 'control',
-        capture: { ...current.capture, target: current.capture.target ?? project.key, error: null },
+        capture: { ...current.capture, target: current.capture.target ?? project.key, find: '', error: null },
       }))
       focusKey($, CAPTURE_KEY)
       return
     case 'scope':
       if (state.mode === 'capture') {
-        // This project, then unfiled, then the others by recent activity.
-        const order = [project.key, 'unfiled', ...view.projects.filter(item => item.key !== project.key).map(item => item.key)]
-        const nextTarget = order[(order.indexOf(state.capture.target ?? project.key) + 1) % order.length] ?? project.key
-        await setPane($, current => ({ ...current, capture: { ...current.capture, target: nextTarget } }))
+        await setPane($, current => ({ ...current, mode: 'target', capture: { ...current.capture, find: '' } }))
+        focusKey($, TARGET_KEY)
         return
       }
+      if (state.mode === 'target') return leaveTarget($)
       await setPane($, current => ({ ...current, scope: current.scope === 'project' ? 'all' : 'project', scopeChosen: true, offset: 0 }))
       // Remembered across opens and sessions: all sticks; back to this project restores the
       // defaults (search starts here, the list and typing look everywhere).
@@ -1213,6 +1221,23 @@ const editSubmit = async ($: EngineInterface, value: string) => {
   }
   await setPane($, current => ({ ...current, mode: 'browse', edit: null }))
   await focusLine($, id)
+}
+
+// Back from capture's target picker to capture, the draft as it was.
+const leaveTarget = async ($: EngineInterface) => {
+  await setPane($, current => ({ ...current, mode: 'capture', capture: { ...current.capture, find: '' } }))
+  focusKey($, CAPTURE_KEY)
+  return true
+}
+
+// Enter in the picker: the first project that matches becomes capture's target. With nothing
+// matching, the picker stays.
+const targetSubmit = async ($: EngineInterface, value: string) => {
+  const view = await viewOf($)
+  const first = targetsOf(view.ctx, view.projects, value)[0]
+  if (!first) return
+  await setPane($, current => ({ ...current, capture: { ...current.capture, target: first.value } }))
+  await leaveTarget($)
 }
 
 const moveTo = async ($: EngineInterface, value: string) => {
@@ -1885,6 +1910,8 @@ export const register: Register = (on, options) => {
       searchSubmit: value => run(serially(() => searchSubmit($, value))),
       captureInput: value => run(setPane($, state => ({ ...state, capture: { ...state.capture, draft: value } }))),
       captureSubmit: value => run(serially(() => captureSubmit($, value))),
+      targetInput: value => run(setPane($, state => ({ ...state, capture: { ...state.capture, find: value } }))),
+      targetSubmit: value => run(serially(() => targetSubmit($, value))),
       editInput: value => run(setPane($, state => ({ ...state, edit: state.edit ? { ...state.edit, draft: value } : null }))),
       editSubmit: value => run(serially(() => editSubmit($, value))),
       editCancel: () => run(serially(() => act($, 'back'))),

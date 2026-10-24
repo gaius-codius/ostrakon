@@ -19,7 +19,7 @@ export const freshPane = (): PaneState => ({
   sheetFrom: null,
   edit: null,
   moving: null,
-  capture: { draft: '', target: null, saved: [], error: null },
+  capture: { draft: '', target: null, find: '', saved: [], error: null },
   stash: '',
   fills: [],
   undo: [],
@@ -176,6 +176,18 @@ export type Ctx = {
 }
 
 export const labelOf = (ctx: Ctx, project: NoteProject | null) => (project === null ? UNFILED : (ctx.labels.get(project.key) ?? project.name))
+
+// Capture's target picker (SPEC §4.4): this project, unfiled, then the others, narrowed to the
+// labels that hold what's typed.
+export const targetsOf = (ctx: Ctx, projects: NoteProject[], find: string) => {
+  const all = [
+    { value: ctx.current.key, label: labelOf(ctx, ctx.current) },
+    { value: UNFILED, label: UNFILED },
+    ...projects.filter(item => item.key !== ctx.current.key).map(item => ({ value: item.key, label: labelOf(ctx, item) })),
+  ]
+  const words = find.trim().toLowerCase()
+  return words === '' ? all : all.filter(option => option.label.toLowerCase().includes(words))
+}
 
 export const isOther = (ctx: Ctx, note: Note) => note.project !== null && note.project.key !== ctx.current.key
 
@@ -407,6 +419,7 @@ export type Focus =
   | { kind: 'search'; hasResults: boolean; hasQuery: boolean }
   | { kind: 'line'; line: Line; picks: number }
   | { kind: 'capture' }
+  | { kind: 'target' }
   | { kind: 'edit' }
   | { kind: 'bundle' }
   | { kind: 'move' }
@@ -444,6 +457,8 @@ export const keysFor = (focus: Focus): Key[] => {
         ...CHORDS(false),
         fieldKeys,
       ]
+    case 'target':
+      return [{ action: 'scope', shown: ['⏎', 'pick'] }, { action: 'back', shown: ['esc', 'back'] }, ...CHORDS(false), fieldKeys]
     case 'edit':
       return [{ action: 'new', shown: ['⏎', 'save'] }, { action: 'back', shown: ['esc', 'back, draft kept'] }, ...CHORDS(false), fieldKeys]
     case 'bundle':

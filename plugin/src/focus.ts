@@ -40,6 +40,7 @@ export const leaveMode = (state: PaneState, to: string | undefined): PaneState =
     (state.mode === 'edit' && (to === EDIT_KEY || to === 'edit-cancel' || to === 'edit-save')) ||
     (state.mode === 'move' && to === MOVE_KEY) ||
     state.mode === 'capture' ||
+    state.mode === 'target' ||
     state.mode === 'bundle' ||
     state.mode === 'browse'
   return stays ? state : { ...state, mode: 'browse', moving: null, sheetFrom: null }

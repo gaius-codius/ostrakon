@@ -37,7 +37,7 @@ export type NoteProblem = { file: string; reason: string }
 
 // The launcher pane's state (SPEC §4). Note ids, project keys and line keys only; the notes
 // themselves live in `notes`.
-export type PaneMode = 'browse' | 'capture' | 'edit' | 'bundle' | 'move' | 'sheet'
+export type PaneMode = 'browse' | 'capture' | 'target' | 'edit' | 'bundle' | 'move' | 'sheet'
 
 export type Undo =
   | { kind: 'status'; id: string; before: NoteStatus }
@@ -68,7 +68,9 @@ export type PaneState = {
   edit: { id: string; draft: string } | null
   // The note a move (m) applies to, fixed when the Select opens.
   moving: string | null
-  capture: { draft: string; target: string | null; saved: string[]; error: string | null }
+  // `target`: the project capture saves to, null for this one; it goes back to null when the pane
+  // closes. `find`: what's typed in its picker (ctrl+s).
+  capture: { draft: string; target: string | null; find: string; saved: string[]; error: string | null }
   // The person's prompt draft, held while the pane has the keyboard (SPEC §4.4).
   stash: string
   // What the pane put into the prompt since the last submit, so a submit containing a fill's text
