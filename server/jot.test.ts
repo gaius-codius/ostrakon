@@ -252,9 +252,10 @@ describe('ostrakon jot', () => {
     expect(refused.err[0]).not.toContain('Claude Code sends it')
     expect(refused.err[0]).toContain('copy HUB_TOKEN')
 
-    // Another token in the env was refused; the sessions' own token may still be taken.
     const otherToken = setup(settings, { OSTRAKON_HUB_URL: 'https://hub', OSTRAKON_HUB_TOKEN: 'typo' }, refusing)
-    expect((await jot(['y'], otherToken.deps)).err[0]).toContain('Claude Code sends it')
+    const envRefused = (await jot(['y'], otherToken.deps)).err[0]
+    expect(envRefused).not.toContain('Claude Code sends it')
+    expect(envRefused).toContain('hubToken in the settings')
   })
 
   test('keeps the notesDir option as given, as the mod does', async () => {

@@ -59,7 +59,8 @@ export const settingsOf = (file: string): Settings => {
 }
 
 // Where Claude Code keeps its settings: CLAUDE_CONFIG_DIR when set, as the sessions here see it.
-export const settingsFileOf = (home: string, env: JotDeps['env']) => join(path(env.CLAUDE_CONFIG_DIR) ?? join(home, '.claude'), 'settings.json')
+// Appended as given, not join()ed: join would fold a `..` the filesystem resolves after a symlink.
+export const settingsFileOf = (home: string, env: JotDeps['env']) => `${path(env.CLAUDE_CONFIG_DIR) ?? `${home}/.claude`}/settings.json`
 
 // As the mod picks it (store.ts): OSTRAKON_DIR as a session sees it (the settings' env over the
 // shell's), else the notesDir option, else the default; the notes are in its notes/.
@@ -208,8 +209,10 @@ export const jot = async (args: string[], deps: JotDeps): Promise<{ out: string[
   const same = (a: string | undefined) => a?.replace(/\/+$/, '')
   const sessionsHub = !fromEnv || same(url) === same(settings.hubUrl)
   const later =
-    sessionsHub && problem === REFUSED && token === settings.hubToken
-      ? "Sessions here use that token too: copy HUB_TOKEN from the hub's env file into hubToken."
+    sessionsHub && problem === REFUSED
+      ? token === settings.hubToken
+        ? "Sessions here use that token too: copy HUB_TOKEN from the hub's env file into hubToken."
+        : 'Sessions here use the hubToken in the settings.'
       : sessionsHub
         ? 'Claude Code sends it once a session runs here.'
         : settings.hubUrl

@@ -44,8 +44,10 @@ except ValueError:
 print('dirs\t' + str(s.get('env', {}).get('CLAUDE_CODE_PLUGIN_DIRS', '')))
 print('envDir\t' + str(s.get('env', {}).get('OSTRAKON_DIR', '')))
 print('market\t' + ('1' if s.get('enabledPlugins', {}).get('ostrakon@ostrakon') else ''))
-configs = s.get('pluginConfigs', {})
-entries = [configs.get(n, {}).get('options', {}) for n in ('ostrakon', 'ostrakon@inline', 'ostrakon@ostrakon')]
+# An entry that isn't an object (a leftover null) counts as empty, so it hides none of the others.
+dict_or_empty = lambda v: v if isinstance(v, dict) else {}
+configs = dict_or_empty(s.get('pluginConfigs'))
+entries = [dict_or_empty(dict_or_empty(configs.get(n)).get('options')) for n in ('ostrakon', 'ostrakon@inline', 'ostrakon@ostrakon')]
 text = lambda v: v.strip() if isinstance(v, str) else ''
 # The hub's URL and token as a pair, from one entry (as ostrakon jot reads them), so a leftover
 # entry's URL never meets another's token; an entry with only a URL still shows the token missing.
