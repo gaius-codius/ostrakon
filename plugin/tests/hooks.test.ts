@@ -261,6 +261,33 @@ test('an edit draft survives closing the pane and comes back on open', async ($,
   await ui.unmount()
 })
 
+// The kit can't raise Esc; Tab off the card leaves the same state (the list, the draft kept).
+type Leave = ($: Engine, ui: Awaited<ReturnType<typeof mountPane>>) => Promise<unknown>
+const leftEdit = async ($: Engine, on: Parameters<typeof startSession>[1], leave: Leave) => {
+  await startSession($, on, fixture())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-e' })
+  await ui.input({ key: 'edit', text: 'half-edited text', kind: 'change' })
+  await leave($, ui)
+  expect(await ui.find({ type: 'Input', key: 'edit' })).toBeUndefined()
+  await ui.press({ key: 'key-pane:previous' })
+  await run($, 'jot', '')
+  expect(await ui.find({ type: 'Input', key: 'edit' })).toBeUndefined()
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-e' })
+  const field = await ui.find({ type: 'Input', key: 'edit' })
+  expect((field?.props as { value?: string } | undefined)?.value).toBe('half-edited text')
+  await ui.unmount()
+}
+
+test('an edit left by its cancel button before the pane closes stays shut on open, its draft kept for the next e', ($, on) =>
+  leftEdit($, on, (_, ui) => ui.press({ key: 'edit-cancel' })))
+
+test('an edit left by moving the ring off it before the pane closes stays shut on open, its draft kept for the next e', ($, on) =>
+  leftEdit($, on, $ => $.ui.focus({ component: 'Pane', requestId: PANE.requestId, element: 'q', origin: { kind: 'person' } })))
+
 test('an unfocused pane draws no selection and says how to get the keyboard', async ($, on) => {
   const dir = fixture()
   await startSession($, on, dir)
