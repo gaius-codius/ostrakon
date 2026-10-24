@@ -173,7 +173,7 @@ ctrl+s scope  ctrl+n new  ctrl+q close                ctrl+x i keys  ← footer
 
   The `ui.close` hook puts the stash back as the whole prompt only if the prompt is still empty. Otherwise it adds the stash after a blank line, so nothing is overwritten.
   So the stash is held only while the pane has the keys: when they go to the prompt, the draft is there too. A click into the prompt is the exception (the mod isn't told), and leaves it held until the next exit. `t` closes the pane rather than leaving it open: the prompt is where the work goes next, and an inline pane would keep its rows above it.
-- The capture draft and the edit draft live in `$.state` and are restored when the pane reopens.
+- The capture draft and the edit draft live in `$.state` and are restored when the pane reopens. The pane reopens in the edit card only if it closed while the card (or the key sheet over it) was showing; an edit left before the close keeps its draft for the next `e` on that note.
 
 ### 4.5 Keys and actions
 Letter and digit keys work only while a row, header or Button has focus (an Input takes every printable key). `ctrl+` chords work anywhere in the pane.
@@ -221,7 +221,7 @@ One blank row, then one line: as many key/label pairs for the focus as the width
 
 ### 4.7 Other states
 - **Bundle:** `⇢ bundle  3 notes into one prompt`, then the exact prompt in a quote box: `Please look at these notes from my ostrakon:`, a blank line, one `- ` line per note in pick order (other projects prefixed `[label] `). Focus goes to a `[ send ]` button; ⏎ sends and `t` fills the prompt instead. Picked notes are marked sent only once the prompt goes in.
-- **Edit:** the row becomes a `round` box with a one-line Input prefilled with the text. Newlines show as `↵` and turn back into newlines on save (a note that already contains `↵` can't round-trip, so `e` points you to the file). `[ esc cancel ]` and `[ ⏎ save ]` sit below, naming their keys where the eye is, then `draft kept if the pane closes` when it fits on the line; the draft is kept if the pane closes.
+- **Edit:** the row becomes a `round` box with a one-line Input prefilled with the text. Newlines show as `↵` and turn back into newlines on save (a note that already contains `↵` can't round-trip, so `e` points you to the file). `[ esc cancel ]` and `[ ⏎ save ]` sit below, naming their keys where the eye is, then `draft kept if the pane closes` when it fits on the line; the draft is kept if the pane closes. `[ esc cancel ]` does what Esc does: back to the row, the draft kept for the next `e` on that note.
 - **Empty inbox:** `Nothing pending in cc.` (scope all: `Nothing pending in any project.`) and the ways in (`//`, `ctrl+n` new note, and the phone and harvest lines when those are configured) in a fixed key column. Docked, a small dim shard sits beside them; when the descriptions would be cut beside it, the shard is left out.
 - **Toasts** are short and calm (`Archived · u undo`, `Copied`, `note 2 in your prompt · ⏎ to send`). Never `$.ui.status`.
 
@@ -246,7 +246,7 @@ One blank row, then one line: as many key/label pairs for the focus as the width
 ---
 
 ## 5. Dispatch semantics
-- **Detecting a sent note:** in `prompt.submit` (origin `composer`), if the text contains the exact text the mod last filled for a note or bundle, those notes are marked `sent`, with `sentAt` and `context.sentSessionId`. A prompt submitted while idle is marked at once; one submitted mid-turn only waits in the queue (the person can take it back) and is marked when it is delivered.
+- **Detecting a sent note:** in `prompt.submit` (origin `composer`), if the text contains the exact text the mod filled for a note or bundle since the last submit, those notes are marked `sent` (each fill on its own: two notes filled one after the other are both marked, and one whose text was deleted from the prompt is not), with `sentAt` and `context.sentSessionId`. A prompt submitted while idle is marked at once; one submitted mid-turn only waits in the queue (the person can take it back) and is marked when it is delivered.
 - **Failure-safe:** a note is never removed or altered before the submit is known to have entered. `sent` notes stay in history and can be restored.
 - **Cross-project dispatch:** when a note's project differs from the session's it is prefixed `[label] ` in `t`, `s`, Pocket fills and bundle lines.
 
