@@ -8,7 +8,7 @@ How ostrakon works: what it does, how notes are stored and synced, and the facts
 |---|---|
 | `plugin/` | The mod (Claude Code plugin): store, merge, sync adapters, pane and band UI |
 | `server/` | The hub (Bun + SQLite) and the phone app (PWA); setup in `docs/phone.md` |
-| `bin/ostrakon`, `install.sh`, `update.sh` | The command line (`pair`, `hub`, `update`, `version`) and the install and update scripts |
+| `bin/ostrakon`, `install.sh`, `update.sh` | The command line (`jot`, `pair`, `hub`, `update`, `doctor`, `version`) and the install and update scripts |
 | `tools/` | Development tooling: screenshot pipeline, mockups, QA and experiment harnesses (their output goes to the gitignored `working-docs/`) |
 
 ---
@@ -272,7 +272,7 @@ status: open                         # open | proposed | sent | archived | dismi
 by: you                              # you | claude | phone
 created: 2026-10-09T14:02:11.000Z
 updated: 2026-10-09T14:02:11.000Z    # last-writer-wins clock (see 6.3)
-origin: laptop                       # hostname that made the last change
+origin: laptop                       # hostname that made the last change, or the source /api/jot was given (§9.2)
 project: cc                          # the project's name, or null for none
 projectKey: github.com/example/cc    # normalized git remote; falls back to "path:/home/user/work/cc"
 projectPath: /home/user/work/cc      # display only; differs per machine
@@ -373,7 +373,7 @@ A machine that stays on, with Bun installed, systemd (for the unit in `server/`)
   - `GET /api/changes?since=<seq>&wait=25`: long poll. Returns `{ notes, cursor }`.
   - `POST /api/notes`: a batch upsert. The server applies §6.3 per note and returns the winners.
   - `GET /api/projects`: known projects, for the phone's picker.
-  - `POST /api/jot`: `{ text, project? }` makes one phone note; what an iOS Shortcut or `curl` sends.
+  - `POST /api/jot`: `{ text, project?, source? }` makes one note; what an iOS Shortcut, `curl` or another sender (a Slack bot) sends. Without `source` it's the phone's (`by: phone`, `origin: iphone`); with one it's yours (`by: you`) and `origin` is the source, a short name (letters, digits, `.`, `_`, `-`; at most 64). A project is matched by key or name; an unknown one leaves the note unfiled.
   - `GET /` and the files in `server/public/` (one folder down at most: `fonts/`, `vendor/`): the phone app (§9.3).
   - Notes travel as JSON; the hub holds each to the file format and refuses the rest per note.
 - **Network:** the hub binds only to `127.0.0.1`. With Tailscale it's exposed by `tailscale serve --bg --https=8443 http://127.0.0.1:8790`: HTTPS, because a PWA needs it, on its own port so anything on 443 is left alone.
@@ -406,6 +406,12 @@ A machine that stays on, with Bun installed, systemd (for the unit in `server/`)
 - The hub adapter uses `$.http.fetch` with a long-poll `pull`. When the hub is unreachable the mod keeps working locally and the footer shows `hub offline · N queued` (or `hub refused the token · N queued`). While sync works the footer says nothing.
 - **Hub runs:** every response names the hub's run (a random id per start). A client that sees it change drops its cursor and what it knew the hub held and does a full pull, so a restored or wiped hub gets every note back from the machines that have them.
 - **Several sessions on one machine** each run the loop. Pushes and absorbs are idempotent (merge, per-note locks); the cost is N long polls and repeated identical pushes.
+
+### 9.5 Outside Claude Code: `ostrakon jot`
+- `ostrakon jot [--project <name>] <text>` (`server/jot.ts`, Bun) saves an `open` note of yours (`by: you`, `origin` this machine's hostname) into the notes folder the mod uses, found as the mod finds it: `OSTRAKON_DIR` from Claude Code's settings, else from the shell, else the `notesDir` option, else the default. It writes a temp file and renames it into place (§6.2); sessions here read it on their next poll.
+- `--project` (`-p`) takes a project the notes in that folder already know, matched as Claude's `jot` matches (§8); an unknown or ambiguous name is refused with the known ones, and nothing is saved.
+- When a hub is set (the mod's `hubUrl` and `hubToken`, or `OSTRAKON_HUB_URL` and `OSTRAKON_HUB_TOKEN`, read as a pair: if either is set, neither comes from the settings), it also posts the note to `POST /api/notes`, waiting at most 3 s. The sessions' own push of the same note later changes nothing (§6.3). A hub that can't be reached, refuses it or answers as something other than a hub is reported on stderr, with whether a session here will send it later (only when the mod has that hub); the note is still saved and the exit code is 0.
+- `ostrakon jot --ask` (`bin/jot-ask`) asks for one line in the first prompt tool it finds (Omarchy's `omarchy-menu-input`, walker, fuzzel, rofi, wofi, zenity, or a macOS dialog, untested: #78), takes a leading `@name` as `--project name` (a lone `@name` is refused), and shows the answer as a notification; a refused note's text is in it, so it isn't lost.
 
 ---
 
@@ -444,7 +450,7 @@ ostrakon/
     src/                  ← store.ts, mirror.ts, merge.ts, ulid.ts, frontmatter.ts, sync/*.ts, ui/*.tsx
     types/index.d.ts
     tests/*.test.ts
-  server/                 ← hub (Bun) + public/ (phone PWA)
+  server/                 ← hub (Bun), jot.ts (`ostrakon jot`) + public/ (phone PWA)
   docs/                   ← this file, DESIGN.md, phone.md
   tools/                  ← check.sh, screenshot pipeline, harnesses (see §12)
 ```

@@ -165,6 +165,14 @@ describe('hub', () => {
     expect(await broken.json()).toEqual({ error: 'invalid JSON body' })
   })
 
+  test('jot with a source makes your note, with the source as its origin', async () => {
+    const { call } = fresh()
+    const jot = (body: unknown) => call('/api/jot', { method: 'POST', body: JSON.stringify(body) })
+    const made = (await (await jot({ text: 'reply to the landlord', source: ' slack ' })).json()) as { note: Note }
+    expect(made.note).toMatchObject({ text: 'reply to the landlord', by: 'you', origin: 'slack', status: 'open' })
+    for (const source of ['', 'two words', 'a'.repeat(65), 'x\ny', 7]) expect((await jot({ text: 'x', source })).status).toBe(400)
+  })
+
   test('projects come from live notes, most recent first', async () => {
     const { call } = fresh()
     const infra = { key: 'github.com/me/infra', name: 'infra', path: '/x' }

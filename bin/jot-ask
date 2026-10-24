@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# `ostrakon jot --ask`: the desktop quick-note. Asks for one line in whichever prompt is installed,
+# saves it with `ostrakon jot`, and shows the answer as a notification. Bind it to a key (README).
+# A line starting with @name files the note under that project: `@cc fix the flaky test`.
+set -uo pipefail
+
+ROOT=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
+has() { command -v "$1" >/dev/null; }
+
+tell() { # title body
+  if has notify-send; then notify-send -a ostrakon "$1" "$2"
+  elif has osascript; then osascript - "$1" "$2" <<<'on run argv
+display notification (item 2 of argv) with title (item 1 of argv)
+end run'
+  else printf '%s %s\n' "$1" "$2" >&2; fi
+}
+
+ask() {
+  local prompt='Note (@project first to file it)'
+  # Omarchy's own prompt first (it exits 1 when dismissed); walker for older Omarchy.
+  if has omarchy-menu-input; then omarchy-menu-input "$prompt"
+  elif has walker; then walker --dmenu --placeholder "$prompt" </dev/null
+  elif has fuzzel; then fuzzel --dmenu --prompt-only "$prompt: " </dev/null
+  elif has rofi; then rofi -dmenu -p "$prompt" </dev/null
+  elif has wofi; then wofi --dmenu --prompt "$prompt" </dev/null
+  elif has zenity; then zenity --entry --title ostrakon --text "$prompt"
+  elif has osascript; then osascript -e "text returned of (display dialog \"$prompt\" default answer \"\" with title \"ostrakon\")"
+  else
+    tell "ostrakon: not saved" "jot --ask needs one of walker, fuzzel, rofi, wofi or zenity"
+    return 1
+  fi
+}
+
+line=$(ask) || exit 0
+line=${line#"${line%%[![:space:]]*}"}
+line=${line%"${line##*[![:space:]]}"}
+[ -n "$line" ] || exit 0
+
+args=()
+if [[ $line =~ ^@([^[:space:]]+)$ ]]; then
+  tell "ostrakon: not saved" "@${BASH_REMATCH[1]} needs a note after it"
+  exit 1
+elif [[ $line =~ ^@([^[:space:]]+)[[:space:]]+(.+)$ ]]; then args=(--project "${BASH_REMATCH[1]}" -- "${BASH_REMATCH[2]}")
+else args=(-- "$line"); fi
+
+if answer=$("$ROOT/bin/ostrakon" jot "${args[@]}" 2>&1); then tell ostrakon "$answer"
+else
+  # The reason without the usage line, and the text, so a refused note isn't lost.
+  reason=$(grep -v '^usage:' <<<"$answer")
+  tell "ostrakon: not saved" "${reason#ostrakon jot: }
+$line"
+  exit 1
+fi
