@@ -1791,14 +1791,20 @@ export const register: Register = (on, options) => {
   })
 
   // A queued prompt that carries fills enters the conversation as a row of the main loop's: the
-  // note is sent now.
+  // note is sent now. Only a queued fill counts: one still in the prompt waits for its own submit,
+  // and a plugin's row (a note sent with `s`) is that plugin's, whatever text it holds.
   on('session.append', async ($, e, next) => {
     const appended = await next(e)
     if (e.agentId !== undefined || e.message.role !== 'user' || !(e.door === 'prompt' || e.door === 'attachment' || e.door === 'delivery')) return appended
+    if (e.origin.kind === 'plugin') return appended
     const fills = (await read($, pane)).fills
     const text = e.message.content.map(block => (typeof block.text === 'string' ? block.text : '')).join('\n')
-    const texts = fills.map(fill => fill.text)
-    const carried = carriedIn(text, texts)
+    // Every fill masks its copies, so a queued fill held only inside another's text doesn't count.
+    const queued = new Set(fills.filter(fill => fill.isQueued).map(fill => fill.text))
+    const carried = carriedIn(
+      text,
+      fills.map(fill => fill.text),
+    ).filter(found => queued.has(found))
     if (carried.length === 0) return appended
     $.ui.log(`ostrakon: sent on entry (${e.door}${e.message.name ? ` ${e.message.name}` : ''})`, { to: 'debug' })
     spendFills($, carried)
@@ -1808,6 +1814,28 @@ export const register: Register = (on, options) => {
       })
       .catch(error => reportStorage($, error))
     return appended
+  })
+
+  // A queued prompt taken back from the queue lands in the box again. The engine raises no event
+  // of its own for that, only this change, stamped as its own write (`engine`, the kind any newer
+  // one is read as): a queued fill the box now holds is back in the prompt, waiting for a submit.
+  // A recalled history entry or a plugin's fill (the pocket filling a queued note again) isn't one.
+  on('prompt.change', async ($, e, next) => {
+    const changed = await next(e)
+    const kind: string = e.origin.kind
+    if (kind === 'history' || kind === 'clear' || kind === 'undo' || kind === 'plugin' || kind === 'app') return changed
+    const fills = (await read($, pane)).fills
+    if (!fills.some(fill => fill.isQueued)) return changed
+    const back = carriedIn(
+      e.text,
+      fills.map(fill => fill.text),
+    )
+    if (!fills.some(fill => fill.isQueued && back.includes(fill.text))) return changed
+    await setPane($, current => ({
+      ...current,
+      fills: current.fills.map(fill => (fill.isQueued && back.includes(fill.text) ? { ...fill, isQueued: false } : fill)),
+    }))
+    return changed
   })
 
   on('turn.start', async ($, e, next) => {

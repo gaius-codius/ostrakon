@@ -27,6 +27,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 - After `m` moves a note out of this project's list, the row that took its place is selected, as after an archive. Before, the search field took the keys.
 - After you leave an edit with Esc, the pane opens on the list again, not in the edit card. It opens in the edit card only if it closed while that was showing. `[ esc back ]` now keeps the draft as Esc does: `e` on that note picks it back up.
 - A note whose text sits inside another note's is no longer marked sent when you delete it from the prompt and the longer note is in the prompt twice.
+- A note put in the prompt is no longer marked sent when you send a longer note that contains its text with `s`, or when you took its queued prompt back and deleted it.
 - In the move picker and the new-note project picker, a project's whole name typed comes first, so Enter can pick `api` even when `api-server` is listed above it.
 - A note put into the prompt again while it waits in the queue is still marked sent when that queued prompt goes in.
 - A session open while the mod updates keeps marking notes sent; before, the pane's state from the older version broke it until a restart.
