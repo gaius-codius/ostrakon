@@ -1828,7 +1828,10 @@ export const register: Register = (on, options) => {
     // open, and one wrongly left queued could be marked by a row it never went in.
     const isBack = (fill: Fill) => fill.isQueued && e.text.includes(fill.text)
     if (!(await read($, pane)).fills.some(isBack)) return changed
-    await setPane($, current => ({ ...current, fills: current.fills.map(fill => (isBack(fill) ? { ...fill, isQueued: false } : fill)) }))
+    $.ui.log(`ostrakon: queued fill back in the prompt (${kind})`, { to: 'debug' })
+    await setPane($, current => ({ ...current, fills: current.fills.map(fill => (isBack(fill) ? { ...fill, isQueued: false } : fill)) })).catch(error =>
+      reportStorage($, error),
+    )
     return changed
   })
 
