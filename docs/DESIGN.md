@@ -199,6 +199,7 @@ Strings the surfaces or the docs depend on, each checked word for word in every 
 | `saved to` | plugin/src/ui/look.ts, docs/SPEC.md | the hint tail after a save: `✓ saved to <project>` |
 | `esc back` | plugin/src/ui/look.ts, docs/SPEC.md | the edit card's back button: `[ esc back ]`, the draft kept |
 | `all projects` | plugin/src/model.ts, docs/SPEC.md | the footer's `ctrl+s` in this project's scope |
+| `this project` | plugin/src/model.ts, plugin/src/ui/pane.tsx, docs/SPEC.md | the footer's `ctrl+s` in scope all, and the search row's scope |
 | `symbols` | plugin/src/ui/look.ts, docs/SPEC.md | the key sheet's heading over the row markers |
 | `Archived · u undo` | plugin/src/ui/look.ts, docs/SPEC.md | the pane's archive toast |
 | `Please look at these notes from my ostrakon:` | plugin/src/ui/look.ts, docs/SPEC.md | the bundle's first line |
@@ -298,7 +299,7 @@ Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one
 - Change: With nothing open in this project but some history, the list shows the project's header with `0` in place of the empty inbox, and the footer leads with `↓ history`.
 - Change: The key sheet ends with the row markers under `symbols`, and lists `g` (top, again bottom).
 - Why: The button keeps the draft, which "cancel" didn't say. `scope` didn't say that it's the way to every project's notes. History was out of reach from the empty inbox, and the footer's `◆ from Claude` was the only legend for the row markers.
-Fingerprint: bd2eb1d00571
+Fingerprint: 58295af87f4e
 
 ### 4.0.0 — 2026-10-22
 - Change: The footer shows as many key pairs as the width takes, not four at most: on a row, `m move` and `y copy` follow the note's own four, then `v pick`, `z fold` and `h history`. The legend stays ahead of the pairs past the first four.
