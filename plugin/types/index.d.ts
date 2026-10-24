@@ -68,8 +68,8 @@ export type PaneState = {
   edit: { id: string; draft: string } | null
   // The note a move (m) applies to, fixed when the Select opens.
   moving: string | null
-  // `target`: the project capture saves to, null for this one; it goes back to null when the pane
-  // closes. `find`: what's typed in its picker (ctrl+s).
+  // `target`: the project capture saves to; null until capture first sets it, and again once the
+  // pane closes. `find`: what's typed in its picker (ctrl+s).
   capture: { draft: string; target: string | null; find: string; saved: string[]; error: string | null }
   // The person's prompt draft, held while the pane has the keyboard (SPEC §4.4).
   stash: string

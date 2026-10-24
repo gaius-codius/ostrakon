@@ -1231,11 +1231,16 @@ const leaveTarget = async ($: EngineInterface) => {
 }
 
 // Enter in the picker: the first project that matches becomes capture's target. With nothing
-// matching, the picker stays.
+// matching, the picker stays, its text drawn again (the field emptied itself on Enter).
 const targetSubmit = async ($: EngineInterface, value: string) => {
+  // An Enter that lands after ctrl+s or Esc already went back picks nothing.
+  if ((await read($, pane)).mode !== 'target') return
   const view = await viewOf($)
   const first = targetsOf(view.ctx, view.projects, value)[0]
-  if (!first) return
+  if (!first) {
+    await setPane($, current => ({ ...current, capture: { ...current.capture, find: redrawn(value) } }))
+    return
+  }
   await setPane($, current => ({ ...current, capture: { ...current.capture, target: first.value } }))
   await leaveTarget($)
 }

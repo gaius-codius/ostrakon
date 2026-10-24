@@ -870,7 +870,10 @@ test("the picker's ctrl+s goes back to capture with the target as it was; nothin
   await ui.input({ key: 'target', text: 'zzz', kind: 'change' })
   expect(await ui.find({ type: 'Text', text: /No project matches/ })).toBeDefined()
   await ui.input({ key: 'target', text: 'zzz', kind: 'submit' })
-  expect(await ui.find({ type: 'Input', key: 'target' })).toBeDefined()
+  const picker = await ui.find({ type: 'Input', key: 'target' })
+  expect(((picker?.props as { value?: string } | undefined)?.value ?? '').trim()).toBe('zzz')
+  // The key sheet isn't offered over the picker, as over the move picker.
+  expect(await ui.find({ type: 'Text', text: /^ctrl\+x i$/ })).toBeUndefined()
   await ui.press({ key: 'key-app:toggleDiffPreSession' })
   const field = await ui.find({ type: 'Input', key: 'capture' })
   expect((field?.props as { value?: string } | undefined)?.value).toBe('half a thought')
