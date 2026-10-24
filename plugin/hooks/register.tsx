@@ -92,7 +92,9 @@ const REFOCUS_MS = 60
 const isOpen = atom({ plugin: 'ostrakon', key: 'isOpen' } as const, false)
 const notes = atom({ plugin: 'ostrakon', key: 'notes' } as const, {})
 const problems = atom({ plugin: 'ostrakon', key: 'problems' } as const, [])
-const pane = atom({ plugin: 'ostrakon', key: 'pane' } as const, freshPane())
+// Shaped: a reload keeps the atoms, so a PaneState from older code (lastFill before fills) would
+// throw in the hooks that read it. Bump the tag when PaneState changes.
+const pane = atom({ plugin: 'ostrakon', key: 'pane' } as const, freshPane(), { shape: 'fills' })
 // Shaped: the value was a list of ids before the band was drawn against the latest turn.
 const harvest = atom({ plugin: 'ostrakon', key: 'harvest' } as const, null, { shape: 'order' })
 const turns = atom(
@@ -940,8 +942,9 @@ const afterFill = async ($: EngineInterface, text: string, ids: string[], isFrom
   // Added to the fills since the last submit. The same text filled again counts once, for every
   // note that filled it.
   await setPane($, current => {
-    const same = current.fills.find(fill => fill.text === text)?.ids ?? []
-    const fill = { text, ids: [...new Set([...same, ...ids])], isQueued: false }
+    // A fill already waiting in the queue stays queued: filling it again doesn't take it back.
+    const same = current.fills.find(fill => fill.text === text)
+    const fill = { text, ids: [...new Set([...(same?.ids ?? []), ...ids])], isQueued: same?.isQueued ?? false }
     return { ...current, stash: '', fills: [...current.fills.filter(other => other.text !== text), fill] }
   })
   if (!isFromBand && (await read($, isOpen))) await closePane($)

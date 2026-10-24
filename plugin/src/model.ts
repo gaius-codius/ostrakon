@@ -200,10 +200,15 @@ export const placesOf = (ctx: Ctx, projects: NoteProject[], note: Note, find: st
   )
 }
 
-// A picker's options whose labels hold what's typed, in their order; all of them with nothing typed.
+// A picker's options whose labels hold what's typed, in their order, but a label typed in full
+// first, so Enter can reach a project whose label sits inside an earlier one's (api, api-server).
+// All of them with nothing typed.
 const narrowed = (options: { value: string; label: string }[], find: string) => {
   const words = find.trim().toLowerCase()
-  return words === '' ? options : options.filter(option => option.label.toLowerCase().includes(words))
+  if (words === '') return options
+  const held = options.filter(option => option.label.toLowerCase().includes(words))
+  const isWhole = (option: { label: string }) => option.label.toLowerCase() === words
+  return [...held.filter(isWhole), ...held.filter(option => !isWhole(option))]
 }
 
 export const isOther = (ctx: Ctx, note: Note) => note.project !== null && note.project.key !== ctx.current.key

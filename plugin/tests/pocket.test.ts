@@ -816,6 +816,67 @@ test('two prompts queued in one turn, each carrying its own fill, mark both note
   await ui.unmount()
 })
 
+test('a fill waiting in the queue, filled again, is still marked sent when its queued prompt enters', async ($, on) => {
+  const dir = fixture()
+  const { world, clock } = await startSession($, on, dir)
+  const ui = await mountBand($)
+  await $.turn.start({ text: 'working on something', turnId: 'turn-3' })
+  await ui.press({ key: 'band-chip-1' })
+  await clock.advance(10)
+  const text = world.box.text
+  await $.prompt.submit({ text, wait: false, origin: { kind: 'composer' }, turnId: 'turn-3' })
+  world.box.text = ''
+  // Still open, so the band offers it again.
+  await ui.redraw(BAND.props)
+  await ui.press({ key: 'band-chip-1' })
+  await clock.advance(10)
+  world.box.text = ''
+  await $.prompt.submit({ text: 'something else', wait: false, origin: { kind: 'composer' }, turnId: 'turn-3' })
+  await append($, text, { door: 'delivery', name: 'queued_command' })
+  await clock.advance(10)
+  expect(noteIn(dir, ONE).status).toBe('sent')
+  await ui.unmount()
+})
+
+// What the pane atom held before v0.8 (one lastFill, no fills), as a reload keeps it.
+const OLD_PANE = {
+  mode: 'browse',
+  query: '',
+  scope: 'project',
+  scopeChosen: false,
+  history: false,
+  folded: [],
+  picks: [],
+  cursor: null,
+  focus: 'search',
+  offset: 0,
+  sheetPage: 0,
+  sheetFrom: null,
+  edit: null,
+  moving: null,
+  capture: { draft: '', target: null, saved: [], error: null },
+  stash: '',
+  lastFill: null,
+  undo: [],
+}
+
+test('a pane value older code left across a reload is set aside: a fill and its submit still mark the note sent', async ($, on) => {
+  on('state.get', async (_, e, next) => {
+    const got = (await next(e)) as { value: { value: unknown; version: number } }
+    if ((e as { key?: string }).key === 'pane' && got.value.version === 0) return { value: { value: OLD_PANE, version: 0 } }
+    return got
+  })
+  const dir = fixture()
+  const { world, clock } = await startSession($, on, dir)
+  const ui = await mountBand($)
+  await ui.press({ key: 'band-chip-1' })
+  await clock.advance(10)
+  await composer($, world.box.text)
+  await clock.advance(10)
+  expect(noteIn(dir, ONE).status).toBe('sent')
+  await ui.unmount()
+})
+
 test('two notes with the same text, each put into the prompt, are both marked sent', async ($, on) => {
   const dir = fixture()
   put(dir, OTHER, 'rename the store helpers', CC, 90)

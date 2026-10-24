@@ -83,6 +83,17 @@ describe('model', () => {
     expect(placesOf(ctx, projects, note('a', INFRA, 1), 'infra')).toEqual([])
   })
 
+  test('a label typed in full comes first, so a project whose label sits inside an earlier one is reachable', () => {
+    const api: NoteProject = { key: 'github.com/me/api', name: 'api', path: '/home/me/api' }
+    const server: NoteProject = { key: 'github.com/me/api-server', name: 'api-server', path: '/home/me/api-server' }
+    const projects = [CC, server, api]
+    const ctx: Ctx = { now: NOW, current: CC, labels: labelsOf(projects) }
+    expect(placesOf(ctx, projects, note('a', CC, 1), ' API ').map(option => option.label)).toEqual(['api', 'api-server'])
+    expect(targetsOf(ctx, projects, 'api').map(option => option.label)).toEqual(['api', 'api-server'])
+    // Short of the whole label, the order stays as listed.
+    expect(placesOf(ctx, projects, note('a', CC, 1), 'ap').map(option => option.label)).toEqual(['api-server', 'api'])
+  })
+
   test('a prompt carries each fill it holds; one held only inside a longer fill is not carried', () => {
     const texts = ['fix typo', 'fix typo in README', 'rename the store']
     expect(carriedIn('fix typo in README', texts)).toEqual(['fix typo in README'])

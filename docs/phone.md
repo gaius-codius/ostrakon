@@ -141,7 +141,7 @@ The same thing from a terminal:
 curl -H 'Authorization: Bearer <HUB_TOKEN>' -d '{"text":"check the backup job"}' https://<host>.<tailnet>.ts.net:8443/api/jot
 ```
 
-A note sent this way is the phone's. Anything else that sends notes, such as a Slack bot or a script, adds a `source`: the note is then yours, and the source shows as where it came from.
+A note sent this way is the phone's. Anything else that sends notes, such as a Slack bot or a script, adds a `source`: the note is then yours, with the source kept as its origin. The pane and the phone don't show the origin, so it reads as a note you wrote. A sender holds the hub's one token, which can read and change every note: give it only to a sender you trust.
 
 ```
 curl -H 'Authorization: Bearer <HUB_TOKEN>' -d '{"text":"reply to the landlord","source":"slack"}' https://<host>.<tailnet>.ts.net:8443/api/jot
