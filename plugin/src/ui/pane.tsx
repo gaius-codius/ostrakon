@@ -563,7 +563,7 @@ const Rows = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
                 </Box>
               </Box>
               <Box gap={2}>
-                <Button key='edit-cancel' label={TEXT.editCancel} onPress={() => handlers.editCancel()} />
+                <Button key='edit-cancel' label={TEXT.editBack} onPress={() => handlers.editCancel()} />
                 <Button key='edit-save' variant='primary' label={TEXT.editSave} onPress={() => handlers.editSubmit(view.pane.edit?.draft ?? '')} />
                 <Box flexGrow={1} />
                 {/* Only when it fits: wrapped, it adds a row the paging doesn't budget for. */}
@@ -582,7 +582,7 @@ const Rows = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
 }
 
 // The edit card's button row: its frame and padding, both buttons, three gaps of 2, the hint.
-const editHintFits = (width: number) => width - 4 >= cells(`[ ${TEXT.editCancel} ]`) + cells(`[ ${TEXT.editSave} ]`) + 3 * 2 + cells(TEXT.editHint)
+const editHintFits = (width: number) => width - 4 >= cells(`[ ${TEXT.editBack} ]`) + cells(`[ ${TEXT.editSave} ]`) + 3 * 2 + cells(TEXT.editHint)
 
 // Enter saves the query as a note, so this is capture's start: a query the field cuts off reads
 // whole here, as capture's draft does, and one that fits isn't repeated. The footer has the keys.
@@ -766,7 +766,7 @@ const isSheetFramed = (bodyRows: number, isInline: boolean) => bodyRows - sheetT
 export const sheetRoom = (bodyRows: number, isInline: boolean) =>
   Math.max(1, bodyRows - sheetTop(isInline) - FOOTER_ROWS - (isSheetFramed(bodyRows, isInline) ? 2 : 0))
 export const sheetPages = (bodyRows: number, isInline: boolean, problems: number) =>
-  Math.max(1, Math.ceil((problems + TEXT.keySheet.length) / sheetRoom(bodyRows, isInline)))
+  Math.max(1, Math.ceil((problems + TEXT.keySheet.length + 1 + TEXT.symbolSheet.length) / sheetRoom(bodyRows, isInline)))
 
 const padCells = (text: string, width: number) => `${text}${' '.repeat(Math.max(0, width - cells(text)))}`
 
@@ -782,6 +782,8 @@ const KeySheet = ({ el, view }: { el: E; view: PaneView }) => {
   const entries = [
     ...view.problems.map(problem => ({ problem: `${problem.file}: ${problem.reason}`, key: '', label: '' })),
     ...lines.map(([key, label]) => ({ problem: '', key, label })),
+    { problem: '', key: '', label: TEXT.symbolsTitle },
+    ...TEXT.symbolSheet.map(([key, label]) => ({ problem: '', key, label })),
   ]
   return (
     <Box
@@ -798,6 +800,8 @@ const KeySheet = ({ el, view }: { el: E; view: PaneView }) => {
       {entries.slice(page * room, (page + 1) * room).map(({ problem, key, label }) =>
         problem !== '' ? (
           <Text color={COLOUR.problem}>{cut(problem, inner)}</Text>
+        ) : key === '' ? (
+          <Text bold>{cut(label, inner)}</Text>
         ) : (
           <Text>
             <Text bold>{padCells(cut(key, keyWidth - 1), keyWidth)}</Text>

@@ -664,7 +664,7 @@ const EditView = (ctx: Ctx) => {
           rename the store helpers to match the spec (createStore, change, scan) and the tests▏ ⏎ save
         </Text>
         <Box gap={2}>
-          <Text>[ esc cancel ]</Text>
+          <Text>[ esc back ]</Text>
           <Text color="claude" bold>
             [ ⏎ save ]
           </Text>

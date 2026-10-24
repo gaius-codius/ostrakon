@@ -372,25 +372,29 @@ test('the key sheet pages to fit the inline body, j and k turning the pages roun
   const ui = await $.ui.mount({ plugin: 'ostrakon', surface: 'terminal', ...PANE, props })
   await ui.input({ key: 'q', text: '', kind: 'submit' })
   await ui.press({ key: 'key-i' })
-  // 11 rows less the search row, the footer and the frame: 7 a page, so 19 keys take 3. Opened on
-  // a row, its own seven keys (copy the last but one) are the first page.
+  // 11 rows less the search row, the footer and the frame: 7 a page, so 21 keys take 3 and the
+  // symbols (a title and 6 lines) a fourth. Opened on a row, its own seven keys (copy the last but
+  // one) are the first page.
   expect(await ui.find({ type: 'Text', text: /^copy$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ close keys$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^ more 1\/3$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ more 1\/4$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^jump to a row$/ })).toBeUndefined()
   await ui.press({ key: 'key-j' })
   expect(await ui.find({ type: 'Text', text: /^jump to a row$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^copy$/ })).toBeUndefined()
   await ui.press({ key: 'key-k' })
   await ui.press({ key: 'key-k' })
-  expect(await ui.find({ type: 'Text', text: /^ more 3\/3$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ more 4\/4$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^symbols$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^from the phone$/ })).toBeDefined()
+  await ui.press({ key: 'key-k' })
   expect(await ui.find({ type: 'Text', text: /^jot from the prompt/ })).toBeDefined()
   // At 40 columns the sheet is narrower than its 46, and no label line is wider than the pane.
   for (const text of await texts(ui)) expect(text.length).toBeLessThanOrEqual(39)
   await ui.press({ key: 'key-i' })
   expect(await ui.find({ type: 'Text', text: /^ close keys$/ })).toBeUndefined()
   await ui.press({ key: 'key-i' })
-  expect(await ui.find({ type: 'Text', text: /^ more 1\/3$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ more 1\/4$/ })).toBeDefined()
   await ui.unmount()
 })
 
