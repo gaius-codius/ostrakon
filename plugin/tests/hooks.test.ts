@@ -328,6 +328,105 @@ test("an edit of another project's note closed on a note sent meanwhile opens on
   await ui.unmount()
 })
 
+// Editing the first row's note (cc's newest), the pane open and holding the keys.
+const editingFirst = async ($: Engine, on: Parameters<typeof startSession>[1]) => {
+  const dir = fixture()
+  const { world, clock } = await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-e' })
+  await ui.input({ key: 'edit', text: 'half-edited text', kind: 'change' })
+  return { dir, world, clock, ui }
+}
+const FIRST = '/data/notes/01JA7K2M3Q9X4ZB6C8D0EFGH01.md'
+
+// The pane is on the list in browse mode, then the note, back on the list, picks the draft up on `e`.
+const onListDraftKept = async (dir: MemDir, clock: { advance: (ms: number) => Promise<unknown> }, ui: Awaited<ReturnType<typeof mountPane>>) => {
+  expect(await ui.find({ type: 'Input', key: 'edit' })).toBeUndefined()
+  expect((await texts(ui)).some(text => /draft kept/.test(text))).toBe(false)
+  expect(await ui.find({ type: 'Text', text: /rename the store helpers/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ctrl\+s all projects$/ })).toBeDefined()
+  dir.put(FIRST, (dir.get(FIRST) ?? '').replace(/status: (sent|archived)/, 'status: open'))
+  await clock.advance(2000)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-e' })
+  const field = await ui.find({ type: 'Input', key: 'edit' })
+  expect((field?.props as { value?: string } | undefined)?.value).toBe('half-edited text')
+  await ui.unmount()
+}
+
+test('an edit whose note another session sends while the pane is open goes to the list, its draft kept', async ($, on) => {
+  const { dir, clock, ui } = await editingFirst($, on)
+  dir.put(FIRST, dir.get(FIRST)?.replace('status: open', 'status: sent') ?? '')
+  await clock.advance(2000)
+  await onListDraftKept(dir, clock, ui)
+})
+
+test('an edit whose note Claude archives while the pane is open goes to the list at once, its draft kept', async ($, on) => {
+  const { dir, world, clock, ui } = await editingFirst($, on)
+  const archive = world.tools.find(tool => tool.name === 'archive')?.registeredAs ?? ''
+  await $.tool.call({ tool: archive, id: '01JA7K2M3Q9X4ZB6C8D0EFGH01' } as never)
+  expect(noteIn(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH01').status).toBe('archived')
+  await onListDraftKept(dir, clock, ui)
+})
+
+test('an edit whose note its Pocket chip fills and the submit sends goes to the list at once, its draft kept', async ($, on) => {
+  const { dir, world, clock, ui } = await editingFirst($, on)
+  const band = await $.ui.mount({
+    plugin: 'ostrakon',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    requestId: 'band',
+    props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 120, scroll: { offset: 0, bodyRows: 6 }, view: {} },
+  })
+  await band.press({ key: 'band-chip-1' })
+  await clock.advance(10)
+  expect(world.box.text).toBe('check why the cache test is flaky')
+  expect(world.pane.isOpen).toBe(true)
+  await composer($, world.box.text)
+  expect(noteIn(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH01').status).toBe('sent')
+  await band.unmount()
+  await onListDraftKept(dir, clock, ui)
+})
+
+test('the keys handed back to an edit whose note left the list meanwhile come to the list, its draft kept', async ($, on) => {
+  const { dir, clock, ui } = await editingFirst($, on)
+  await ui.press({ key: 'key-switch' })
+  await ui.redraw({ ...PANE.props, isFocused: false })
+  dir.put(FIRST, dir.get(FIRST)?.replace('status: open', 'status: sent') ?? '')
+  await clock.advance(2000)
+  await ui.press({ key: 'key-switch' })
+  await ui.redraw({ ...PANE.props, isFocused: true })
+  await onListDraftKept(dir, clock, ui)
+})
+
+test("ctrl+s in the edit card of another project's note, in scope all, does nothing: the card stays", async ($, on) => {
+  await startSession($, on, fixture())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: 'metric', kind: 'change' })
+  await ui.input({ key: 'q', text: 'metric', kind: 'submit' })
+  await ui.press({ key: 'key-e' })
+  await ui.input({ key: 'edit', text: 'half-edited metric', kind: 'change' })
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  const field = await ui.find({ type: 'Input', key: 'edit' })
+  expect((field?.props as { value?: string } | undefined)?.value).toBe('half-edited metric')
+  expect((await texts(ui)).some(text => /draft kept/.test(text))).toBe(true)
+  await ui.unmount()
+})
+
+test('ctrl+s in the edit card saves no scope: the pane opens on this project next time', async ($, on) => {
+  const { ui } = await editingFirst($, on)
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  expect(await ui.find({ type: 'Input', key: 'edit' })).toBeDefined()
+  await ui.press({ key: 'edit-cancel' })
+  await ui.press({ key: 'key-pane:previous' })
+  await run($, 'jot', '')
+  expect(await ui.find({ type: 'Text', text: /^ this project · 2 open$/ })).toBeDefined()
+  await ui.unmount()
+})
+
 // The kit can't raise Esc; Tab off the card leaves the same state (the list, the draft kept).
 type Leave = ($: Engine, ui: Awaited<ReturnType<typeof mountPane>>) => Promise<unknown>
 const leftEdit = async ($: Engine, on: Parameters<typeof startSession>[1], leave: Leave) => {

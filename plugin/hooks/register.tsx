@@ -495,6 +495,16 @@ const isListed = async ($: EngineInterface, state: PaneState, id: string | undef
   return linesOf(ctx, state, all, await read($, problems)).some(line => line.key === id)
 }
 
+// The note being edited left the list while the pane is open (sent, archived, the scope changed):
+// the pane goes to the list, the draft kept for the next `e` on that note (SPEC §4.4). True if it did.
+const leaveGoneEdit = async ($: EngineInterface) => {
+  const state = await read($, pane)
+  if (state.mode !== 'edit' || (await isListed($, state, state.edit?.id))) return false
+  await setPane($, current => (current.mode === 'edit' ? { ...current, mode: 'browse', focus: 'search' } : current))
+  focusKey($, SEARCH_KEY)
+  return true
+}
+
 const viewOf = async ($: EngineInterface): Promise<PaneView> => {
   let state = await read($, pane)
   const all = Object.values(await read($, notes))
@@ -593,6 +603,7 @@ const markSent = async ($: EngineInterface, ids: string[]) => {
   for (const id of ids) {
     await changeNote($, id, note => ({ ...note, status: 'sent', sentAt: stamp, context: { ...note.context, sentSessionId: sessionId } }))
   }
+  if (await read($, isOpen)) await leaveGoneEdit($)
 }
 
 // The key sheet's open and close. Opened from a text field, where `i` would be typed, it takes the
@@ -675,7 +686,11 @@ const refocus = async ($: EngineInterface) => {
   // The key sheet closed back to capture or the edit card (Esc): their field takes the keys again.
   if (state.mode === 'capture') return focusKey($, CAPTURE_KEY)
   if (state.mode === 'target') return focusKey($, TARGET_KEY)
-  if (state.mode === 'edit') return focusKey($, EDIT_KEY)
+  // The note being edited may have left the list while the prompt had the keys: then the list takes them.
+  if (state.mode === 'edit') {
+    if (!(await leaveGoneEdit($))) focusKey($, EDIT_KEY)
+    return
+  }
   if (state.mode === 'bundle') return focusKey($, SEND_KEY)
   // The selected note may have left the list while the prompt had the keys: the line that took its
   // place (viewOf picks it, as realign does) takes them.
@@ -719,6 +734,8 @@ const focusLine = async ($: EngineInterface, key: string | null) => {
 // line's slot so Enter and the letter keys act on the same row.
 const realign = async ($: EngineInterface) => {
   if (!(await read($, isOpen))) return
+  // Whether or not the pane holds the keys: handed to the prompt, the edit card draws unfocused.
+  if (await leaveGoneEdit($)) return
   const view = await viewOf($)
   if (view.focus.kind !== 'line' || view.pane.cursor === null) return
   // The selected note left the list: keep the line that took its place (viewOf picked it).
@@ -1135,6 +1152,9 @@ const act = async ($: EngineInterface, action: Action) => {
         return
       }
       if (state.mode === 'target') return leaveTarget($)
+      // Answered so it doesn't reach the engine's own action, but the edit card has no scope: a
+      // flip could drop the note being edited from the list.
+      if (state.mode === 'edit') return
       await setPane($, current => ({ ...current, scope: current.scope === 'project' ? 'all' : 'project', scopeChosen: true, offset: 0 }))
       // Remembered across opens and sessions: all sticks; back to this project restores the
       // defaults (search starts here, the list and typing look everywhere).
@@ -1711,6 +1731,7 @@ export const register: Register = (on, options) => {
     if (!changed) return { deny: ARCHIVE_REPLY.failed }
     if (changed.deleted) return { deny: ARCHIVE_REPLY.missing(id) }
     if (!isAllowed) return { deny: ARCHIVE_REPLY.notOpen(id, changed.status) }
+    if (await read($, isOpen)) await leaveGoneEdit($)
     toast($, TOAST.claudeArchived(changed.text))
     return { result: ARCHIVE_REPLY.archived(id) }
   })
