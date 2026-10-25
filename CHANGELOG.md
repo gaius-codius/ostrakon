@@ -6,6 +6,8 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-25
+
 ### Added
 
 - `ostrakon jot [--project <name>] <text>` saves a note of yours from outside Claude Code: into this machine's notes, and to the hub at once if the mod has one set. `ostrakon jot --ask` asks for the note in a small desktop prompt; bind it to a key (README, Notes from the desktop).
@@ -143,7 +145,8 @@ The first public release.
 - `ostrakon pair`: a QR code with a one-time code (5 minutes, works once) pairs a phone with the hub; `--token` prints the long-lived link instead.
 - The `ostrakon` command (`pair`, `hub`, `update`, `version`), `install.sh` and `update.sh`.
 
-[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/gaius-codius/ostrakon/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/gaius-codius/ostrakon/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/gaius-codius/ostrakon/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/gaius-codius/ostrakon/compare/v0.4.0...v0.5.0
