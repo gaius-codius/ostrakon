@@ -23,6 +23,9 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ### Fixed
 
+- `ostrakon doctor` checks the settings a session actually uses. Installed with `claude plugin install`, that is `pluginConfigs["ostrakon@ostrakon"]` only; before, an `ostrakon` entry left over from `install.sh` went first. With the mod both installed and loaded from a folder, it says sessions use the folder's copy and which settings that copy reads.
+- `ostrakon doctor` says when `settings.json` is JSON but not an object, instead of reporting no hub set. It takes `CLAUDE_CODE_PLUGIN_DIRS` from the settings over the shell, as Claude Code does.
+- With `CLAUDE_CONFIG_DIR` set but empty, the mod, `ostrakon jot` and `ostrakon doctor` read Claude Code's files from the working directory, as Claude Code does.
 - Two notes put into one prompt before you send it (two chips, or a chip and `t`) are both marked sent. Before, only the second was.
 - After `m` moves a note out of this project's list, the row that took its place is selected, as after an archive. Before, the search field took the keys.
 - After you leave an edit with Esc, the pane opens on the list again, not in the edit card. It opens in the edit card only if it closed while that was showing.
