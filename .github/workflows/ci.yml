@@ -48,7 +48,7 @@ jobs:
       run:
         shell: bash
     env:
-      SHA256: "f329748feb169a1bcddb578f0195af810a1a5287ebf629728464821490b04333"
+      SHA256: "8c90b0170d08fdb370db282c61d74897b834fc2569dd14c35eb1e491212dc6de"
       DISABLE_AUTOUPDATER: 1
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 1
     steps:
