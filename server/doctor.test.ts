@@ -34,7 +34,7 @@ type Where = 'home' | 'config' | 'cwd'
 
 // Runs doctor with the settings in ~/.claude, in CLAUDE_CONFIG_DIR, or (CLAUDE_CONFIG_DIR set but
 // empty) in the working directory; env adds to a clean environment.
-const doctor = (settings: unknown, where: Where = 'home', env: Record<string, string> = {}, before = (_home: string) => {}) => {
+const doctor = (settings: unknown, where: Where = 'home', env: Record<string, string> = {}, before = (_at: { home: string; config: string }) => {}) => {
   const root = temp()
   const home = join(root, 'home')
   const config = join(root, 'config')
@@ -46,8 +46,9 @@ const doctor = (settings: unknown, where: Where = 'home', env: Record<string, st
     chmodSync(join(stubs, name), 0o755)
   }
   const at = { home: join(home, '.claude'), config, cwd }[where]
-  writeFileSync(join(at, 'settings.json'), typeof settings === 'string' ? settings : JSON.stringify(settings))
-  before(home)
+  // undefined: no settings file at all.
+  if (settings !== undefined) writeFileSync(join(at, 'settings.json'), typeof settings === 'string' ? settings : JSON.stringify(settings))
+  before({ home, config })
   const log = join(root, 'curl.log')
   writeFileSync(log, '')
   const run = Bun.spawnSync(['bash', DOCTOR], {
@@ -109,10 +110,16 @@ describe('ostrakon doctor', () => {
     // A relative folder, run from where it would name the mod: still none.
     const relative = doctor(leftover({ env: { CLAUDE_CODE_PLUGIN_DIRS: `../../../..${MOD}` } }))
     expect(relative.curled[0]).toBe('https://current/healthz ')
-    const tilde = doctor(leftover({ env: { CLAUDE_CODE_PLUGIN_DIRS: '~/mod' } }), 'home', {}, home =>
+    const tilde = doctor(leftover({ env: { CLAUDE_CODE_PLUGIN_DIRS: '~/mod' } }), 'home', {}, ({ home }) =>
       cpSync(join(MOD, '.claude-plugin'), join(home, 'mod', '.claude-plugin'), { recursive: true }),
     )
     expect(tilde.curled[0]).toBe('https://old/healthz ')
+  })
+
+  test('with no settings file, takes the plugin folders from the shell', () => {
+    const { out } = doctor(undefined, 'home', { CLAUDE_CODE_PLUGIN_DIRS: MOD })
+    expect(out).not.toContain("the mod isn't loaded")
+    expect(out).toContain('ok  the mod loads in every session (CLAUDE_CODE_PLUGIN_DIRS)')
   })
 
   test("the settings' plugin folders go over the shell's, an empty list included", () => {
@@ -143,15 +150,8 @@ describe('ostrakon doctor', () => {
   test("says the settings aren't valid when they aren't JSON, or are JSON but not an object", () => {
     const notJson = doctor('{', 'config')
     expect(notJson.out).toContain(`!!  ${join(notJson.config, 'settings.json')} isn't valid JSON`)
-    const folder = doctor('{}', 'config')
-    rmSync(join(folder.config, 'settings.json'))
-    mkdirSync(join(folder.config, 'settings.json'))
-    expect(
-      Bun.spawnSync(['bash', DOCTOR], {
-        cwd: folder.cwd,
-        env: { HOME: folder.home, PATH: process.env.PATH ?? '', CLAUDE_CONFIG_DIR: folder.config, OSTRAKON_CACHE: join(folder.cwd, 'cache') },
-      }).stdout.toString(),
-    ).toContain(`!!  ${join(folder.config, 'settings.json')} can't be read`)
+    const folder = doctor(undefined, 'config', {}, ({ config }) => mkdirSync(join(config, 'settings.json')))
+    expect(folder.out).toContain(`!!  ${join(folder.config, 'settings.json')} can't be read`)
     for (const body of ['[1]', 'null']) {
       const { out, config, curled } = doctor(body, 'config')
       expect(out).toContain(`!!  ${join(config, 'settings.json')} isn't a JSON object, so Claude Code can't read it`)

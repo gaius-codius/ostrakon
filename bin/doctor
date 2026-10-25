@@ -39,10 +39,9 @@ settings() {
   python3 -I - "$SETTINGS" <<'EOF'
 import json, os, sys
 path = sys.argv[1]
-if not os.path.exists(path):
-    sys.exit(0)
+# No settings file: nothing set there, so the shell's plugin folders still count.
 try:
-    s = json.load(open(path))
+    s = json.load(open(path)) if os.path.exists(path) else {}
 except ValueError:
     print('invalid\tjson'); sys.exit(0)
 except OSError:
