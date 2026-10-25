@@ -54,9 +54,9 @@ Use one or the other. The install script offers to add the [keybindings](#keybin
 
 ### Requirements
 
-- **Claude Code** with mods support (see the [mods docs](https://code.claude.com/docs/en/plugins/mods/overview)). Tested with 2.1.308; mods are still changing, so a much older or newer version may not work.
+- **Claude Code** with mods support (see the [mods docs](https://code.claude.com/docs/en/plugins/mods/overview)). Tested with 2.1.310; mods are still changing, so a much older or newer version may not work.
 - **git**, and **python3** for the install script (without it, the script tells you the one line to add yourself).
-- **For the hub:** [Bun](https://bun.sh) (tested with 1.4.3) to run the hub and to use `ostrakon pair` and `ostrakon jot`, and `qrencode` for the pairing QR code. `install.sh --hub` sets the hub up as a systemd service, so that part is Linux-only for now; elsewhere, run `ostrakon hub` however you like to keep things running.
+- **For the hub:** [Bun](https://bun.sh) (tested with 1.4.4) to run the hub and to use `ostrakon pair` and `ostrakon jot`, and `qrencode` for the pairing QR code. `install.sh --hub` sets the hub up as a systemd service, so that part is Linux-only for now; elsewhere, run `ostrakon hub` however you like to keep things running.
 
 Tested on Linux. macOS should work for the mod but hasn't been tried yet; reports are welcome.
 
@@ -192,7 +192,7 @@ ostrakon jot --project cc fix the flaky test
 
 The note goes into this machine's notes folder, the one the mod uses, so it shows in your sessions here. If the mod has a hub set (`hubUrl` and `hubToken`), it goes to the hub at once too, so your phone and other machines have it within seconds. If the hub can't be reached, the note stays here, and a session sends it later if the mod has that hub. `--project` (or `-p`) takes a project your notes already know, by name or key. On a machine without the mod's settings, set `OSTRAKON_HUB_URL` and `OSTRAKON_HUB_TOKEN` instead; set either and both are read from there, never one from each place.
 
-**A quick-note key.** `ostrakon jot --ask` asks for one line in a small prompt, saves it and shows a notification. Start the line with `@name` to file it under a project: `@cc fix the flaky test`. It uses Omarchy's own prompt, or else whichever of walker, fuzzel, rofi, wofi, zenity or (on macOS) osascript is installed. Bind it to a key. On Omarchy, add this to `~/.config/hypr/bindings.lua`:
+**A quick-note key.** `ostrakon jot --ask` asks for one line in a small prompt, saves it and shows a notification. Start the line with `@name` to file it under a project: `@cc fix the flaky test`. It uses Omarchy's own prompt, or else whichever of walker, fuzzel, rofi, wofi, zenity or (on macOS, untested) osascript is installed. Bind it to a key. On Omarchy, add this to `~/.config/hypr/bindings.lua`:
 
 ```lua
 o.bind("SUPER + SHIFT + J", "Ostrakon note", "~/.local/bin/ostrakon jot --ask")
