@@ -107,7 +107,7 @@ describe('ostrakon doctor', () => {
 
   test('reads a ~ in the plugin folders as home, and a relative folder as none', () => {
     // A relative folder, run from where it would name the mod: still none.
-    const relative = doctor(leftover({ env: { CLAUDE_CODE_PLUGIN_DIRS: '../../../..' + MOD } }))
+    const relative = doctor(leftover({ env: { CLAUDE_CODE_PLUGIN_DIRS: `../../../..${MOD}` } }))
     expect(relative.curled[0]).toBe('https://current/healthz ')
     const tilde = doctor(leftover({ env: { CLAUDE_CODE_PLUGIN_DIRS: '~/mod' } }), 'home', {}, home =>
       cpSync(join(MOD, '.claude-plugin'), join(home, 'mod', '.claude-plugin'), { recursive: true }),
