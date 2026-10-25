@@ -253,6 +253,9 @@ const storeIO = async ($: EngineInterface): Promise<StoreIO> => ({
     await update($, notes, () => merged)
     await update($, problems, () => broken)
     schedulePush($)
+    // Every change reaches the pane here (a scan, the hub's or a mirror's, a send, Claude's archive):
+    // an edit whose note just left the list goes to the list at once.
+    if (await read($, isOpen)) await leaveGoneEdit($)
   },
 })
 
@@ -609,7 +612,6 @@ const markSent = async ($: EngineInterface, ids: string[]) => {
   for (const id of ids) {
     await changeNote($, id, note => ({ ...note, status: 'sent', sentAt: stamp, context: { ...note.context, sentSessionId: sessionId } }))
   }
-  if (await read($, isOpen)) await leaveGoneEdit($)
 }
 
 // The key sheet's open and close. Opened from a text field, where `i` would be typed, it takes the
@@ -693,7 +695,7 @@ const refocus = async ($: EngineInterface) => {
   if (state.mode === 'capture') return focusKey($, CAPTURE_KEY)
   if (state.mode === 'target') return focusKey($, TARGET_KEY)
   // The note being edited may have left the list while the prompt had the keys: then the list takes
-  // them. The poll's realign has usually done it already; this covers a turn that came first.
+  // them. The store's publish has done it already when a note changed; this holds whatever else.
   if (state.mode === 'edit') {
     if (!(await leaveGoneEdit($))) focusKey($, EDIT_KEY)
     return
@@ -741,8 +743,6 @@ const focusLine = async ($: EngineInterface, key: string | null) => {
 // line's slot so Enter and the letter keys act on the same row.
 const realign = async ($: EngineInterface) => {
   if (!(await read($, isOpen))) return
-  // Whether or not the pane holds the keys: handed to the prompt, the edit card draws unfocused.
-  if (await leaveGoneEdit($)) return
   const view = await viewOf($)
   if (view.focus.kind !== 'line' || view.pane.cursor === null) return
   // The selected note left the list: keep the line that took its place (viewOf picked it).
@@ -1738,7 +1738,6 @@ export const register: Register = (on, options) => {
     if (!changed) return { deny: ARCHIVE_REPLY.failed }
     if (changed.deleted) return { deny: ARCHIVE_REPLY.missing(id) }
     if (!isAllowed) return { deny: ARCHIVE_REPLY.notOpen(id, changed.status) }
-    if (await read($, isOpen)) await leaveGoneEdit($)
     toast($, TOAST.claudeArchived(changed.text))
     return { result: ARCHIVE_REPLY.archived(id) }
   })
