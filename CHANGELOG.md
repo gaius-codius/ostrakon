@@ -28,7 +28,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 - After you leave an edit with Esc, the pane opens on the list again, not in the edit card. It opens in the edit card only if it closed while that was showing.
 - A note put in the prompt is no longer marked sent when you send a longer note that contains its text with `s`, or when you took its queued prompt back and deleted it.
 - If the pane closed in the edit card and that note was sent or archived before it opened again, it now opens on the list. Before, it opened in edit mode with no card and ignored typing until Esc.
-- The same goes for a note that leaves the list while the pane is open on its edit card (Claude archives it, or its chip fills the prompt and you send it), and for one that left while `ctrl+x tab` had given the prompt the keys: the pane goes to the list, and `e` on that note picks the draft back up. `ctrl+s` in the edit card now does nothing; it used to change the scope, which could drop the note being edited from the list.
+- The same goes for a note that leaves the list while the pane is open on its edit card (Claude archives it, its chip fills the prompt and you send it, or another session sends it), and for one that left while `ctrl+x tab` had given the prompt the keys: the pane goes to the list, and `e` on that note picks the draft back up. `ctrl+s` in the edit card now does nothing; it used to change the scope, which could drop the note being edited from the list.
 - `ostrakon doctor` reads the hub's address and token from one plugin entry in the settings, never one from each.
 - `ostrakon doctor` and `install.sh` use the settings in `CLAUDE_CONFIG_DIR` when it's set, as Claude Code does.
 

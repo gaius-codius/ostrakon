@@ -495,14 +495,20 @@ const isListed = async ($: EngineInterface, state: PaneState, id: string | undef
   return linesOf(ctx, state, all, await read($, problems)).some(line => line.key === id)
 }
 
-// The note being edited left the list while the pane is open (sent, archived, the scope changed):
+// The note being edited left the list while the pane is open (sent, archived, moved elsewhere):
 // the pane goes to the list, the draft kept for the next `e` on that note (SPEC §4.4). True if it did.
 const leaveGoneEdit = async ($: EngineInterface) => {
   const state = await read($, pane)
   if (state.mode !== 'edit' || (await isListed($, state, state.edit?.id))) return false
-  await setPane($, current => (current.mode === 'edit' ? { ...current, mode: 'browse', focus: 'search' } : current))
-  focusKey($, SEARCH_KEY)
-  return true
+  // Only that edit: a key handled meanwhile may have left it, or started another.
+  let isLeft = false
+  await setPane($, current => {
+    if (current.mode !== 'edit' || current.edit?.id !== state.edit?.id) return current
+    isLeft = true
+    return { ...current, mode: 'browse', focus: 'search' }
+  })
+  if (isLeft) focusKey($, SEARCH_KEY)
+  return isLeft
 }
 
 const viewOf = async ($: EngineInterface): Promise<PaneView> => {
@@ -686,7 +692,8 @@ const refocus = async ($: EngineInterface) => {
   // The key sheet closed back to capture or the edit card (Esc): their field takes the keys again.
   if (state.mode === 'capture') return focusKey($, CAPTURE_KEY)
   if (state.mode === 'target') return focusKey($, TARGET_KEY)
-  // The note being edited may have left the list while the prompt had the keys: then the list takes them.
+  // The note being edited may have left the list while the prompt had the keys: then the list takes
+  // them. The poll's realign has usually done it already; this covers a turn that came first.
   if (state.mode === 'edit') {
     if (!(await leaveGoneEdit($))) focusKey($, EDIT_KEY)
     return
@@ -1152,9 +1159,9 @@ const act = async ($: EngineInterface, action: Action) => {
         return
       }
       if (state.mode === 'target') return leaveTarget($)
-      // Answered so it doesn't reach the engine's own action, but the edit card has no scope: a
-      // flip could drop the note being edited from the list.
-      if (state.mode === 'edit') return
+      // Answered so it doesn't reach the engine's own action, but the edit card (or the key sheet
+      // over it) has no scope: a flip could drop the note being edited from the list.
+      if (state.mode === 'edit' || (state.mode === 'sheet' && state.sheetFrom === 'edit')) return
       await setPane($, current => ({ ...current, scope: current.scope === 'project' ? 'all' : 'project', scopeChosen: true, offset: 0 }))
       // Remembered across opens and sessions: all sticks; back to this project restores the
       // defaults (search starts here, the list and typing look everywhere).

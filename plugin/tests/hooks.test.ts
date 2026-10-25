@@ -416,6 +416,22 @@ test("ctrl+s in the edit card of another project's note, in scope all, does noth
   await ui.unmount()
 })
 
+test('ctrl+s under the key sheet over the edit card does nothing: the sheet closes back to the card', async ($, on) => {
+  await startSession($, on, fixture())
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: 'metric', kind: 'change' })
+  await ui.input({ key: 'q', text: 'metric', kind: 'submit' })
+  await ui.press({ key: 'key-e' })
+  await ui.input({ key: 'edit', text: 'half-edited metric', kind: 'change' })
+  await ui.press({ key: 'key-app:toggleReplTab' })
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  await ui.press({ key: 'key-app:toggleReplTab' })
+  const field = await ui.find({ type: 'Input', key: 'edit' })
+  expect((field?.props as { value?: string } | undefined)?.value).toBe('half-edited metric')
+  await ui.unmount()
+})
+
 test('ctrl+s in the edit card saves no scope: the pane opens on this project next time', async ($, on) => {
   const { ui } = await editingFirst($, on)
   await ui.press({ key: 'key-app:toggleDiffPreSession' })
