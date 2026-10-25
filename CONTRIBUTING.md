@@ -36,6 +36,16 @@ How it all works, and the Claude Code behaviour it relies on, is written up in [
 
 `tools/check.sh` and CI fail until the doc matches the code and the change is logged.
 
+## Writing the docs
+
+The README and `docs/` are for people using ostrakon. Write them so a reader can skim and act:
+
+- **Lead with what to do.** Put the command or the example first, and the explanation after it.
+- **No walls of text.** Short paragraphs, one idea each. Split separate details into a list, and a section doing more than one job into subheadings.
+- **Plain, literal words.** Say what happens, not how impressive it is. Cut sentences that repeat the one before.
+- **Don't assume a setup.** Describe the general case first (any desktop, any terminal), then give examples for particular ones. Omarchy, Hyprland and macOS are examples, not the default.
+- **Mark what's untested** rather than leaving it out or implying it works.
+
 ## Releases
 
 Before each release, go through the checklist in [`docs/releasing.md`](docs/releasing.md): mods keep changing, so it re-tests against the current Claude Code and updates the requirements, `ostrakon doctor` and the docs.

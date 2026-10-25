@@ -183,28 +183,39 @@ The service runs `~/.local/bin/ostrakon hub`, so it doesn't matter where the rep
 
 ## Notes from the desktop
 
-`ostrakon jot` saves a note of yours from outside Claude Code (it needs [Bun](https://bun.sh)):
+Save a note without opening Claude Code. Needs [Bun](https://bun.sh).
 
 ```sh
 ostrakon jot call the plumber
-ostrakon jot --project cc fix the flaky test
+ostrakon jot -p cc fix the flaky test     # file it under a project
 ```
 
-The note goes into this machine's notes folder, the one the mod uses, so it shows in your sessions here. If the mod has a hub set (`hubUrl` and `hubToken`), it goes to the hub at once too, so your phone and other machines have it within seconds. If the hub can't be reached, the note stays here, and a session sends it later if the mod has that hub. `--project` (or `-p`) takes a project your notes already know, by name or key. On a machine without the mod's settings, set `OSTRAKON_HUB_URL` and `OSTRAKON_HUB_TOKEN` instead; set either and both are read from there, never one from each place.
+- **Where it goes:** this machine's notes folder, so it shows in your sessions here. If the mod has a hub set, the note goes to the hub at once and reaches your phone and other machines within seconds.
+- **Hub down?** The note stays here, and a session sends it to the hub later.
+- **`--project` / `-p`** takes a project your notes already know, by name or key.
+- **No mod on this machine?** Set `OSTRAKON_HUB_URL` and `OSTRAKON_HUB_TOKEN`. If either is set, both are read from the environment.
 
-**A quick-note key.** `ostrakon jot --ask` asks for one line in a small prompt, saves it and shows a notification. Start the line with `@name` to file it under a project: `@cc fix the flaky test`. It uses Omarchy's own prompt, or else whichever of walker, fuzzel, rofi, wofi, zenity or (on macOS, untested) osascript is installed. Bind it to a key. On Omarchy, add this to `~/.config/hypr/bindings.lua`:
+### A quick-note key
 
-```lua
-o.bind("SUPER + SHIFT + J", "Ostrakon note", "~/.local/bin/ostrakon jot --ask")
-```
+`ostrakon jot --ask` opens a one-line prompt, saves what you type and shows a notification. Start the line with `@name` to file it under a project: `@cc fix the flaky test`.
 
-On Hyprland with a `.conf` setup, the same in `bindings.conf`:
+Bind `~/.local/bin/ostrakon jot --ask` to a key in your desktop's keyboard settings or your window manager's config. On Hyprland, in `bindings.conf`:
 
 ```
 bindd = SUPER SHIFT, J, Ostrakon note, exec, ~/.local/bin/ostrakon jot --ask
 ```
 
-Other senders, such as a Slack bot or a script on another machine, can post to the hub's `/api/jot` with a `source` (see [`docs/phone.md`](docs/phone.md#ios-shortcut-jot-to-ostrakon)): the note is yours, with the source kept as its origin.
+On Omarchy, in `~/.config/hypr/bindings.lua`:
+
+```lua
+o.bind("SUPER + SHIFT + J", "Ostrakon note", "~/.local/bin/ostrakon jot --ask")
+```
+
+The prompt comes from a tool you likely have already: walker, fuzzel, rofi, wofi or zenity. On Omarchy it uses Omarchy's own prompt. On macOS it uses osascript, which is untested so far.
+
+### From other apps
+
+A Slack bot, a script or another machine can post to the hub's `/api/jot` with a `source`. The note is yours, and the source is kept as where it came from. See [`docs/phone.md`](docs/phone.md#ios-shortcut-jot-to-ostrakon).
 
 ## Known limitations
 
