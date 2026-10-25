@@ -193,6 +193,13 @@ if [ -n "$mirrorDir" ]; then
   else bad "mirror folder $mirror doesn't exist (the mod makes it only if its parent folder does)"; fi
 fi
 
+# The port the ostrakon-hub service here listens on (install.sh sets HUB_PORT; the hub's default is 8790).
+local_hub_port() {
+  local p
+  p=$(systemctl --user show ostrakon-hub -p Environment --value 2>/dev/null | tr ' ' '\n' | sed -n 's/^HUB_PORT=//p' | tail -n 1)
+  echo "${p:-8790}"
+}
+
 echo "== sync with a hub"
 if [ -n "$invalid" ]; then
   note "the hub wasn't checked, as the settings can't be read"
@@ -207,7 +214,13 @@ else
     ok*)
       hv=$(printf '%s' "$health" | awk '{print $2}')
       if [ "$hv" = "$version" ]; then ok "hub answers at $base"
-      else note "hub at $base runs ${hv:-an older version}, this checkout $version; run ostrakon update where the hub runs"; fi
+      elif has systemctl && systemctl --user is-active --quiet ostrakon-hub &&
+        [ "$(curl -s -m 3 "http://127.0.0.1:$(local_hub_port)/healthz" | awk '$1 == "ok" {print $2}')" = "$hv" ]; then
+        note "the hub on this machine runs ${hv:-an older version}, this checkout $version; ostrakon update restarts it"
+      else
+        host=$(printf '%s' "$base" | sed -E 's#^[a-zA-Z]+://##; s#[:/].*##')
+        note "hub at $base runs ${hv:-an older version}, this checkout $version; on $host, run ostrakon update"
+      fi
       if [ -z "$hubToken" ]; then bad "no hubToken set, so the hub refuses this machine's notes"
       else
         case $(status_of "$base/api/projects" "$hubToken") in
