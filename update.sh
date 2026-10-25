@@ -3,7 +3,8 @@
 #   ./update.sh            a checkout on a release moves to the newest release; one on a branch pulls it
 #   ./update.sh --release  move to the newest release (from a branch too)
 #   ./update.sh --main     move to main and pull it (the newest code, not yet released)
-# Then the `ostrakon` link is kept and the hub restarted if it's installed and running.
+# Then the `ostrakon` link is kept and the hub restarted if it's installed and running: after new
+# code, or when it still runs an older release than this checkout.
 set -euo pipefail
 
 # All in a function: git may rewrite this file mid-run, and bash reads a script as it goes.
@@ -41,23 +42,34 @@ main() {
   fi
   after=$(g rev-parse HEAD)
 
+  local updated=yes
   if [ "$before" = "$after" ]; then
     say "already up to date ($(g describe --tags --always))"
-    return 0
+    updated=
+  else
+    say "updated to $(g describe --tags --always):"
+    g log --format='  %h %s' "$before..$after" | head -n 30
+    local link=$HOME/.local/bin/ostrakon
+    if [ -L "$link" ]; then ln -sfn "$root/bin/ostrakon" "$link"; fi
   fi
-  say "updated to $(g describe --tags --always):"
-  g log --format='  %h %s' "$before..$after" | head -n 30
 
-  local link=$HOME/.local/bin/ostrakon
-  if [ -L "$link" ]; then ln -sfn "$root/bin/ostrakon" "$link"; fi
-
+  # The hub restarts after new code, and also when it still runs an older release than this
+  # checkout (it was never restarted after a pull, say), which /healthz tells.
   if command -v systemctl >/dev/null && systemctl --user cat ostrakon-hub >/dev/null 2>&1; then
     systemctl --user daemon-reload
     if systemctl --user is-active --quiet ostrakon-hub; then
-      systemctl --user restart ostrakon-hub
-      if systemctl --user is-active --quiet ostrakon-hub; then say "hub restarted"; else say "! hub didn't come back: journalctl --user -u ostrakon-hub"; fi
+      local port running version
+      port=$(systemctl --user show ostrakon-hub -p Environment --value | tr ' ' '\n' | sed -n 's/^HUB_PORT=//p' | tail -n 1)
+      running=$(curl -s -m 3 "http://127.0.0.1:${port:-8790}/healthz" 2>/dev/null | awk '$1 == "ok" {print $2}' || true)
+      version=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$root/plugin/.claude-plugin/plugin.json" | head -n 1)
+      if [ -n "$updated" ] || [ "$running" != "$version" ]; then
+        [ -n "$updated" ] || say "the hub runs ${running:-an older version}, this checkout $version"
+        systemctl --user restart ostrakon-hub
+        if systemctl --user is-active --quiet ostrakon-hub; then say "hub restarted"; else say "! hub didn't come back: journalctl --user -u ostrakon-hub"; fi
+      fi
     fi
   fi
+  [ -n "$updated" ] || return 0
   say "Restart running Claude Code sessions to load the new mod. What changed: CHANGELOG.md"
 }
 

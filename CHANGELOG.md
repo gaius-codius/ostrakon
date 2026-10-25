@@ -6,6 +6,11 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Fixed
+
+- `ostrakon update` restarts the hub on this machine when it still runs an older release than the checkout, even with nothing new to pull. Before, it restarted the hub only after pulling new code, so a hub that missed a restart stayed on the old version.
+- When the hub runs a different release, `ostrakon doctor` says where to update it: on this machine, that `ostrakon update` restarts it; elsewhere, the hub's host. It used to say "where the hub runs".
+
 ## [0.8.0] - 2026-10-25
 
 ### Added
