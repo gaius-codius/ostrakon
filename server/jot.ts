@@ -5,8 +5,8 @@
 // the mod has that hub.
 //
 // The folder and the hub come from Claude Code's settings, as the mod sees them (bin/doctor reads
-// them the same way): settings.json in CLAUDE_CONFIG_DIR, else ~/.claude. OSTRAKON_HUB_URL and
-// OSTRAKON_HUB_TOKEN go over the settings' hub.
+// them the same way): settings.json in CLAUDE_CONFIG_DIR, else ~/.claude, from the plugin entry the
+// sessions read. OSTRAKON_HUB_URL and OSTRAKON_HUB_TOKEN go over the settings' hub.
 
 import { mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
@@ -39,10 +39,35 @@ const text = (value: unknown) => (typeof value === 'string' && value.trim() !== 
 // A folder as given: the mod doesn't trim notesDir or OSTRAKON_DIR.
 const path = (value: unknown) => (typeof value === 'string' && value !== '' ? value : undefined)
 
-// The plugin's options, under whichever name it was installed as (the same names bin/doctor tries).
-// The hub's URL and token as a pair, from the first entry that has both, so a leftover entry's URL
-// never meets another's token.
-export const settingsOf = (file: string): Settings => {
+// A value that isn't an object (a leftover null) counts as empty, so it hides nothing.
+const record = (value: unknown): Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+
+const isModFolder = (dir: string) => {
+  try {
+    return record(JSON.parse(readFileSync(`${dir.replace(/\/+$/, '')}/.claude-plugin/plugin.json`, 'utf8'))).name === 'ostrakon'
+  } catch {
+    return false
+  }
+}
+
+// Which plugin entry the sessions here read their options from (SPEC §9.5). A copy loaded from a
+// folder (CLAUDE_CODE_PLUGIN_DIRS, the settings' over the shell's) reads `ostrakon`, then
+// `ostrakon@inline`, and Claude Code then skips an installed copy; one installed with `claude plugin
+// install` alone reads `ostrakon@ostrakon`. A `--plugin-dir` on the command line can't be seen here.
+const entriesOf = (settings: { env?: unknown; enabledPlugins?: unknown }, shellDirs: string | undefined) => {
+  const fromSettings = record(settings.env).CLAUDE_CODE_PLUGIN_DIRS
+  const dirs = typeof fromSettings === 'string' ? fromSettings : (shellDirs ?? '')
+  const folder = dirs.split(':').some(dir => dir !== '' && isModFolder(dir))
+  const market = Boolean(record(settings.enabledPlugins)['ostrakon@ostrakon'])
+  return market && !folder ? ['ostrakon@ostrakon'] : ['ostrakon', 'ostrakon@inline']
+}
+
+// The plugin's options from the entries the sessions read. The hub's URL and token as a pair, from
+// the first entry that has both, so a leftover entry's URL never meets another's token. Throws a
+// SyntaxError for a file that isn't JSON, and a TypeError for JSON that isn't an object (`[1]`),
+// which Claude Code can't read either.
+export const settingsOf = (file: string, shellDirs?: string): Settings => {
   let raw: string
   try {
     raw = readFileSync(file, 'utf8')
@@ -50,17 +75,21 @@ export const settingsOf = (file: string): Settings => {
     return {}
   }
   const parsed = JSON.parse(raw) as unknown
-  if (typeof parsed !== 'object' || parsed === null) return {}
-  const s = parsed as { env?: Record<string, unknown>; pluginConfigs?: Record<string, { options?: Record<string, unknown> }> }
-  const entries = ['ostrakon', 'ostrakon@inline', 'ostrakon@ostrakon'].map(name => s.pluginConfigs?.[name]?.options)
-  const hub = entries.find(options => text(options?.hubUrl) !== undefined && text(options?.hubToken) !== undefined)
-  const notesDir = entries.map(options => path(options?.notesDir)).find(value => value !== undefined)
-  return { envDir: path(s.env?.OSTRAKON_DIR), notesDir, hubUrl: text(hub?.hubUrl), hubToken: text(hub?.hubToken) }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new TypeError('not an object')
+  const s = parsed as { env?: unknown; enabledPlugins?: unknown; pluginConfigs?: unknown }
+  const entries = entriesOf(s, shellDirs).map(name => record(record(record(s.pluginConfigs)[name]).options))
+  const hub = entries.find(options => text(options.hubUrl) !== undefined && text(options.hubToken) !== undefined)
+  const notesDir = entries.map(options => path(options.notesDir)).find(value => value !== undefined)
+  return { envDir: path(record(s.env).OSTRAKON_DIR), notesDir, hubUrl: text(hub?.hubUrl), hubToken: text(hub?.hubToken) }
 }
 
-// Where Claude Code keeps its settings: CLAUDE_CONFIG_DIR when set, as the sessions here see it.
+// Where Claude Code keeps its settings: CLAUDE_CONFIG_DIR when set, as the sessions here see it. Set
+// but empty, Claude Code keeps it as it is, so its settings.json is the one in the working directory.
 // Appended as given, not join()ed: join would fold a `..` the filesystem resolves after a symlink.
-export const settingsFileOf = (home: string, env: JotDeps['env']) => `${path(env.CLAUDE_CONFIG_DIR) ?? `${home}/.claude`}/settings.json`
+export const settingsFileOf = (home: string, env: JotDeps['env']) => {
+  const dir = env.CLAUDE_CONFIG_DIR ?? `${home}/.claude`
+  return dir === '' ? 'settings.json' : `${dir}/settings.json`
+}
 
 // As the mod picks it (store.ts): OSTRAKON_DIR as a session sees it (the settings' env over the
 // shell's), else the notesDir option, else the default; the notes are in its notes/.
@@ -145,9 +174,9 @@ export const jot = async (args: string[], deps: JotDeps): Promise<{ out: string[
   const file = settingsFileOf(deps.home, deps.env)
   let settings: Settings
   try {
-    settings = settingsOf(file)
-  } catch {
-    return { out: [], err: [`ostrakon jot: ${file} isn't valid JSON`], code: 1 }
+    settings = settingsOf(file, deps.env.CLAUDE_CODE_PLUGIN_DIRS)
+  } catch (error) {
+    return { out: [], err: [`ostrakon jot: ${file} isn't ${error instanceof SyntaxError ? 'valid JSON' : 'a JSON object'}`], code: 1 }
   }
   const dir = notesDirOf(deps.home, deps.env, settings)
 

@@ -132,7 +132,11 @@ describe('ostrakon jot', () => {
     const hub = openHub(temp())
     const serve = handler(hub, { token: 'secret' })
     const fetch: JotDeps['fetch'] = (url, init) => serve(new Request(url, init))
-    const { deps, notes } = setup({ pluginConfigs: { 'ostrakon@ostrakon': { options: { hubUrl: 'https://hub/', hubToken: 'secret' } } } }, {}, fetch)
+    const { deps, notes } = setup(
+      { enabledPlugins: { 'ostrakon@ostrakon': true }, pluginConfigs: { 'ostrakon@ostrakon': { options: { hubUrl: 'https://hub/', hubToken: 'secret' } } } },
+      {},
+      fetch,
+    )
     const result = await jot(['from the desk'], deps)
     expect(result).toEqual({ out: ['Saved.'], err: [], code: 0 })
     const [local] = notes()
@@ -189,7 +193,7 @@ describe('ostrakon jot', () => {
     const settings = {
       pluginConfigs: {
         ostrakon: { options: { hubUrl: 'https://old' } },
-        'ostrakon@ostrakon': { options: { hubUrl: 'https://current', hubToken: 'live-token' } },
+        'ostrakon@inline': { options: { hubUrl: 'https://current', hubToken: 'live-token' } },
       },
     }
     const { deps } = setup(settings, {}, spy)
@@ -204,12 +208,100 @@ describe('ostrakon jot', () => {
       return new Response('{}', { status: 500 })
     }
     const old = temp()
-    const settings = { pluginConfigs: { ostrakon: { options: { notesDir: old } }, 'ostrakon@ostrakon': { options: { hubUrl: 'https://hub', hubToken: 't' } } } }
+    const settings = { pluginConfigs: { ostrakon: { options: { notesDir: old } }, 'ostrakon@inline': { options: { hubUrl: 'https://hub', hubToken: 't' } } } }
     const { deps, notes } = setup(settings, {}, spy)
     await jot(['x'], deps)
     expect(seen).toEqual(['https://hub/api/notes'])
     expect(readdirSync(join(old, 'notes'))).toHaveLength(1)
     expect(() => notes()).toThrow()
+  })
+
+  // The issue's case: installed from the marketplace, with an `ostrakon` entry left over from install.sh.
+  const leftover = (extra: object = {}, old: object = {}) => ({
+    enabledPlugins: { 'ostrakon@ostrakon': true },
+    pluginConfigs: {
+      ostrakon: { options: { hubUrl: 'https://old', hubToken: 'old-token', ...old } },
+      'ostrakon@ostrakon': { options: { hubUrl: 'https://current', hubToken: 'live-token' } },
+    },
+    ...extra,
+  })
+  const MOD = join(import.meta.dir, '../plugin')
+
+  test('installed from the marketplace and loaded from no folder, reads only ostrakon@ostrakon', async () => {
+    const seen: string[] = []
+    const refusing: JotDeps['fetch'] = async (url, init) => {
+      seen.push(`${url} ${(init.headers as Record<string, string>).authorization}`)
+      return new Response('{"error":"unauthorized"}', { status: 401 })
+    }
+    const old = temp()
+    const { deps, notes } = setup(leftover({}, { notesDir: old }), {}, refusing)
+    const result = await jot(['x'], deps)
+    expect(seen).toEqual(['https://current/api/notes Bearer live-token'])
+    expect(notes()).toHaveLength(1)
+    expect(() => readdirSync(join(old, 'notes'))).toThrow()
+    // The token the sessions use, so the advice to fix hubToken points at the entry they read.
+    expect(result.err[0]).toContain('Sessions here use that token too')
+  })
+
+  test('loaded from a folder, reads ostrakon then ostrakon@inline and never ostrakon@ostrakon', async () => {
+    const seen: string[] = []
+    const spy: JotDeps['fetch'] = async url => {
+      seen.push(url)
+      return new Response('{}', { status: 500 })
+    }
+    // The folder in the settings, with the marketplace copy also installed: Claude Code skips that one.
+    const inSettings = setup(leftover({ env: { CLAUDE_CODE_PLUGIN_DIRS: `/nowhere:${MOD}/` } }), {}, spy)
+    await jot(['x'], inSettings.deps)
+    // From the shell, with an ostrakon@inline entry and nothing installed.
+    const fromShell = setup(
+      {
+        pluginConfigs: {
+          'ostrakon@inline': { options: { hubUrl: 'https://inline', hubToken: 't' } },
+          'ostrakon@ostrakon': { options: { hubUrl: 'https://market', hubToken: 't' } },
+        },
+      },
+      { CLAUDE_CODE_PLUGIN_DIRS: MOD },
+      spy,
+    )
+    await jot(['y'], fromShell.deps)
+    expect(seen).toEqual(['https://old/api/notes', 'https://inline/api/notes'])
+  })
+
+  test("the settings' plugin folders go over the shell's, an empty list included", async () => {
+    const seen: string[] = []
+    const spy: JotDeps['fetch'] = async url => {
+      seen.push(url)
+      return new Response('{}', { status: 500 })
+    }
+    const { deps } = setup(leftover({ env: { CLAUDE_CODE_PLUGIN_DIRS: '' } }), { CLAUDE_CODE_PLUGIN_DIRS: MOD }, spy)
+    await jot(['x'], deps)
+    expect(seen).toEqual(['https://current/api/notes'])
+  })
+
+  test('with CLAUDE_CONFIG_DIR set but empty, reads settings.json in the working directory, as Claude Code does', async () => {
+    const seen: string[] = []
+    const spy: JotDeps['fetch'] = async url => {
+      seen.push(url)
+      return new Response('{}', { status: 500 })
+    }
+    const cwd = temp()
+    writeFileSync(join(cwd, 'settings.json'), JSON.stringify({ pluginConfigs: { ostrakon: { options: { hubUrl: 'https://here', hubToken: 't' } } } }))
+    const { deps } = setup({ pluginConfigs: { ostrakon: { options: { hubUrl: 'https://home', hubToken: 't' } } } }, { CLAUDE_CONFIG_DIR: '' }, spy)
+    const was = process.cwd()
+    process.chdir(cwd)
+    try {
+      await jot(['x'], deps)
+    } finally {
+      process.chdir(was)
+    }
+    expect(seen).toEqual(['https://here/api/notes'])
+  })
+
+  test("says the settings aren't a JSON object when they parse as something else", async () => {
+    for (const body of ['[1]', 'null', '"x"']) {
+      const { deps, home } = setup(body)
+      expect((await jot(['x'], deps)).err).toEqual([`ostrakon jot: ${join(home, '.claude', 'settings.json')} isn't a JSON object`])
+    }
   })
 
   test("with an env hub other than the mod's, says a session sends it to the mod's hub", async () => {
