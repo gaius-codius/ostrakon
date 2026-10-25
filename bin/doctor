@@ -5,8 +5,11 @@
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
-# As Claude Code finds its settings: CLAUDE_CONFIG_DIR when set, else ~/.claude.
-SETTINGS=${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json
+# As Claude Code finds its settings: CLAUDE_CONFIG_DIR when set, else ~/.claude. Set but empty,
+# Claude Code keeps it as it is, so its settings.json is the one in the working directory.
+if [ -z "${CLAUDE_CONFIG_DIR+set}" ]; then SETTINGS=$HOME/.claude/settings.json
+elif [ -z "$CLAUDE_CONFIG_DIR" ]; then SETTINGS=$PWD/settings.json
+else SETTINGS=$CLAUDE_CONFIG_DIR/settings.json; fi
 ENV_FILE=${OSTRAKON_HUB_ENV:-$HOME/.config/ostrakon-hub/env}
 problems=0
 
@@ -28,8 +31,9 @@ status_of() { # url [token]
 version=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$ROOT/plugin/.claude-plugin/plugin.json" | head -n 1)
 echo "ostrakon $version ($(git -C "$ROOT" describe --tags --always --dirty 2>/dev/null || echo 'not a git checkout')) in $ROOT"
 
-# What the settings say, as KEY<tab>value lines: the mod's folder, the notes folder Claude Code
-# hands the mod (env.OSTRAKON_DIR, nothing else from env), and the plugin's options.
+# What the settings say, as KEY<tab>value lines: the folders Claude Code loads mods from, the notes
+# folder it hands the mod (env.OSTRAKON_DIR), and the plugin's options from the entry the sessions
+# read (as ostrakon jot reads them, server/jot.ts; SPEC §9.5).
 settings() {
   has python3 || return 0
   python3 -I - "$SETTINGS" <<'EOF'
@@ -40,16 +44,32 @@ if not os.path.exists(path):
 try:
     s = json.load(open(path))
 except ValueError:
-    print('invalid\t1'); sys.exit(0)
+    print('invalid\tjson'); sys.exit(0)
+if not isinstance(s, dict):
+    print('invalid\tobject'); sys.exit(0)
 # A value that isn't an object (a leftover null) counts as empty, so it hides none of the others.
 dict_or_empty = lambda v: v if isinstance(v, dict) else {}
-s = dict_or_empty(s)
 env = dict_or_empty(s.get('env'))
-print('dirs\t' + str(env.get('CLAUDE_CODE_PLUGIN_DIRS', '')))
+# The settings' list goes over the shell's, an empty one included.
+dirs = env.get('CLAUDE_CODE_PLUGIN_DIRS')
+dirs = dirs if isinstance(dirs, str) else os.environ.get('CLAUDE_CODE_PLUGIN_DIRS', '')
+def is_mod(folder):
+    try:
+        return dict_or_empty(json.load(open(os.path.join(folder, '.claude-plugin', 'plugin.json')))).get('name') == 'ostrakon'
+    except (OSError, ValueError):
+        return False
+folder = any(d and is_mod(d) for d in dirs.split(':'))
+market = bool(dict_or_empty(s.get('enabledPlugins')).get('ostrakon@ostrakon'))
+print('dirs\t' + dirs)
 print('envDir\t' + str(env.get('OSTRAKON_DIR', '')))
-print('market\t' + ('1' if dict_or_empty(s.get('enabledPlugins')).get('ostrakon@ostrakon') else ''))
+print('market\t' + ('1' if market else ''))
+print('folder\t' + ('1' if folder else ''))
+# A copy loaded from a folder reads `ostrakon`, then `ostrakon@inline`, and Claude Code then skips an
+# installed copy; one installed with `claude plugin install` alone reads `ostrakon@ostrakon`.
+names = ('ostrakon@ostrakon',) if market and not folder else ('ostrakon', 'ostrakon@inline')
+print('entry\t' + ' then '.join(names))
 configs = dict_or_empty(s.get('pluginConfigs'))
-entries = [dict_or_empty(dict_or_empty(configs.get(n)).get('options')) for n in ('ostrakon', 'ostrakon@inline', 'ostrakon@ostrakon')]
+entries = [dict_or_empty(dict_or_empty(configs.get(n)).get('options')) for n in names]
 text = lambda v: v.strip() if isinstance(v, str) else ''
 # The hub's URL and token as a pair, from one entry (as ostrakon jot reads them), so a leftover
 # entry's URL never meets another's token; an entry with only a URL still shows the token missing.
@@ -62,9 +82,9 @@ for key in ('notesDir', 'mirrorDir'):
     print(f'{key}\t{value}')
 EOF
 }
-dirs='' envDir='' market='' hubUrl='' hubToken='' notesDir='' mirrorDir='' invalid=''
+dirs='' envDir='' market='' folder='' entry='' hubUrl='' hubToken='' notesDir='' mirrorDir='' invalid=''
 while IFS=$'\t' read -r key value; do
-  case $key in dirs | envDir | market | hubUrl | hubToken | notesDir | mirrorDir | invalid) printf -v "$key" '%s' "$value" ;; esac
+  case $key in dirs | envDir | market | folder | entry | hubUrl | hubToken | notesDir | mirrorDir | invalid) printf -v "$key" '%s' "$value" ;; esac
 done < <(settings)
 expand() { case $1 in '~') echo "$HOME" ;; '~/'*) echo "$HOME/${1#'~/'}" ;; *) echo "$1" ;; esac; }
 
@@ -78,22 +98,22 @@ if has claude; then
 else
   bad "claude not found: install Claude Code (with mods support)"
 fi
-if [ -n "$invalid" ]; then
+if [ "$invalid" = json ]; then
   bad "$SETTINGS isn't valid JSON, so Claude Code can't read it"
+elif [ "$invalid" = object ]; then
+  bad "$SETTINGS isn't a JSON object, so Claude Code can't read it"
 elif ! has python3; then
   note "python3 not found, so the settings weren't checked"
 else
-  loaded=${CLAUDE_CODE_PLUGIN_DIRS:-$dirs}
-  if [ -n "$market" ]; then
-    case $loaded in
-      *"$ROOT/plugin"*) bad "the mod loads twice, from the marketplace and from CLAUDE_CODE_PLUGIN_DIRS; keep one (claude plugin uninstall ostrakon@ostrakon, or remove $ROOT/plugin from CLAUDE_CODE_PLUGIN_DIRS)" ;;
-      *) ok "the mod is installed from the marketplace (ostrakon@ostrakon)" ;;
-    esac
+  if [ -n "$market" ] && [ -n "$folder" ]; then
+    bad "the mod is both installed from the marketplace and loaded from a folder (CLAUDE_CODE_PLUGIN_DIRS); sessions use the folder's copy, so its settings come from pluginConfigs $entry, not ostrakon@ostrakon. Keep one: claude plugin uninstall ostrakon@ostrakon, or take the folder out of CLAUDE_CODE_PLUGIN_DIRS"
+  elif [ -n "$market" ]; then
+    ok "the mod is installed from the marketplace (ostrakon@ostrakon)"
   else
-    case $loaded in
+    case $dirs in
       *"$ROOT/plugin"*) ok "the mod loads in every session (CLAUDE_CODE_PLUGIN_DIRS)" ;;
       '') bad "the mod isn't loaded: run $ROOT/install.sh, or start claude with --plugin-dir $ROOT/plugin" ;;
-      *) bad "CLAUDE_CODE_PLUGIN_DIRS names other folders ($loaded), not $ROOT/plugin" ;;
+      *) bad "CLAUDE_CODE_PLUGIN_DIRS names other folders ($dirs), not $ROOT/plugin" ;;
     esac
   fi
 fi
@@ -167,7 +187,9 @@ if [ -n "$mirrorDir" ]; then
 fi
 
 echo "== sync with a hub"
-if [ -z "$hubUrl" ]; then
+if [ -n "$invalid" ]; then
+  note "the hub wasn't checked, as the settings can't be read"
+elif [ -z "$hubUrl" ]; then
   note "no hubUrl set; fine if you sync through a folder, or not at all"
 elif ! has curl; then
   note "curl not found, so the hub wasn't checked"
