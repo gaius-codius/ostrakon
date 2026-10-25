@@ -6,6 +6,8 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-25
+
 ### Fixed
 
 - `ostrakon update` restarts the hub on this machine when it still runs an older release than the checkout, even with nothing new to pull. Before, it restarted the hub only after pulling new code, so a hub that missed a restart stayed on the old version.
@@ -150,7 +152,8 @@ The first public release.
 - `ostrakon pair`: a QR code with a one-time code (5 minutes, works once) pairs a phone with the hub; `--token` prints the long-lived link instead.
 - The `ostrakon` command (`pair`, `hub`, `update`, `version`), `install.sh` and `update.sh`.
 
-[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/gaius-codius/ostrakon/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/gaius-codius/ostrakon/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/gaius-codius/ostrakon/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/gaius-codius/ostrakon/compare/v0.5.0...v0.6.0
