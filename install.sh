@@ -8,8 +8,11 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
 BIN=$HOME/.local/bin
-# As Claude Code finds its settings: CLAUDE_CONFIG_DIR when set, else ~/.claude.
-CONFIG_DIR=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+# As Claude Code finds its settings: CLAUDE_CONFIG_DIR when set, else ~/.claude. Set but empty,
+# Claude Code keeps it as it is, so its files are the ones in the working directory.
+if [ -z "${CLAUDE_CONFIG_DIR+set}" ]; then CONFIG_DIR=$HOME/.claude
+elif [ -z "$CLAUDE_CONFIG_DIR" ]; then CONFIG_DIR=$PWD
+else CONFIG_DIR=$CLAUDE_CONFIG_DIR; fi
 SETTINGS=$CONFIG_DIR/settings.json
 ENV_FILE=$HOME/.config/ostrakon-hub/env
 UNIT_DIR=$HOME/.config/systemd/user

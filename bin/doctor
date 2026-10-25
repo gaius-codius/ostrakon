@@ -45,6 +45,8 @@ try:
     s = json.load(open(path))
 except ValueError:
     print('invalid\tjson'); sys.exit(0)
+except OSError:
+    print('invalid\tunreadable'); sys.exit(0)
 if not isinstance(s, dict):
     print('invalid\tobject'); sys.exit(0)
 # A value that isn't an object (a leftover null) counts as empty, so it hides none of the others.
@@ -53,7 +55,11 @@ env = dict_or_empty(s.get('env'))
 # The settings' list goes over the shell's, an empty one included.
 dirs = env.get('CLAUDE_CODE_PLUGIN_DIRS')
 dirs = dirs if isinstance(dirs, str) else os.environ.get('CLAUDE_CODE_PLUGIN_DIRS', '')
+# As Claude Code reads a folder in the list (`:`-separated): a leading ~ is home; a relative one loads nothing.
 def is_mod(folder):
+    folder = os.path.expanduser(folder)
+    if not os.path.isabs(folder):
+        return False
     try:
         return dict_or_empty(json.load(open(os.path.join(folder, '.claude-plugin', 'plugin.json')))).get('name') == 'ostrakon'
     except (OSError, ValueError):
@@ -102,6 +108,8 @@ if [ "$invalid" = json ]; then
   bad "$SETTINGS isn't valid JSON, so Claude Code can't read it"
 elif [ "$invalid" = object ]; then
   bad "$SETTINGS isn't a JSON object, so Claude Code can't read it"
+elif [ "$invalid" = unreadable ]; then
+  bad "$SETTINGS can't be read (a folder, or no permission)"
 elif ! has python3; then
   note "python3 not found, so the settings weren't checked"
 else

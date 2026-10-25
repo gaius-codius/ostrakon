@@ -381,9 +381,10 @@ const toneOfTheme = async ($: EngineInterface, theme: string): Promise<Tone> => 
   }
   if (!theme.startsWith('custom:')) return toneOf(theme)
   // Claude Code's folder: CLAUDE_CONFIG_DIR when set, else ~/.claude. Set but empty, Claude Code keeps
-  // it as it is, so the themes are in the working directory, which a relative path reads from.
-  const dir = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${(await $.env.get('HOME')) ?? ''}/.claude`
-  const file = await $.fs.read(`${dir === '' ? '' : `${dir}/`}themes/${theme.slice('custom:'.length)}.json`).then(String, () => '')
+  // it as it is, so the themes are in the directory the session runs in.
+  const set = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? `${(await $.env.get('HOME')) ?? ''}/.claude`
+  const dir = set === '' ? await $.session.cwd() : set
+  const file = await $.fs.read(`${dir}/themes/${theme.slice('custom:'.length)}.json`).then(String, () => '')
   try {
     const { base } = JSON.parse(file) as { base?: unknown }
     return toneOf(typeof base === 'string' ? base : 'dark')

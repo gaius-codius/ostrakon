@@ -1,6 +1,6 @@
 # Ostrakon design system
 
-Version: 5.0.0
+Version: 5.0.1
 
 What the terminal mod (the pane, the band and the prompt hint, in `plugin/`) and the phone (`server/public/`) must agree on: colour roles, the project palette, the phone's tokens, symbols, fixed copy, motion and the accessibility bar. [`SPEC.md`](SPEC.md) describes behaviour and points here for these values instead of repeating them. The code holds the values: `plugin/src/ui/look.ts` for the terminal, `style.css`, `app.js` and `index.html` for the phone.
 
@@ -61,7 +61,7 @@ Contrast is against the phone's `--bg` (`#141416`, `#f6f5f2`); the checker recom
 |---|---|
 | `dark`, `dark-daltonized` | the dark values |
 | `light`, `light-daltonized` | the light values |
-| `custom:<name>` | by the `base` in `~/.claude/themes/<name>.json` (`$CLAUDE_CONFIG_DIR` if set); dark if unreadable |
+| `custom:<name>` | by the `base` in `~/.claude/themes/<name>.json` (`$CLAUDE_CONFIG_DIR` if set, the session's folder if set but empty); dark if unreadable |
 | `auto` | `COLORFGBG`'s background index: 7 or 9–15 light, anything else (or unset) dark |
 | `dark-ansi`, `light-ansi` | theme keys instead, below |
 | anything else | the dark values |
@@ -292,6 +292,11 @@ Keys, layout and behaviour are in [`SPEC.md`](SPEC.md). The terminal's spacing i
 ## 11. Changelog
 
 Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one or more `- Change:` lines and one or more `- Why:` lines. The newest entry ends with `Fingerprint: <hash>` of the design values in the code (`bun tools/check-design.ts --fingerprint` prints it). Versions: major when a meaning changes or something goes (a glyph means something else, a colour role moves); minor when something is added; patch for a value tweak or a doc fix. Entries are never removed.
+
+### 5.0.1 — 2026-10-25
+- Change: A custom theme's file is read from the session's folder when `CLAUDE_CONFIG_DIR` is set but empty.
+- Why: Claude Code keeps an empty `CLAUDE_CONFIG_DIR` as it is, so that is where it reads the theme from.
+Fingerprint: 58295af87f4e
 
 ### 5.0.0 — 2026-10-24
 - Change: The edit card's back button reads `[ esc back ]` (was `[ esc cancel ]`).

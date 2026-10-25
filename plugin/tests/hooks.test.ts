@@ -859,10 +859,8 @@ test('with CLAUDE_CONFIG_DIR set but empty, a custom theme is read from the work
   on('config.set', (_, e) => ({ value: e.value }))
   const dir = fixture()
   dir.put('/home/me/.claude/themes/ink.json', JSON.stringify({ name: 'Ink', base: 'dark' }))
-  // The kit reads a relative path from the plugin's folder, the one holding tests/ (Bun's
-  // import.meta.dir, which the engine's types don't declare).
-  const tests = (import.meta as ImportMeta & { dir: string }).dir
-  dir.put(`${tests.replace(/\/tests$/, '')}/themes/ink.json`, JSON.stringify({ name: 'Ink', base: 'light' }))
+  dir.put('/home/me/Work/cc/themes/ink.json', JSON.stringify({ name: 'Ink', base: 'light' }))
+  on('session.cwd', () => ({ value: '/home/me/Work/cc' }))
   await startSession($, on, dir, '', undefined, { CLAUDE_CONFIG_DIR: '' })
   await run($, 'jot', '')
   const ui = await mountPane($)

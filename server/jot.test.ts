@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -265,6 +265,27 @@ describe('ostrakon jot', () => {
     )
     await jot(['y'], fromShell.deps)
     expect(seen).toEqual(['https://old/api/notes', 'https://inline/api/notes'])
+  })
+
+  test('reads a ~ in the plugin folders as home, and a relative folder as none, as Claude Code does', async () => {
+    const seen: string[] = []
+    const spy: JotDeps['fetch'] = async url => {
+      seen.push(url)
+      return new Response('{}', { status: 500 })
+    }
+    const tilde = setup(leftover({ env: { CLAUDE_CODE_PLUGIN_DIRS: '~/mod' } }), {}, spy)
+    mkdirSync(join(tilde.home, 'mod'))
+    cpSync(join(MOD, '.claude-plugin'), join(tilde.home, 'mod', '.claude-plugin'), { recursive: true })
+    await jot(['x'], tilde.deps)
+    const relative = setup(leftover({ env: { CLAUDE_CODE_PLUGIN_DIRS: 'plugin' } }), {}, spy)
+    const was = process.cwd()
+    process.chdir(join(MOD, '..'))
+    try {
+      await jot(['y'], relative.deps)
+    } finally {
+      process.chdir(was)
+    }
+    expect(seen).toEqual(['https://old/api/notes', 'https://current/api/notes'])
   })
 
   test("the settings' plugin folders go over the shell's, an empty list included", async () => {

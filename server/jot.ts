@@ -43,7 +43,10 @@ const path = (value: unknown) => (typeof value === 'string' && value !== '' ? va
 const record = (value: unknown): Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 
-const isModFolder = (dir: string) => {
+// As Claude Code reads a folder in the list: a leading ~ is home; a relative one loads nothing.
+const isModFolder = (home: string, entry: string) => {
+  const dir = entry.replace(/^~(?=\/|$)/, home)
+  if (!dir.startsWith('/')) return false
   try {
     return record(JSON.parse(readFileSync(`${dir.replace(/\/+$/, '')}/.claude-plugin/plugin.json`, 'utf8'))).name === 'ostrakon'
   } catch {
@@ -52,13 +55,13 @@ const isModFolder = (dir: string) => {
 }
 
 // Which plugin entry the sessions here read their options from (SPEC §9.5). A copy loaded from a
-// folder (CLAUDE_CODE_PLUGIN_DIRS, the settings' over the shell's) reads `ostrakon`, then
+// folder (CLAUDE_CODE_PLUGIN_DIRS, `:`-separated, the settings' over the shell's) reads `ostrakon`, then
 // `ostrakon@inline`, and Claude Code then skips an installed copy; one installed with `claude plugin
 // install` alone reads `ostrakon@ostrakon`. A `--plugin-dir` on the command line can't be seen here.
-const entriesOf = (settings: { env?: unknown; enabledPlugins?: unknown }, shellDirs: string | undefined) => {
+const entriesOf = (home: string, settings: { env?: unknown; enabledPlugins?: unknown }, shellDirs: string | undefined) => {
   const fromSettings = record(settings.env).CLAUDE_CODE_PLUGIN_DIRS
   const dirs = typeof fromSettings === 'string' ? fromSettings : (shellDirs ?? '')
-  const folder = dirs.split(':').some(dir => dir !== '' && isModFolder(dir))
+  const folder = dirs.split(':').some(dir => dir !== '' && isModFolder(home, dir))
   const market = Boolean(record(settings.enabledPlugins)['ostrakon@ostrakon'])
   return market && !folder ? ['ostrakon@ostrakon'] : ['ostrakon', 'ostrakon@inline']
 }
@@ -67,7 +70,7 @@ const entriesOf = (settings: { env?: unknown; enabledPlugins?: unknown }, shellD
 // the first entry that has both, so a leftover entry's URL never meets another's token. Throws a
 // SyntaxError for a file that isn't JSON, and a TypeError for JSON that isn't an object (`[1]`),
 // which Claude Code can't read either.
-export const settingsOf = (file: string, shellDirs?: string): Settings => {
+export const settingsOf = (file: string, home: string, shellDirs?: string): Settings => {
   let raw: string
   try {
     raw = readFileSync(file, 'utf8')
@@ -77,7 +80,7 @@ export const settingsOf = (file: string, shellDirs?: string): Settings => {
   const parsed = JSON.parse(raw) as unknown
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new TypeError('not an object')
   const s = parsed as { env?: unknown; enabledPlugins?: unknown; pluginConfigs?: unknown }
-  const entries = entriesOf(s, shellDirs).map(name => record(record(record(s.pluginConfigs)[name]).options))
+  const entries = entriesOf(home, s, shellDirs).map(name => record(record(record(s.pluginConfigs)[name]).options))
   const hub = entries.find(options => text(options.hubUrl) !== undefined && text(options.hubToken) !== undefined)
   const notesDir = entries.map(options => path(options.notesDir)).find(value => value !== undefined)
   return { envDir: path(record(s.env).OSTRAKON_DIR), notesDir, hubUrl: text(hub?.hubUrl), hubToken: text(hub?.hubToken) }
@@ -174,7 +177,7 @@ export const jot = async (args: string[], deps: JotDeps): Promise<{ out: string[
   const file = settingsFileOf(deps.home, deps.env)
   let settings: Settings
   try {
-    settings = settingsOf(file, deps.env.CLAUDE_CODE_PLUGIN_DIRS)
+    settings = settingsOf(file, deps.home, deps.env.CLAUDE_CODE_PLUGIN_DIRS)
   } catch (error) {
     return { out: [], err: [`ostrakon jot: ${file} isn't ${error instanceof SyntaxError ? 'valid JSON' : 'a JSON object'}`], code: 1 }
   }
