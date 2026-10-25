@@ -619,7 +619,7 @@ const append = (
     role?: 'user' | 'assistant'
     agentId?: string
     name?: string
-    origin?: { kind: 'composer' } | { kind: 'engine' } | { kind: 'plugin'; name: string; asUser?: true }
+    origin?: { kind: 'composer' } | { kind: 'engine' } | { kind: 'plugin'; name: string; asUser?: true } | { kind: 'plugin'; event: string }
   } = { door: 'prompt' },
 ) =>
   $.session.append({
@@ -750,7 +750,7 @@ test("a note held in the prompt is not marked sent by a person's row that carrie
 test("a plugin's row carrying a queued note's text marks nothing; the queued prompt's own row still does", async ($, on) => {
   const { dir, ui, clock, text } = await queued($, on)
   await append($, text, { door: 'prompt', origin: { kind: 'plugin', name: 'other', asUser: true } })
-  await append($, text, { door: 'attachment', origin: { kind: 'plugin', name: 'other' } })
+  await append($, text, { door: 'attachment', origin: { kind: 'plugin', event: 'prompt.submit' } })
   await clock.advance(10)
   expect(noteIn(dir, ONE).status).toBe('open')
   await append($, text, { door: 'delivery', name: 'queued_command', origin: { kind: 'engine' } })
@@ -800,6 +800,10 @@ test('a queued note taken back inside a longer note held in the prompt is no lon
 test('a queued prompt taken back and submitted again marks its note once its row enters', async ($, on) => {
   const { dir, ui, clock, text } = await queued($, on)
   await change($, text, { kind: 'engine' })
+  // Taken back, it's no longer queued: a row of another kind carrying its text isn't its row.
+  await append($, text, { door: 'attachment', name: 'nested_memory', origin: { kind: 'engine' } })
+  await clock.advance(10)
+  expect(noteIn(dir, ONE).status).toBe('open')
   await $.prompt.submit({ text, wait: false, origin: { kind: 'composer' }, turnId: 'turn-3' })
   expect(noteIn(dir, ONE).status).toBe('open')
   await append($, text, { door: 'delivery', name: 'queued_command' })
@@ -818,10 +822,11 @@ test('a queued prompt taken back and submitted once idle marks its note at once'
   await ui.unmount()
 })
 
-test('a recalled history entry or a plugin fill holding a queued note leaves it queued', async ($, on) => {
+test('a recalled history entry, an undo or a plugin fill holding a queued note leaves it queued', async ($, on) => {
   const { dir, ui, clock, text } = await queued($, on)
   await change($, text, { kind: 'history' })
   await change($, text, { kind: 'plugin', name: 'ostrakon' })
+  await change($, text, { kind: 'undo' })
   await append($, text, { door: 'delivery', name: 'queued_command' })
   await clock.advance(10)
   expect(noteIn(dir, ONE).status).toBe('sent')

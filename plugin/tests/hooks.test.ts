@@ -281,6 +281,8 @@ test('an edit closed on a note sent meanwhile opens on the list, its draft kept 
   expect(await ui.find({ type: 'Input', key: 'edit' })).toBeUndefined()
   expect((await texts(ui)).some(text => /draft kept/.test(text))).toBe(false)
   expect(await ui.find({ type: 'Text', text: /rename the store helpers/ })).toBeDefined()
+  // The browse footer, not the edit card's.
+  expect(await ui.find({ type: 'Text', text: /^ctrl\+s all projects$/ })).toBeDefined()
   // Back on the list, the note picks the draft up again.
   dir.put(file, dir.get(file)?.replace('status: sent', 'status: open') ?? '')
   await clock.advance(2000)
@@ -288,6 +290,41 @@ test('an edit closed on a note sent meanwhile opens on the list, its draft kept 
   await ui.press({ key: 'key-e' })
   const field = await ui.find({ type: 'Input', key: 'edit' })
   expect((field?.props as { value?: string } | undefined)?.value).toBe('half-edited text')
+  await ui.unmount()
+})
+
+// Another project's note, reached by a search (scope all), edited, the pane closed. The query
+// clears with the close, so the scope is back on this project when the pane opens again.
+const closedOnInfraEdit = async ($: Engine, on: Parameters<typeof startSession>[1]) => {
+  const dir = fixture()
+  const { clock } = await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: 'metric', kind: 'change' })
+  await ui.input({ key: 'q', text: 'metric', kind: 'submit' })
+  await ui.press({ key: 'key-e' })
+  await ui.input({ key: 'edit', text: 'half-edited metric', kind: 'change' })
+  await ui.press({ key: 'key-pane:previous' })
+  return { dir, clock, ui }
+}
+
+test("an edit of another project's note closed and reopened comes back on the card, scope all", async ($, on) => {
+  const { ui } = await closedOnInfraEdit($, on)
+  await run($, 'jot', '')
+  const field = await ui.find({ type: 'Input', key: 'edit' })
+  expect((field?.props as { value?: string } | undefined)?.value).toBe('half-edited metric')
+  expect(await ui.find({ type: 'Text', text: /^ all · 3 open$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test("an edit of another project's note closed on a note sent meanwhile opens on this project's list", async ($, on) => {
+  const { dir, clock, ui } = await closedOnInfraEdit($, on)
+  const file = '/data/notes/01JA7K2M3Q9X4ZB6C8D0EFGH03.md'
+  dir.put(file, dir.get(file)?.replace('status: open', 'status: sent') ?? '')
+  await clock.advance(2000)
+  await run($, 'jot', '')
+  expect(await ui.find({ type: 'Input', key: 'edit' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^ this project · 2 open$/ })).toBeDefined()
   await ui.unmount()
 })
 

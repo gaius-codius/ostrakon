@@ -113,6 +113,22 @@ test('a note archived while its edit card waits under the sheet: the sheet close
   await ui.unmount()
 })
 
+test('a note archived while its edit card waits under the sheet: ctrl+x tab hands the keys over with the list behind, not the card', async ($, on) => {
+  const { world, ui } = await opened($, on)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-e' })
+  await ui.press({ key: CHORD_KEY })
+  expect(await sheetUp(ui)).toBe(true)
+  const archive = world.tools.find(tool => tool.name === 'archive')?.registeredAs ?? 'archive'
+  await $.tool.call({ tool: archive, id: '01JA7K2M3Q9X4ZB6C8D0EFGH01' } as never)
+  await ui.press({ key: 'key-switch' })
+  expect(await sheetUp(ui)).toBe(false)
+  expect(await ui.find({ type: 'Input', key: 'edit' })).toBeUndefined()
+  expect(await shows(ui, /draft kept/)).toBe(false)
+  expect(await shows(ui, /^ctrl\+x i$/)).toBe(true)
+  await ui.unmount()
+})
+
 test('the bundle answers the chord and stays as it is', async ($, on) => {
   const { ui } = await opened($, on)
   await ui.input({ key: 'q', text: '', kind: 'submit' })

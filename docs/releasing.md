@@ -10,8 +10,10 @@ time. The steps that actually cut the release are at the end, and in [`CONTRIBUT
   every test against the `claude` you have, so a change in the mods interface usually shows up here
   first.
 - Use it for real in a session: capture with `/jot` and `//`, open the pane with `ctrl+x s`,
-  pull a note in from the pocket, and let harvest run once. The tests can't see everything the
-  terminal draws.
+  pull a note in from the pocket, and let harvest run once. Fill a note, send it while a turn runs,
+  take the queued prompt back and delete it: the note stays open. Fill it again and let the queued
+  prompt go in: it's marked sent. Run `ostrakon jot` once with a hub set. The tests can't see
+  everything the terminal draws, or how the engine marks a queued prompt taken back.
 - Run `ostrakon doctor` and fix anything it marks. Its "the mod in a session" part should name the
   Claude Code version you just used, with no problems listed.
 
@@ -45,7 +47,8 @@ time. The steps that actually cut the release are at the end, and in [`CONTRIBUT
 - The README, [`docs/phone.md`](phone.md) and `docs/SPEC.md` describe what the release does, not
   what the last one did.
 - Screenshots in the README, if the pane, the band or the phone app look different:
-  `tools/screens/readme.sh` takes both again, on the same fixture notes.
+  `tools/screens/readme.sh` takes them all again (the pane, the phone and the demo GIF with its
+  still), on the same fixture notes.
 - [`ROADMAP.md`](../ROADMAP.md): take out anything this release built.
 
 ## 5. Cut it

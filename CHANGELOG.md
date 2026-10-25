@@ -18,23 +18,18 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 - In a new note (`ctrl+n`), `ctrl+s` opens a project picker instead of stepping through every project: type part of a name and press Enter. The picked project now lasts until the pane closes; the next time it opens, new notes go to this session's project again.
 - With nothing open in this project but some sent or archived notes, the pane shows the project's heading instead of the empty page: `↓` then `h` shows the history.
 - The footer's `ctrl+s` says where it goes (`all projects` or `this project`) instead of `scope`.
-- The edit card's `[ esc cancel ]` is now `[ esc back ]`: it keeps the draft.
+- The edit card's `[ esc cancel ]` is now `[ esc back ]`: it keeps the draft, as Esc does, and `e` on that note picks it back up.
 - The move picker (`m`) is a field like the new-note project picker: type part of a project's name and press Enter to move the note there. It used to be a list you stepped through with the arrow keys.
 
 ### Fixed
 
-- Two notes put into one prompt before you send it (two chips, `;1` then `;2`, or a chip and `t`) are both marked sent. Before, only the second was.
+- Two notes put into one prompt before you send it (two chips, or a chip and `t`) are both marked sent. Before, only the second was.
 - After `m` moves a note out of this project's list, the row that took its place is selected, as after an archive. Before, the search field took the keys.
-- After you leave an edit with Esc, the pane opens on the list again, not in the edit card. It opens in the edit card only if it closed while that was showing. `[ esc back ]` now keeps the draft as Esc does: `e` on that note picks it back up.
-- A note whose text sits inside another note's is no longer marked sent when you delete it from the prompt and the longer note is in the prompt twice.
+- After you leave an edit with Esc, the pane opens on the list again, not in the edit card. It opens in the edit card only if it closed while that was showing.
 - A note put in the prompt is no longer marked sent when you send a longer note that contains its text with `s`, or when you took its queued prompt back and deleted it.
 - If the pane closed in the edit card and that note was sent or archived before it opened again, it now opens on the list. Before, it opened in edit mode with no card and ignored typing until Esc.
-- In the move picker and the new-note project picker, a project's whole name typed comes first, so Enter can pick `api` even when `api-server` is listed above it.
-- A note put into the prompt again while it waits in the queue is still marked sent when that queued prompt goes in.
-- A session open while the mod updates keeps marking notes sent; before, the pane's state from the older version broke it until a restart.
-- `ostrakon jot` and `ostrakon doctor` read the hub's address and token from one plugin entry in the settings, never one from each.
-- `ostrakon jot` and `ostrakon doctor` read the settings from `CLAUDE_CONFIG_DIR` when it's set, as Claude Code does.
-- When the hub refuses the token, `ostrakon jot` no longer says a session will send the note later: sessions use that token too.
+- `ostrakon doctor` reads the hub's address and token from one plugin entry in the settings, never one from each.
+- `ostrakon doctor` and `install.sh` use the settings in `CLAUDE_CONFIG_DIR` when it's set, as Claude Code does.
 
 ## [0.7.0] - 2026-10-22
 

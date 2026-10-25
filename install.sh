@@ -8,10 +8,12 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)
 BIN=$HOME/.local/bin
-SETTINGS=$HOME/.claude/settings.json
+# As Claude Code finds its settings: CLAUDE_CONFIG_DIR when set, else ~/.claude.
+CONFIG_DIR=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+SETTINGS=$CONFIG_DIR/settings.json
 ENV_FILE=$HOME/.config/ostrakon-hub/env
 UNIT_DIR=$HOME/.config/systemd/user
-KEYS_FILE=$HOME/.claude/keybindings.json
+KEYS_FILE=$CONFIG_DIR/keybindings.json
 
 want_hub=0 want_release=0 want_keys=ask rest=()
 for arg in "$@"; do
@@ -38,7 +40,7 @@ fi
 
 has claude || say "! claude not found: install Claude Code (with mods support) to use the mod"
 
-# The mod: CLAUDE_CODE_PLUGIN_DIRS in ~/.claude/settings.json, set only when it isn't already.
+# The mod: CLAUDE_CODE_PLUGIN_DIRS in the settings, set only when it isn't already.
 say "== mod"
 if ! has python3; then
   say "! python3 not found; add this to $SETTINGS yourself:"
@@ -72,7 +74,7 @@ else:
 EOF
 fi
 
-# The keybindings: the README's, added to ~/.claude/keybindings.json key by key. A key bound to
+# The keybindings: the README's, added to keybindings.json beside the settings, key by key. A key bound to
 # something else, or an action the person already gave another key, is left as it is.
 keys_py=$(cat <<'EOF'
 import json, os, shutil, sys
