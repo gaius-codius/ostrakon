@@ -68,7 +68,7 @@ export type World = {
 export type Where = { repo: { root: string; remote: string | null } | null; root: string }
 const IN_CC: Where = { repo: { root: '/home/me/Work/cc', remote: 'git@github.com:me/cc.git' }, root: '/home/me/Work/cc' }
 
-export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '', where: Where = IN_CC) => {
+export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '', where: Where = IN_CC, env: Record<string, string> = {}) => {
   const engine = $
   const world: World = {
     box: { text: draft },
@@ -82,7 +82,7 @@ export const startSession = async ($: Engine, on: On, dir: MemDir, draft = '', w
     tools: [],
   }
   const clock = mock.clock(on, { now: Date.parse('2026-10-09T12:00:00.000Z') })
-  mock.env(on, { OSTRAKON_DIR: '/data', HOME: '/home/me' })
+  mock.env(on, { OSTRAKON_DIR: '/data', HOME: '/home/me', ...env })
   mock.store(on)
   engineOver(on, dir)
   on('ui.log', () => ({ value: undefined }))

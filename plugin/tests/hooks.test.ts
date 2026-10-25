@@ -969,6 +969,24 @@ test('project colours follow the theme: light, a 16-colour one, a custom theme b
   await ui.unmount()
 })
 
+test('with CLAUDE_CONFIG_DIR set but empty, a custom theme is read from the working directory, as Claude Code reads it', async ($, on) => {
+  on('config.list', () => ({ value: [{ ...THEME_ROW, value: 'dark' }] }))
+  on('config.set', (_, e) => ({ value: e.value }))
+  const dir = fixture()
+  dir.put('/home/me/.claude/themes/ink.json', JSON.stringify({ name: 'Ink', base: 'dark' }))
+  dir.put('/home/me/Work/cc/themes/ink.json', JSON.stringify({ name: 'Ink', base: 'light' }))
+  on('session.cwd', () => ({ value: '/home/me/Work/cc' }))
+  await startSession($, on, dir, '', undefined, { CLAUDE_CONFIG_DIR: '' })
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  await $.config.set({ key: 'theme', value: 'custom:ink', previous: 'dark', provider: THEME_ROW.provider, origin: { kind: 'composer' } })
+  await ui.redraw(PANE.props)
+  const dots = (await ui.findAll({ type: 'Text', text: GLYPH.dot })).map(dot => dot.props.color)
+  expect(dots).toContain('#6f3fd1')
+  await ui.unmount()
+})
+
 test('the empty pane names its scope and offers ctrl+n for a new note', async ($, on) => {
   await startSession($, on, new MemDir())
   await run($, 'jot', '')
