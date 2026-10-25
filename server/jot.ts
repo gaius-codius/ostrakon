@@ -215,7 +215,7 @@ export const jot = async (args: string[], deps: JotDeps): Promise<{ out: string[
     sessionsHub && problem === REFUSED
       ? token === settings.hubToken
         ? "Sessions here use that token too: copy HUB_TOKEN from the hub's env file into hubToken."
-        : 'Sessions here use the hubToken in the settings.'
+        : 'A session here sends it with the hubToken in the settings, if the hub takes that one.'
       : sessionsHub
         ? 'Claude Code sends it once a session runs here.'
         : settings.hubUrl

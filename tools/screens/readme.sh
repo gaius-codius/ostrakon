@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The README's screenshots: the docked pane (with the pocket's chips under it) and the phone app,
 # on the same fixture notes. Runs a throwaway hub on 127.0.0.1:8794 and a real Claude Code session that syncs
-# the fixture to it, then shoots the phone page in headless Chromium. Output: docs/images/*.png.
+# the fixture to it, then shoots the phone page in headless Chromium. Output: docs/images/*.png and
+# the demo GIF.
 # Re-run before a release when the pane, the band or the phone look different (docs/releasing.md).
 # Claude Code's header names the account and the folder, so it's painted over.
 # Needs: tmux, chromium, python3, bun, and ImageMagick (magick).

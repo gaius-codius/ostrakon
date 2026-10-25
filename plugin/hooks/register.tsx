@@ -487,7 +487,8 @@ const focusOf = (state: PaneState, lines: Line[], problemCount: number): Focus =
   }
 }
 
-// Whether a note has a row on the list this state draws: one sent, archived or filtered out has none.
+// Whether a note has a row on the list this state draws: one filtered out has none, nor one sent or
+// archived while history is hidden.
 const isListed = async ($: EngineInterface, state: PaneState, id: string | undefined) => {
   const all = Object.values(await read($, notes))
   const ctx: Ctx = { now: await $.clock.now(), current: project, labels: labelsOf(projectsOf(all)) }
@@ -950,7 +951,7 @@ const fillPrompt = async ($: EngineInterface, text: string, ids: string[], isFro
 // `ids` sent. The pane closes if it's open, except on a fill from the band (SPEC §10): the band or
 // the prompt holds the keys then, so the pane is beside the prompt, kept there to write with.
 const afterFill = async ($: EngineInterface, text: string, ids: string[], isFromBand = false) => {
-  // Added to the fills since the last submit. The same text filled again counts once, for every
+  // Added to the fills held for the next submit. The same text filled again counts once, for every
   // note that filled it.
   await setPane($, current => {
     // A fill already waiting in the queue stays queued: filling it again doesn't take it back.
@@ -1774,9 +1775,9 @@ export const register: Register = (on, options) => {
   // A note the pane or band put into the prompt is sent once a submit carrying that text goes in.
   on('prompt.submit', async ($, e, next) => {
     const fills = e.origin.kind === 'composer' ? (await read($, pane)).fills : []
-    // Only the person's next submit after the fills counts: once one goes in, they're spent, so a
-    // later prompt that happens to contain a short note's text never marks it. A dropped submit
-    // spends nothing: the retry still counts.
+    // Only the person's next submit after the fills counts: once one goes in, they're spent (a queued
+    // one waits for its row), so a later prompt that happens to contain a short note's text never
+    // marks it. A dropped submit spends nothing: the retry still counts.
     const result = await next(e)
     if ('drop' in result && result.drop) return result
     if (fills.length === 0) return result

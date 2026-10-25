@@ -256,7 +256,7 @@ describe('ostrakon jot', () => {
     const otherToken = setup(settings, { OSTRAKON_HUB_URL: 'https://hub', OSTRAKON_HUB_TOKEN: 'typo' }, refusing)
     const envRefused = (await jot(['y'], otherToken.deps)).err[0]
     expect(envRefused).not.toContain('Claude Code sends it')
-    expect(envRefused).toContain('hubToken in the settings')
+    expect(envRefused).toContain('sends it with the hubToken in the settings, if the hub takes that one')
   })
 
   test('keeps the notesDir option as given, as the mod does', async () => {
