@@ -576,7 +576,7 @@ const draftItem = request => {
   const state = request.state
   if (state === 'waiting') parts.push(make('p', 'state', 'waiting to draft'), row(discard()))
   if (state === 'drafting') parts.push(make('p', 'state', 'drafting…'))
-  if (state === 'approved') parts.push(make('p', 'state', 'waiting to file'))
+  if (state === 'approved') parts.push(make('p', 'state', 'waiting to file'), row(discard()))
   if (state === 'filing') parts.push(make('p', 'state', 'filing…'))
   if (state === 'drafted' && request.draft) {
     const { title, body, labels } = request.draft
@@ -615,6 +615,7 @@ const draftItem = request => {
         row(
           save,
           act('Not filed', () => requestStep(request, 'not-filed', { seq: request.seq }), 'btn quiet'),
+          discard(),
         ),
       )
     } else {
@@ -630,9 +631,12 @@ const draftItem = request => {
         row(
           there,
           act('Not filed', () => requestStep(request, 'not-filed', { seq: request.seq }), 'btn quiet'),
+          discard(),
         ),
       )
     }
+    // Discard hands it to the person: the hub stops looking, and the issue may be on GitHub.
+    parts.push(make('p', 'state', 'Discard stops the hub checking. The issue may still exist.'))
   }
   if (state === 'failed')
     parts.push(

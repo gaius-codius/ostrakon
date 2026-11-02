@@ -463,7 +463,8 @@ test('picking a project on Move to moves the note and closes the menu', async ()
 
 // ---- filing a note as an issue: File as issue in the menu, then Drafts ----
 // The test hub (hub.ts) files to me/ostrakon (public) and me/pane (private), and a note's text
-// steers it: `[nodraft]` fails the draft, `[unsure]` gets no answer from GitHub.
+// steers it: `[nodraft]` fails the draft, `[unsure]` gets no answer from GitHub, `[slow]` takes 3 s
+// to file.
 
 const SCREENS = process.env.SCREENS_DIR || '/tmp/ostrakon-phone-screens'
 
@@ -600,6 +601,37 @@ test("an unsure filing: the person checks GitHub, then says Not filed or It's th
   await draftOf(id).waitFor({ state: 'detached' })
   await rowOf(id).waitFor({ state: 'detached' })
   await page.locator('#toast-text', { hasText: 'Filed · me/ostrakon#77' }).waitFor()
+})
+
+test('Discard on an unsure filing says the issue may exist, and drops the request', async () => {
+  const id = '01JA7K2M3Q9X4ZB6C8D0EFGK0H'
+  await push(note(id, '[unsure] The band drops a chip on resize', 'ostrakon'))
+  await askDraft(id)
+  await tapIn(draftOf(id, 'drafted'), 'File')
+  const item = draftOf(id, 'unsure')
+  await item.waitFor()
+  assert.equal(await item.locator('.state').textContent(), 'Discard stops the hub checking. The issue may still exist.')
+  await tapIn(item, 'Discard')
+  await draftOf(id).waitFor({ state: 'detached' })
+  assert.equal((await requestOf(id)) ?? null, null)
+  assert.equal(await rowOf(id).count(), 1, 'Discard took the note away')
+})
+
+test('a request waiting to file behind another can be discarded, and is never filed', async () => {
+  const [slow, behind] = ['01JA7K2M3Q9X4ZB6C8D0EFGK0J', '01JA7K2M3Q9X4ZB6C8D0EFGK0K']
+  await push(note(slow, '[slow] Pairing times out on a slow link', 'ostrakon'), note(behind, 'The pane loses focus after a resize', 'ostrakon'))
+  await askDraft(slow)
+  await askDraft(behind)
+  await tapIn(draftOf(slow, 'drafted'), 'File')
+  await draftOf(slow, 'filing').waitFor()
+  await tapIn(draftOf(behind, 'drafted'), 'File')
+  const item = draftOf(behind, 'approved')
+  await item.waitFor()
+  assert.equal(await item.locator('.state').textContent(), 'waiting to file')
+  await tapIn(item, 'Discard')
+  await draftOf(behind).waitFor({ state: 'detached' })
+  await draftOf(slow).waitFor({ state: 'detached', timeout: 10000 })
+  assert.equal(await rowOf(behind).count(), 1, 'the discarded note was filed')
 })
 
 test('a draft that fails shows why, with Retry and Discard', async () => {

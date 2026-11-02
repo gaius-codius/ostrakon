@@ -33,7 +33,9 @@ Moving, archiving and marking sent can all be undone from the message that pops 
   Nothing is filed until you choose **File**.
 - Once filed, the note is marked sent with an `issue:` line pointing at the issue.
 - If the hub couldn't tell whether GitHub took it, check the repo's issues, then choose
-  **It's there** (paste the issue's link) or **Not filed** (file it again).
+  **It's there** (paste the issue's link) or **Not filed** (file it again). **Discard** gives
+  up on it: the hub stops checking, and the issue may still be on GitHub.
+- A request waiting to be filed can be discarded too, until the hub starts filing it.
 - These buttons need the hub: they're off while it can't be reached, and never queued.
 
 **It works offline.** Saving never waits for the network: notes are queued on the phone and sent

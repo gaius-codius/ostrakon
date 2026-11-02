@@ -1,6 +1,7 @@
 // The test hub for the phone tests (run.sh): the real hub, with filing stubbed. It files to
 // me/ostrakon (public) and me/pane (private); a note's text steers it: `[nodraft]` fails the
-// draft, `[refuse]` is refused by GitHub, `[unsure]` gets no answer. Issues are numbered from 1.
+// draft, `[refuse]` is refused by GitHub, `[unsure]` gets no answer, `[slow]` takes 3 s to file (so a request filed after it waits as
+// approved). Issues are numbered from 1.
 import { serve } from '../../server/hub'
 import { type Filing, NotCreated } from '../../server/requests'
 
@@ -17,6 +18,7 @@ const filing: Filing = {
   file: async request => {
     if (request.text.includes('[refuse]')) throw new NotCreated('label not found')
     if (request.text.includes('[unsure]')) throw new Error('no answer from GitHub')
+    if (request.text.includes('[slow]')) await Bun.sleep(3000)
     issues += 1
     return `https://github.com/${request.repo}/issues/${issues}`
   },

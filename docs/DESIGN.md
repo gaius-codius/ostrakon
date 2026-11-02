@@ -1,6 +1,6 @@
 # Ostrakon design system
 
-Version: 6.1.0
+Version: 6.2.0
 
 What the terminal mod (the pane, the band and the prompt hint, in `plugin/`) and the phone (`server/public/`) must agree on: colour roles, the project palette, the phone's tokens, symbols, fixed copy, motion and the accessibility bar. [`SPEC.md`](SPEC.md) describes behaviour and points here for these values instead of repeating them. The code holds the values: `plugin/src/ui/look.ts` for the terminal, `style.css`, `app.js` and `index.html` for the phone.
 
@@ -232,6 +232,7 @@ Strings the surfaces or the docs depend on, each checked word for word in every 
 | `Couldn't tell if it was filed. Check GitHub.` | server/public/app.js, docs/SPEC.md | a filing with no clear answer |
 | `It's there` | server/public/app.js, docs/SPEC.md | its button to paste the issue's URL |
 | `Not filed` | server/public/app.js, docs/SPEC.md | its button to file again |
+| `Discard stops the hub checking. The issue may still exist.` | server/public/app.js, docs/SPEC.md | under its buttons: Discard there leaves the issue to the person |
 | `Filed` | server/public/app.js, docs/SPEC.md | the toast once a request is filed: `Filed · owner/repo#12` |
 
 ## 7. Motion
@@ -305,6 +306,11 @@ Keys, layout and behaviour are in [`SPEC.md`](SPEC.md). The terminal's spacing i
 ## 11. Changelog
 
 Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one or more `- Change:` lines and one or more `- Why:` lines. The newest entry ends with `Fingerprint: <hash>` of the design values in the code (`bun tools/check-design.ts --fingerprint` prints it). Versions: major when a meaning changes or something goes (a glyph means something else, a colour role moves); minor when something is added; patch for a value tweak or a doc fix. Entries are never removed.
+
+### 6.2.0 — 2026-11-03
+- Change: Drafts offers **Discard** on a request waiting to file and on one the hub couldn't tell was filed; the second shows `Discard stops the hub checking. The issue may still exist.` under its buttons. New copy in §6.
+- Why: A request waiting to file (filing off) or unsure had no way to be dropped (#117). An unsure one may already be on GitHub, so the line says so before the person gives it up.
+Fingerprint: 019a9088e946
 
 ### 6.1.0 — 2026-11-02
 - Change: The phone's note actions add **File as issue** (an issue icon: a ring with a dot) on a note under a GitHub repo the hub files to, and a **Drafts** section above the inbox lists the requests with their state, the draft's repo and visibility (`owner/repo · public`), title, labels and body, and File, New draft and Discard. New copy in §6.

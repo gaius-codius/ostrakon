@@ -430,21 +430,76 @@ describe('discarding', () => {
     expect((await t2.step(failing.id, 'discard')).body.request.state).toBe('discarded')
   })
 
-  test("drafting, approved, filing, unsure and filed can't be discarded", async () => {
+  test('an approved request discarded before filing claims it is never filed', async () => {
     const t = fresh({ run: false })
     const request = await drafted(t)
     await t.step(request.id, 'file', { revision: 1 })
-    expect((await t.step(request.id, 'discard')).status).toBe(409)
+    const discarded = await t.step(request.id, 'discard')
+    expect(discarded.status).toBe(200)
+    expect(discarded.body.request.state).toBe('discarded')
+    await t.runner.kick()
+    expect(t.calls.file).toEqual([])
+    expect(t.hub.requests.get(request.id)?.state).toBe('discarded')
+  })
+
+  test('an unsure request discarded is never looked up or filed again, even after a restart', async () => {
+    const t = fresh({ run: false })
+    const request = await drafted(t)
+    t.answers.file = async () => {
+      throw new Error('lost')
+    }
+    await t.step(request.id, 'file', { revision: 1 })
+    await t.runner.kick()
+    expect(t.hub.requests.get(request.id)?.state).toBe('unsure')
+    expect(t.calls.find).toHaveLength(1)
+    expect((await t.step(request.id, 'discard')).body.request.state).toBe('discarded')
+    // Not filed after it changes nothing: it stays discarded.
+    expect((await t.step(request.id, 'not-filed', { seq: request.seq })).status).toBe(409)
+    await t.runner.kick()
+    t.hub.close()
+    const again = fresh({ run: false, dir: t.dir })
+    await again.runner.kick()
+    expect(again.calls.find).toEqual([])
+    expect(again.calls.file).toEqual([])
+    expect(again.hub.requests.get(request.id)?.state).toBe('discarded')
+    again.hub.close()
+    expect(t.calls.find).toHaveLength(1)
+    expect(t.calls.file).toHaveLength(1)
+  })
+
+  test('an issue a lookup finds after the person discarded the request is not recorded', async () => {
+    const t = fresh({ run: false })
+    const request = await drafted(t)
+    t.answers.file = async () => {
+      throw new Error('lost')
+    }
+    const lookup = held<string | null>()
+    t.answers.find = () => lookup.promise
+    await t.step(request.id, 'file', { revision: 1 })
+    const running = t.runner.kick()
+    while (t.calls.find.length === 0) await Bun.sleep(1)
+    expect((await t.step(request.id, 'discard')).body.request.state).toBe('discarded')
+    lookup.release('https://github.com/me/cc/issues/5')
+    await running
+    expect(t.hub.requests.get(request.id)).toMatchObject({ state: 'discarded', issue: null })
+    expect(t.hub.note(A)?.extra).toEqual([])
+  })
+
+  test("drafting, filing and filed can't be discarded", async () => {
+    const t = fresh({ run: false })
+    const request = await drafted(t)
+    await t.step(request.id, 'file', { revision: 1 })
     const file = held<string>()
     t.answers.file = () => file.promise
     const running = t.runner.kick()
-    expect((await t.step(request.id, 'discard')).status).toBe(409)
+    const refused = await t.step(request.id, 'discard')
+    expect(refused.status).toBe(409)
+    expect(refused.body.request.state).toBe('filing')
     file.fail(new Error('lost'))
     await running
-    expect(t.hub.requests.get(request.id)?.state).toBe('unsure')
-    expect((await t.step(request.id, 'discard')).status).toBe(409)
     await t.step(request.id, 'found', { url: 'https://github.com/me/cc/issues/2' })
     expect((await t.step(request.id, 'discard')).status).toBe(409)
+    expect(t.hub.requests.get(request.id)?.state).toBe('filed')
 
     t.hub.push([note(B)])
     const other = (await t.ask(B)).body.request
