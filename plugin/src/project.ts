@@ -20,6 +20,12 @@ export const normalizeRemote = (remote: string) => {
   return cleanPath === '' ? cleanHost : `${cleanHost}/${cleanPath}`
 }
 
+// The repo a project key names, when it's a github.com one: `github.com/owner/repo`.
+export const repoOf = (project: NoteProject | null) => {
+  const match = project && /^github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/.exec(project.key)
+  return match?.[1] ?? null
+}
+
 export const basename = (path: string) => path.replace(/\/+$/, '').split('/').pop() || path
 
 // The key of a folder with no remote: its path on this machine.

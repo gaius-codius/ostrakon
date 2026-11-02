@@ -128,6 +128,7 @@ export const TEXT = {
     ['d / u', 'archive / undo, restore'],
     ['m', 'move: type a project, ⏎'],
     ['y', 'copy'],
+    ['o', 'file as a GitHub issue'],
     ['h / z', 'history / fold'],
     ['f / ctrl+f', 'search'],
     ['n / ctrl+n', 'new note'],

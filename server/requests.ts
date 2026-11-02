@@ -54,12 +54,6 @@ export type Filing = {
 
 export class NotCreated extends Error {}
 
-// The repo a project key names, when it's a github.com one: `github.com/owner/repo`.
-export const repoOf = (project: NoteProject | null) => {
-  const match = project && /^github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/.exec(project.key)
-  return match?.[1] ?? null
-}
-
 // A GitHub issue URL, trimmed, and the repo it names.
 const ISSUE_URL = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/issues\/[1-9]\d*$/
 export const issueUrl = (url: string) => (ISSUE_URL.test(url.trim()) ? url.trim() : null)

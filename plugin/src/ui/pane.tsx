@@ -821,8 +821,8 @@ const topRows = (view: { pane: PaneState; isInline: boolean; width: number; body
 const isSheetFramed = (bodyRows: number, isInline: boolean) => bodyRows - sheetTop(isInline) - FOOTER_ROWS - 2 >= 1
 export const sheetRoom = (bodyRows: number, isInline: boolean) =>
   Math.max(1, bodyRows - sheetTop(isInline) - FOOTER_ROWS - (isSheetFramed(bodyRows, isInline) ? 2 : 0))
-export const sheetPages = (bodyRows: number, isInline: boolean, problems: number) =>
-  Math.max(1, Math.ceil((problems + TEXT.keySheet.length + 1 + TEXT.symbolSheet.length) / sheetRoom(bodyRows, isInline)))
+export const sheetPages = (bodyRows: number, isInline: boolean, problems: number, omit: string[] = []) =>
+  Math.max(1, Math.ceil((problems + sheetLines(TEXT.keySheet, [], omit).length + 1 + TEXT.symbolSheet.length) / sheetRoom(bodyRows, isInline)))
 
 const padCells = (text: string, width: number) => `${text}${' '.repeat(Math.max(0, width - cells(text)))}`
 
@@ -834,7 +834,7 @@ const KeySheet = ({ el, view }: { el: E; view: PaneView }) => {
   const room = sheetRoom(view.bodyRows, view.isInline)
   const isFramed = isSheetFramed(view.bodyRows, view.isInline)
   const page = view.focus.kind === 'sheet' ? view.focus.page : 0
-  const lines = sheetLines(TEXT.keySheet, view.focus.kind === 'sheet' ? view.focus.lead : [])
+  const lines = view.focus.kind === 'sheet' ? sheetLines(TEXT.keySheet, view.focus.lead, view.focus.omit) : TEXT.keySheet
   const entries = [
     ...view.problems.map(problem => ({ problem: `${problem.file}: ${problem.reason}`, key: '', label: '' })),
     ...lines.map(([key, label]) => ({ problem: '', key, label })),

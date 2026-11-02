@@ -10,6 +10,7 @@ import {
   carriedIn,
   dispatchText,
   freshPane,
+  issueText,
   keysFor,
   labelOf,
   placesOf,
@@ -19,6 +20,7 @@ import {
   ownKeys,
   pageOf,
   parseQuery,
+  sheetOmits,
   visibleNotes,
 } from '../src/model'
 import {
@@ -470,11 +472,13 @@ const toolView = async ($: EngineInterface) => {
 const focusOf = (state: PaneState, lines: Line[], problemCount: number): Focus => {
   if (!geometry.isFocused) return { kind: 'unfocused' }
   if (state.mode === 'sheet') {
-    const pages = sheetPages(geometry.bodyRows, geometry.isInline, problemCount)
-    // Opened on a row, the sheet leads with that row's own keys, as its footer does.
+    // Opened on a row, the sheet leads with that row's own keys, as its footer does, and leaves off
+    // the ones it doesn't offer.
     const row = state.focus === 'line' ? lines.find(candidate => candidate.key === state.cursor) : undefined
     const lead = row ? ownKeys(keysFor({ kind: 'line', line: row, picks: state.picks.length })) : []
-    return { kind: 'sheet', page: Math.min(Math.max(0, state.sheetPage ?? 0), pages - 1), pages, lead }
+    const omit = sheetOmits(row, state.picks.length)
+    const pages = sheetPages(geometry.bodyRows, geometry.isInline, problemCount, omit)
+    return { kind: 'sheet', page: Math.min(Math.max(0, state.sheetPage ?? 0), pages - 1), pages, lead, omit }
   }
   if (state.mode === 'capture' || state.mode === 'target' || state.mode === 'edit' || state.mode === 'bundle' || state.mode === 'move')
     return { kind: state.mode }
@@ -1032,6 +1036,11 @@ const act = async ($: EngineInterface, action: Action) => {
           view.bundle.map(item => item.id),
         )
       if (note) return fillPrompt($, dispatchText(view.ctx, note), [note.id])
+      return
+    }
+    case 'issue': {
+      const text = note ? issueText(note) : undefined
+      if (note && text !== undefined) return fillPrompt($, text, [note.id])
       return
     }
     case 'send': {

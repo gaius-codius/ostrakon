@@ -170,7 +170,7 @@ describe('turning filing on', () => {
 
   test('refuses a classic GitHub token, and any other kind but a fine-grained one', () => {
     const f = fakes()
-    const classic = filingFromEnv({ ...f.hub, GH_TOKEN: 'ghp_0123456789abcdefghij' }, f.data)
+    const classic = filingFromEnv({ ...f.hub, GH_TOKEN: 'ghp_classic' }, f.data)
     expect(classic).toEqual({ off: 'GH_TOKEN is a classic token (ghp_…), which reaches every repo you can; make a fine-grained one (github_pat_…)' })
     // What `gh auth token` prints: your own login, with all its scopes.
     expect(ghTokenProblem('gho_0123456789')).toBe("GH_TOKEN isn't a fine-grained token (github_pat_…); it starts gho_")
