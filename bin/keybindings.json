@@ -1,0 +1,21 @@
+{
+  "Chat": { "ctrl+x s": "app:cycleDiffBase", "ctrl+x tab": "app:openArtifact" },
+  "Pane": {
+    "ctrl+x s": "app:cycleDiffBase",
+    "ctrl+x tab": "app:openArtifact",
+    "ctrl+q": "pane:previous",
+    "ctrl+f": "app:toggleDiffNoiseFilter",
+    "ctrl+s": "app:toggleDiffPreSession",
+    "ctrl+n": "pane:next",
+    "ctrl+x i": "app:toggleReplTab"
+  },
+  "PaneField": {
+    "ctrl+x s": "app:cycleDiffBase",
+    "ctrl+x tab": "app:openArtifact",
+    "ctrl+q": "pane:previous",
+    "ctrl+f": "app:toggleDiffNoiseFilter",
+    "ctrl+s": "app:toggleDiffPreSession",
+    "ctrl+n": "pane:next",
+    "ctrl+x i": "app:toggleReplTab"
+  }
+}
