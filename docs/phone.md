@@ -156,6 +156,9 @@ filing is off and the phone doesn't offer it.
    CLAUDE_TOKEN_EXPIRES=2027-11-03
    ```
 
+   `ostrakon hub` takes these two from the env file only, never from your shell, so a `GH_TOKEN`
+   you use with `gh` doesn't turn filing on.
+
 `ostrakon doctor`, under `== filing notes as issues`, says whether filing is on, which repos the
 GitHub token covers, and when each token expires (`!!` from a month before).
 

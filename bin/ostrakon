@@ -32,11 +32,14 @@ HUB_* settings are read from the environment, else from $ENV_FILE.
 EOF
 }
 
+# HUB_* from $ENV_FILE when the environment doesn't set them; with `filing`, the hub's two filing
+# tokens too.
 load_env() {
   [ -r "$ENV_FILE" ] || return 0
-  local line key value
+  local line key value keys='HUB_[A-Z_]+'
+  [ "${1:-}" = filing ] && keys+='|GH_TOKEN|CLAUDE_CODE_OAUTH_TOKEN'
   while IFS= read -r line || [ -n "$line" ]; do
-    [[ $line =~ ^[[:space:]]*(HUB_[A-Z_]+)=(.*)$ ]] || continue
+    [[ $line =~ ^[[:space:]]*($keys)=(.*)$ ]] || continue
     key=${BASH_REMATCH[1]} value=${BASH_REMATCH[2]}
     [[ $value =~ ^\"(.*)\"$ || $value =~ ^\'(.*)\'$ ]] && value=${BASH_REMATCH[1]}
     [ -n "${!key:-}" ] || export "$key=$value"
@@ -56,7 +59,9 @@ case ${1:-help} in
     shift
     if [ "${1:-}" = --ask ]; then exec "$ROOT/bin/jot-ask"; fi
     need_bun; exec bun "$ROOT/server/jot.ts" jot "$@" ;;
-  hub) shift; need_bun; load_env; exec bun "$ROOT/server/hub.ts" "$@" ;;
+  # The hub files issues only with the tokens in $ENV_FILE, never ones your shell exports for
+  # your own use (SPEC §9.2 Filing).
+  hub) shift; need_bun; unset GH_TOKEN CLAUDE_CODE_OAUTH_TOKEN; load_env filing; exec bun "$ROOT/server/hub.ts" "$@" ;;
   help | -h | --help) usage ;;
   *) echo "ostrakon: unknown command: $1" >&2; usage >&2; exit 1 ;;
 esac

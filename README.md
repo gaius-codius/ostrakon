@@ -175,7 +175,7 @@ This creates a token in `~/.config/ostrakon-hub/env` (if there isn't one yet) an
 
 To pair a phone, run `ostrakon pair` (it needs `qrencode`) and scan the QR code. The code in it works once and expires after 5 minutes, so the QR never contains the token itself; `--token` prints a link that does.
 
-To run the hub in the foreground instead: `HUB_TOKEN=$(openssl rand -hex 24) ostrakon hub`. The `ostrakon` command reads `HUB_TOKEN` from the environment or from `~/.config/ostrakon-hub/env`.
+To run the hub in the foreground instead: `HUB_TOKEN=$(openssl rand -hex 24) ostrakon hub`. The `ostrakon` command reads `HUB_TOKEN` from the environment or from `~/.config/ostrakon-hub/env`. The filing tokens (`GH_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`) come only from that file, never from your shell.
 
 Not using Tailscale? Any HTTPS reverse proxy, tunnel or VPN works too; see [Open it](docs/phone.md#open-it).
 

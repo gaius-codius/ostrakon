@@ -112,7 +112,7 @@ export const checkDraft = (value: unknown, known: string[], id: string): Draft =
   if (typeof title !== 'string' || title.trim() === '') throw new Error('the draft has no title')
   if ([...title.trim()].length > MAX_TITLE) throw new Error(`the draft's title is over ${MAX_TITLE} characters`)
   // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what it looks for
-  if (/[\u0000-\u001f\u007f]/.test(title)) throw new Error("the draft's title isn't one line")
+  if (/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(title.trim())) throw new Error("the draft's title isn't one line")
   if (typeof body !== 'string') throw new Error('the draft has no body')
   if ([...body].length > MAX_BODY) throw new Error(`the draft's body is over ${MAX_BODY} characters`)
   if (!Array.isArray(labels) || !labels.every(label => typeof label === 'string')) throw new Error("the draft's labels aren't a list of names")
@@ -196,8 +196,9 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
       await gh(['label', 'list', `--repo=${repo}`, '--limit=1000', '--json=name,description'], `couldn't read ${repo}'s labels`),
     ) as unknown
     if (!Array.isArray(out)) throw new Error(`couldn't read ${repo}'s labels: gh answered something else`)
+    // Not a name with a comma or a quote: gh reads --label as a comma-separated list.
     return out
-      .filter((label): label is { name: string; description?: unknown } => typeof label?.name === 'string')
+      .filter((label): label is { name: string; description?: unknown } => typeof label?.name === 'string' && !/[,"]/.test(label.name))
       .map(label => ({ name: label.name, description: typeof label.description === 'string' ? label.description : '' }))
   }
 
@@ -226,13 +227,16 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
   // The issue in the request's repo whose body ends with its marker, open or closed. Listed from
   // the repo, not searched: search lags behind an issue just created, the case this is for.
   const find = async (request: FilingRequest) => {
+    if (!/^[0-9A-Z]{26}$/.test(request.id)) throw new Error(`not a request id: ${request.id}`)
     const since = new Date(Date.parse(request.created) - SKEW_MS).toISOString()
     const out = await gh(
       [
         'api',
         '--method=GET',
         '--paginate',
-        '--jq=.[] | select(.pull_request == null) | [.html_url, (.body // "")] | @json',
+        // Only issues that mention the marker come back, so a busy repo stays under the cap; the
+        // exact check (its last line) is below. The id is a ULID, safe in the filter.
+        `--jq=.[] | select(.pull_request == null and ((.body // "") | contains("${marker(request.id)}"))) | [.html_url, .body] | @json`,
         `repos/${request.repo}/issues`,
         '--raw-field=state=all',
         `--raw-field=since=${since}`,

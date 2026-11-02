@@ -243,6 +243,16 @@ describe('drafting', () => {
     expect(made).toEqual({ title: 'Retry loses the last line', body: `The retry drops the last line.\n\nostrakon: ${ID}`, labels: ['bug'] })
   })
 
+  test('leaves out labels with a comma or a quote, which gh would split', async () => {
+    const f = fakes()
+    f.answer(
+      'gh',
+      `case "$1 $2" in 'repo view') echo '{"visibility":"PUBLIC"}' ;; *) echo '[{"name":"needs info, triage"},{"name":"say \\"hi\\""},{"name":"bug"}]' ;; esac`,
+    )
+    await f.open().draft(request())
+    expect((f.calls().find(isClaude) as Call).stdin).toContain('Labels:\n- bug\n\n')
+  })
+
   test("reads the repo's labels (all of them) and its visibility, values passed as --flag=value", async () => {
     const f = fakes()
     f.answer('gh', `case "$1 $2" in 'repo view') echo '{"visibility":"PRIVATE"}' ;; *) echo '[]' ;; esac`)
@@ -273,6 +283,8 @@ describe('drafting', () => {
     const check = (value: unknown) => () => checkDraft(value, ['bug', 'ui'], ID)
     expect(checkDraft({ ...ok, title: `  ${'é'.repeat(MAX_TITLE)} ` }, ['bug'], ID).title).toBe('é'.repeat(MAX_TITLE))
     expect(checkDraft({ ...ok, body: '  b\n' }, ['bug'], ID).body).toBe(`b\n\nostrakon: ${ID}`)
+    expect(checkDraft({ ...ok, title: 'T\n' }, ['bug'], ID).title).toBe('T')
+    expect(check({ ...ok, title: 'a\u2028b' })).toThrow("the draft's title isn't one line")
     expect(check([ok])).toThrow('the draft is not an object')
     expect(check(null)).toThrow('the draft is not an object')
     expect(check({ ...ok, title: ' ' })).toThrow('the draft has no title')
@@ -362,7 +374,7 @@ describe('filing', () => {
       'api',
       '--method=GET',
       '--paginate',
-      '--jq=.[] | select(.pull_request == null) | [.html_url, (.body // "")] | @json',
+      `--jq=.[] | select(.pull_request == null and ((.body // "") | contains("ostrakon: ${ID}"))) | [.html_url, .body] | @json`,
       'repos/me/cc/issues',
       '--raw-field=state=all',
       // A day before the request, for a clock that differs from GitHub's.
@@ -391,6 +403,7 @@ describe('filing', () => {
     f.issues([['https://github.com/me/cc/issues/3', `ostrakon: ${ID}x`]])
     expect(await f.open().find(request())).toBeNull()
     expect(hasMarker(`a\nostrakon: ${ID}\nmore`, ID)).toBe(false)
+    await expect(f.open().find(request({ id: 'x") | .body' }))).rejects.toThrow('not a request id')
   })
 
   test("refuses, creating nothing, a draft that doesn't end with its marker or names a label the repo dropped", async () => {

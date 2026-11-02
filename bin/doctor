@@ -451,7 +451,7 @@ if day:
 # GH_TOKEN that isn't fine-grained (server/filing.ts), so this says why filing is off before it
 # asks GitHub which repos the token covers and when it ends. Neither token's value is ever printed.
 hub_filing() {
-  local gh claude expires reply kind a b days list='' count=0 more='' expiry='' status='' word unitpath='' tool missing=0
+  local gh claude expires reply kind a b days list='' count=0 more='' expiry='' status='' word words=() unitpath='' tool missing=0
   gh=$(env_value GH_TOKEN) claude=$(env_value CLAUDE_CODE_OAUTH_TOKEN) expires=$(env_value CLAUDE_TOKEN_EXPIRES)
   echo "== filing notes as issues"
   if [ -z "$gh" ] && [ -z "$claude" ]; then
@@ -504,7 +504,8 @@ hub_filing() {
   fi
 
   # The hub runs claude and gh by name, on the PATH its unit gives it.
-  for word in $(systemctl --user show ostrakon-hub -p Environment --value 2>/dev/null); do
+  read -ra words <<<"$(systemctl --user show ostrakon-hub -p Environment --value 2>/dev/null)"
+  for word in "${words[@]}"; do
     [[ $word == PATH=* ]] && unitpath=${word#PATH=}
   done
   if [ -n "$unitpath" ]; then
