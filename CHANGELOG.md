@@ -6,6 +6,11 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Changed
+
+- New notes and the edit card take several lines: the field wraps, grows to 4 rows (2 when the pane sits above the prompt) and scrolls. Shift+Enter, or `\` then Enter, starts a new line, and a pasted note keeps its lines. Notes that contain `↵` can now be edited in the pane too, and the preview no longer repeats the note while you edit it.
+- Capture and the edit card sit between accent rules instead of a frame, and the draft is no longer repeated under the field. Needs Claude Code 2.1.301 or later.
+
 ## [0.8.1] - 2026-10-25
 
 ### Fixed

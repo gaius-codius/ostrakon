@@ -6,7 +6,6 @@ import { CHORD, COLOUR, TEXT, WIDTH, colourOf, toneOf } from '../src/ui/look'
 import {
   ageOf,
   bundleText,
-  canEditInline,
   carriedIn,
   cells,
   dispatchText,
@@ -16,7 +15,6 @@ import {
   footerPairs,
   footerRows,
   freshPane,
-  fromField,
   keysFor,
   labelsOf,
   linesOf,
@@ -27,7 +25,6 @@ import {
   placesOf,
   sheetLines,
   targetsOf,
-  toField,
   uniqueKeys,
   wrap,
 } from '../src/model'
@@ -405,15 +402,13 @@ describe('model', () => {
     expect(shown(60, legend)).toEqual(['t', 's', 'e', 'd', 'i'])
   })
 
-  test('dispatch names other projects, and edit fields round-trip newlines', () => {
+  test('dispatch names other projects', () => {
     const ctx = ctxOf()
     const here = note('fix it', CC, 1)
     const there = note('rotate keys', INFRA, 1)
     expect(dispatchText(ctx, here)).toBe('fix it')
     expect(dispatchText(ctx, there)).toBe('[infra] rotate keys')
     expect(bundleText(ctx, [here, there])).toBe('Please look at these notes from my ostrakon:\n\n- fix it\n- [infra] rotate keys')
-    expect(fromField(toField('one\ntwo'))).toBe('one\ntwo')
-    expect(canEditInline('has ↵ already')).toBe(false)
   })
 })
 

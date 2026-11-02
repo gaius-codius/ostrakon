@@ -17,7 +17,8 @@ export const GLYPH = {
   saved: '✓',
   more: '…',
   enter: '⏎',
-  newline: '↵',
+  // The rules above and below a field being typed in (capture, edit): SPEC §2.3 says why not a frame.
+  rule: '─',
   up: '↑',
   down: '↓',
   problem: '⚠',
@@ -74,6 +75,11 @@ export const WIDTH = {
   // Footer pairs kept ahead of the legend; more show when the width allows (SPEC §4.6).
   footerPairs: 4,
   savedDocked: 3,
+  // Capture's and the edit card's field grows with its text to this many rows, docked and inline.
+  fieldRows: 4,
+  fieldRowsInline: 2,
+  // What the focused field's own hint (`⏎  · \⏎ new line`) takes beside its text, and a cell for the cursor.
+  fieldHint: 18,
   savedInline: 1,
   // Band chips (SPEC §10): Pocket labels shorten from `chip` to `chipMin` before chips drop; a
   // label cuts at a word unless that leaves it under `chipMin`.
@@ -98,6 +104,7 @@ export const TEXT = {
   moveLabel: 'move to',
   noMatch: (project: string) => `No notes match. ${GLYPH.enter} saves it to ${project}.`,
   bundleIntro: 'Please look at these notes from my ostrakon:',
+  editLabel: 'edit',
   editHint: 'draft kept if the pane closes',
   // The edit box's buttons carry their keys, since that's where the eye is while editing.
   editBack: 'esc back',
@@ -178,7 +185,6 @@ export const TOAST = {
   mentions: '@ mentions need the prompt: filled instead',
   notSent: (why: string) => `Not sent: ${why}`,
   inPrompt: (n: number) => `note ${n} in your prompt · ⏎ to send`,
-  hasNewline: 'Contains ↵: edit the file instead (path copied)',
   moved: (project: string) => `Moved to ${project}`,
   failed: (why: string) => `Couldn't save: ${why}`,
   notFilled: "Couldn't put it in the prompt: the prompt is busy",
