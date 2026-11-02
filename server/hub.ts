@@ -25,6 +25,7 @@ import { PURGE_AFTER_MS, isPurgeable, nextStamp, winner } from '../plugin/src/me
 import { repoOf } from '../plugin/src/project'
 import { ulid } from '../plugin/src/ulid'
 import manifest from '../plugin/.claude-plugin/plugin.json'
+import { filingFromEnv } from './filing'
 import { type Draft, type Filing, NotCreated, isDraft, type Outcome, issueUrl, issueUrlIn, openRequests, shortError } from './requests'
 
 // The release this hub is, from the mod's manifest (one version for the repo); shown on /healthz.
@@ -683,6 +684,9 @@ if (import.meta.main && process.argv[2] === 'pair') {
 } else if (import.meta.main) {
   const auth = { token: process.env.HUB_TOKEN, login: process.env.HUB_LOGIN }
   if (!auth.token && !auth.login) throw new Error('set HUB_TOKEN (and/or HUB_LOGIN)')
-  // Filing stays off until the hub has its own credentials for it (#110).
-  serve({ port: Number(process.env.HUB_PORT ?? 8790), dataDir: process.env.HUB_DATA ?? join(process.env.HOME ?? '.', '.local/share/ostrakon-hub'), auth })
+  const dataDir = process.env.HUB_DATA ?? join(process.env.HOME ?? '.', '.local/share/ostrakon-hub')
+  // Filing is on only with the hub's own two tokens (filing.ts); it never uses your logins.
+  const setup = filingFromEnv(process.env, dataDir)
+  if ('off' in setup) console.log(`filing is off: ${setup.off}`)
+  serve({ port: Number(process.env.HUB_PORT ?? 8790), dataDir, auth, filing: 'filing' in setup ? setup.filing : undefined })
 }

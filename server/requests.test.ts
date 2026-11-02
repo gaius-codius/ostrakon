@@ -228,13 +228,13 @@ describe('drafting', () => {
     t.hub.push([note(A)])
     const { body } = await t.ask()
     t.answers.draft = async () => {
-      throw new Error(`claude timed out\n${'x'.repeat(1000)}`)
+      throw new Error(`claude timed out\n${'and then '.repeat(100)}`)
     }
     await t.runner.kick()
     const failed = t.hub.requests.get(body.request.id)
     expect(failed).toMatchObject({ state: 'failed', phase: 'draft', revision: 0 })
     expect(failed?.error?.length).toBeLessThanOrEqual(300)
-    expect(failed?.error).toStartWith('claude timed out x')
+    expect(failed?.error).toStartWith('claude timed out and then')
   })
 
   test('a new draft: drafted → waiting, and the next draft is revision 2', async () => {

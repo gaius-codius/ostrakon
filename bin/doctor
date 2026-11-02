@@ -376,6 +376,149 @@ hub_sandbox() { # pid
   [ ${#off[@]} -gt 0 ] || [ ${#unapplied[@]} -gt 0 ] || ok "the hub runs in its sandbox: your home is read-only to it except its data folder, and it can't see ~/.ssh, ~/.gnupg, ~/.config/gh, ~/.claude, your session's sockets or Docker's"
 }
 
+# KEY's value in the env file, read as hub_data reads HUB_DATA, with the spaces around it dropped.
+env_value() {
+  local line value=''
+  while IFS= read -r line || [ -n "$line" ]; do
+    [[ $line =~ ^[[:space:]]*$1=(.*)$ ]] || continue
+    value=${BASH_REMATCH[1]}
+    value=${value#"${value%%[![:space:]]*}"}
+    value=${value%"${value##*[![:space:]]}"}
+    [[ $value =~ ^\"(.*)\"$ || $value =~ ^\'(.*)\'$ ]] && value=${BASH_REMATCH[1]}
+  done <"$ENV_FILE"
+  printf '%s' "$value"
+}
+
+# Says when a token ends: its name, the date (YYYY-MM-DD) and the days left.
+token_expiry() {
+  if [ "$3" -lt 0 ]; then bad "$1 expired on $2: make a new one"
+  elif [ "$3" -le 30 ]; then bad "$1 expires in $3 days ($2): make a new one before then"
+  else ok "$1 expires on $2"; fi
+}
+
+# GH_TOKEN's repos with issues and its expiry, from GitHub's answer on stdin (curl -i), as
+# tab-separated lines: status, repo (full name and visibility), more, expires (date and days left).
+github_answer() {
+  python3 -I -c '
+import datetime, json, re, sys
+data = sys.stdin.buffer.read().decode("utf-8", "replace")
+status, headers, body = "", {}, ""
+while data.startswith("HTTP/"):
+    head, _, data = data.replace("\r\n", "\n").partition("\n\n")
+    lines = head.split("\n")
+    status = lines[0].split(" ")[1] if len(lines[0].split(" ")) > 1 else ""
+    headers = {}
+    for line in lines[1:]:
+        name, _, value = line.partition(":")
+        headers[name.strip().lower()] = value.strip()
+    body = data
+print("status\t" + status)
+if status != "200":
+    sys.exit()
+try:
+    repos = json.loads(body)
+except ValueError:
+    repos = []
+for repo in repos if isinstance(repos, list) else []:
+    if isinstance(repo, dict) and repo.get("has_issues") is True and isinstance(repo.get("full_name"), str):
+        print("repo\t%s (%s)" % (repo["full_name"], "public" if repo.get("visibility") == "public" else "private"))
+if re.search(r"<[^>]*>\s*;\s*rel=\"next\"", headers.get("link", "")):
+    print("more\t1")
+found = re.match(r"(\d{4}-\d{2}-\d{2}) ", headers.get("github-authentication-token-expiration", ""))
+if found:
+    try:
+        day = datetime.date.fromisoformat(found.group(1))
+        print("expires\t%s\t%d" % (day, (day - datetime.datetime.now(datetime.timezone.utc).date()).days))
+    except ValueError:
+        pass
+'
+}
+
+# The days from today (UTC) to a YYYY-MM-DD date, or nothing when it isn't one.
+days_until() {
+  python3 -I -c '
+import datetime, re, sys
+try:
+    day = datetime.date.fromisoformat(sys.argv[1]) if re.fullmatch(r"\d{4}-\d{2}-\d{2}", sys.argv[1]) else None
+except ValueError:
+    day = None
+if day:
+    print((day - datetime.datetime.now(datetime.timezone.utc).date()).days)
+' "$1"
+}
+
+# Whether the hub can file notes as issues, and for how long (SPEC §9.2 Filing). The hub refuses a
+# GH_TOKEN that isn't fine-grained (server/filing.ts), so this says why filing is off before it
+# asks GitHub which repos the token covers and when it ends. Neither token's value is ever printed.
+hub_filing() {
+  local gh claude expires reply kind a b days list='' count=0 more='' expiry='' status='' word words=() unitpath='' tool missing=0
+  gh=$(env_value GH_TOKEN) claude=$(env_value CLAUDE_CODE_OAUTH_TOKEN) expires=$(env_value CLAUDE_TOKEN_EXPIRES)
+  echo "== filing notes as issues"
+  if [ -z "$gh" ] && [ -z "$claude" ]; then
+    note "filing notes as issues is off: the hub has no GH_TOKEN or CLAUDE_CODE_OAUTH_TOKEN (docs/phone.md, Filing notes as issues, says how to make them)"
+    return
+  fi
+  if [ -z "$claude" ]; then bad "filing is off: $ENV_FILE has GH_TOKEN but no CLAUDE_CODE_OAUTH_TOKEN"; return; fi
+  if [ -z "$gh" ]; then bad "filing is off: $ENV_FILE has CLAUDE_CODE_OAUTH_TOKEN but no GH_TOKEN"; return; fi
+  case $gh in
+    ghp_*) bad "filing is off: GH_TOKEN is a classic token (ghp_…), which reaches every repo you can, so the hub refuses it. Make a fine-grained one (github_pat_…): docs/phone.md"; return ;;
+    github_pat_*) ;;
+    *)
+      [[ $gh =~ ^gh[a-z]_ ]] && more="; it starts ${gh:0:4}"
+      bad "filing is off: GH_TOKEN isn't a fine-grained token (github_pat_…)$more"
+      return ;;
+  esac
+  ok "filing notes as issues is on (GH_TOKEN and CLAUDE_CODE_OAUTH_TOKEN are set; the hub reads them when it starts)"
+  more=''
+
+  if ! has curl || ! has python3; then
+    note "couldn't check which repos GH_TOKEN covers or when it ends: curl and python3 are needed"
+  else
+    reply=$(printf 'Authorization: Bearer %s\n' "$gh" | curl -s -m 10 -i -H @- "${OSTRAKON_GITHUB_API:-https://api.github.com}/user/repos?per_page=100" | github_answer)
+    while IFS=$'\t' read -r kind a b; do
+      case $kind in
+        status) status=$a ;;
+        repo) list+="${list:+, }$a" count=$((count + 1)) ;;
+        more) more=1 ;;
+        expires) expiry=$a days=$b ;;
+      esac
+    done <<<"$reply"
+    if [ "$status" = 401 ]; then bad "GitHub refuses GH_TOKEN (expired or revoked): make a new one (docs/phone.md)"
+    elif [ "$status" != 200 ]; then bad "couldn't ask GitHub which repos GH_TOKEN covers (HTTP ${status:-none}, or no answer)"
+    else
+      if [ "$count" -eq 0 ]; then bad "GH_TOKEN covers no repos with issues, so there's nowhere to file"
+      elif [ -n "$more" ]; then ok "GH_TOKEN covers more than 100 repos, the first: $list"
+      else ok "GH_TOKEN covers $count repos: $list"; fi
+      if [ -n "$expiry" ]; then token_expiry GH_TOKEN "$expiry" "$days"; else note "GH_TOKEN has no expiry date"; fi
+    fi
+  fi
+
+  # No API says when a claude setup-token token ends, so the env file says.
+  if [ -z "$expires" ]; then
+    note "CLAUDE_CODE_OAUTH_TOKEN's expiry isn't known: claude setup-token makes a token good for a year; add CLAUDE_TOKEN_EXPIRES=<YYYY-MM-DD> to $ENV_FILE to be warned a month before"
+  elif ! has python3; then note "couldn't check CLAUDE_TOKEN_EXPIRES: python3 is needed"
+  else
+    days=$(days_until "$expires")
+    if [ -z "$days" ]; then bad "CLAUDE_TOKEN_EXPIRES in $ENV_FILE isn't a date (YYYY-MM-DD)"
+    else token_expiry CLAUDE_CODE_OAUTH_TOKEN "$expires" "$days"; fi
+  fi
+
+  # The hub runs claude and gh by name, on the PATH its unit gives it.
+  read -ra words <<<"$(systemctl --user show ostrakon-hub -p Environment --value 2>/dev/null)"
+  for word in "${words[@]}"; do
+    [[ $word == PATH=* ]] && unitpath=${word#PATH=}
+  done
+  if [ -n "$unitpath" ]; then
+    for tool in claude gh; do
+      if ! (PATH=$unitpath command -v "$tool" >/dev/null 2>&1); then
+        bad "the hub's PATH (its unit's Environment=PATH) has no $tool, so filing fails: install it into one of those folders, or add its folder to the unit's PATH"
+        missing=1
+      fi
+    done
+    [ "$missing" -eq 1 ] || ok "the hub's PATH finds claude and gh"
+  fi
+}
+
 # The hub on this machine, if it's set up here.
 if has systemctl && systemctl --user cat ostrakon-hub >/dev/null 2>&1; then
   echo "== the hub on this machine"
@@ -398,6 +541,7 @@ if has systemctl && systemctl --user cat ostrakon-hub >/dev/null 2>&1; then
   fi
   has bun || bad "bun not found; the hub needs it (https://bun.sh)"
   has qrencode || note "qrencode not found; ostrakon pair needs it to show a QR code"
+  if [ -r "$ENV_FILE" ]; then hub_filing; fi
 fi
 
 echo "== tools"
