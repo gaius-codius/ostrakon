@@ -173,6 +173,7 @@ else
 fi
 mkdir -p "$UNIT_DIR"
 ln -sfn "$ROOT/server/ostrakon-hub.service" "$UNIT_DIR/ostrakon-hub.service"
+"$ROOT/bin/hub-data-unit"
 systemctl --user daemon-reload
 # Restart rather than start, so a hub already running picks up the current unit and code.
 systemctl --user enable ostrakon-hub >/dev/null 2>&1 || true

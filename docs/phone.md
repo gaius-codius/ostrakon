@@ -73,21 +73,36 @@ hub runs without.
 
 - **Your home folder is read-only** to it, except its data folder (`~/.local/share/ostrakon-hub`,
   backups included).
-- **It can't see** `~/.ssh`, `~/.gnupg`, `~/.config/gh`, `~/.claude`, or your session's runtime
-  folder (`/run/user/<uid>`), which holds the D-Bus and systemd sockets and the ssh and gpg agents.
+- **It can't see** `~/.ssh`, `~/.gnupg`, `~/.config/gh` and `~/.claude`.
+- **It can't reach your session's sockets**: the runtime folder (`/run/user/<uid>`) is hidden, with
+  the D-Bus and systemd sockets and the ssh and gpg agents. So are the system bus and Docker's and
+  Podman's sockets.
 - **It gets its own `/tmp`**, can't gain privileges, and can open only network and local sockets.
 
-It still runs as you. It can read the rest of your home folder and see your other processes, so
-this limits the damage from a bug in the hub or in Bun; it isn't a wall.
+It still runs as you, so this limits the damage from a bug in the hub or in Bun; it isn't a wall:
 
-**If you set `HUB_DATA`** to a folder elsewhere in your home, let the hub write there:
+- It can read the rest of your home folder and see your other processes. That includes other
+  logins in `~/.config`, and `~/.claude.json` (Claude Code replaces it on every save, which undoes
+  hiding it).
+- It can still reach sockets elsewhere, and abstract ones (an X11 display, a D-Bus session bus
+  started with `dbus-launch`).
+- A drive or network folder mounted in your home after the hub starts is writable to it until it
+  restarts. `ostrakon doctor` lists anything besides its data folder that the hub can write.
+
+**Keep the checkout, Bun and `HUB_DATA` out of the hidden paths** above, and `HUB_DATA` out of
+`/tmp` and `/var/tmp`: the hub gets an empty private copy of those on every start.
+
+**If you set `HUB_DATA`** to another folder in your home (in `~/.config/ostrakon-hub/env`), run the
+installer again so the hub can write there:
 
 ```
-systemctl --user edit ostrakon-hub
+./install.sh --hub
 ```
 
-and add, under `[Service]`, `ReadWritePaths=/path/to/your/hub-data`. Then restart it with
-`systemctl --user restart ostrakon-hub`.
+It adds the folder to the unit in a drop-in
+(`~/.config/systemd/user/ostrakon-hub.service.d/hub-data.conf`) and restarts the hub. `ostrakon
+update` keeps that drop-in in step with `HUB_DATA`. Until then the hub can't open its data and
+won't start, and `ostrakon doctor` says so.
 
 **On a kernel without unprivileged user namespaces**, systemd can't apply the folder limits in a
 user unit. It starts the hub without them, and `ostrakon doctor` says which are missing. (Not tested

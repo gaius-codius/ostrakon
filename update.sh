@@ -56,6 +56,8 @@ main() {
   # The hub restarts after new code, and also when it still runs an older release than this
   # checkout (it was never restarted after a pull, say), which /healthz tells.
   if command -v systemctl >/dev/null && systemctl --user cat ostrakon-hub >/dev/null 2>&1; then
+    # A HUB_DATA of your own stays writable in the hub's sandbox.
+    [ ! -x "$root/bin/hub-data-unit" ] || "$root/bin/hub-data-unit"
     systemctl --user daemon-reload
     if systemctl --user is-active --quiet ostrakon-hub; then
       local port running version

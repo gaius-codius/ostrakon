@@ -13,7 +13,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ### Security
 
-- The hub's systemd unit runs it in a sandbox: your home folder is read-only to it except its data folder, and it can't see `~/.ssh`, `~/.gnupg`, `~/.config/gh`, `~/.claude` or your session's D-Bus and systemd sockets. `ostrakon doctor` says whether the running hub has these limits. If you set `HUB_DATA` to another folder in your home, add it to the unit (docs/phone.md, What the hub can reach). `ostrakon update` restarts the hub with the new unit.
+- The hub's systemd unit runs it in a sandbox: your home folder is read-only to it except its data folder, and it can't see `~/.ssh`, `~/.gnupg`, `~/.config/gh`, `~/.claude`, your session's D-Bus and systemd sockets, or Docker's socket. `ostrakon doctor` says whether the running hub has these limits. `ostrakon update` restarts the hub with the new unit. **If you set `HUB_DATA` to another folder in your home**, run `./install.sh --hub` after this update, or the hub can't write its data and won't start (docs/phone.md, What the hub can reach).
 
 ## [0.8.1] - 2026-10-25
 
