@@ -77,15 +77,13 @@ else:
 EOF
 fi
 
-# The keybindings: the README's, added to keybindings.json beside the settings, key by key. A key bound to
-# something else, or an action the person already gave another key, is left as it is.
+# The keybindings: the README's (bin/keybindings.json, which doctor checks too), added to
+# keybindings.json beside the settings, key by key. A key bound to something else, or an action the
+# person already gave another key, is left as it is.
 keys_py=$(cat <<'EOF'
 import json, os, shutil, sys
-mode, path = sys.argv[1], sys.argv[2]
-pane = {"ctrl+x s": "app:cycleDiffBase", "ctrl+x tab": "app:openArtifact", "ctrl+q": "pane:previous",
-        "ctrl+f": "app:toggleDiffNoiseFilter", "ctrl+s": "app:toggleDiffPreSession", "ctrl+n": "pane:next",
-        "ctrl+x i": "app:toggleReplTab"}
-want = {"Chat": {"ctrl+x s": "app:cycleDiffBase", "ctrl+x tab": "app:openArtifact"}, "Pane": pane, "PaneField": pane}
+mode, path, wanted = sys.argv[1], sys.argv[2], sys.argv[3]
+want = json.load(open(wanted))
 try:
     keys = json.load(open(path)) if os.path.exists(path) else {}
     blocks = keys.setdefault("bindings", [])
@@ -131,7 +129,7 @@ if [ $want_keys = no ]; then
   say "skipped; to add them later: ./install.sh --keys"
 elif ! has python3; then
   say "! python3 not found; add them yourself: README.md, Keybindings"
-elif python3 -I -c "$keys_py" check "$KEYS_FILE"; then
+elif python3 -I -c "$keys_py" check "$KEYS_FILE" "$ROOT/bin/keybindings.json"; then
   answer=n
   if [ $want_keys = yes ]; then
     answer=y
@@ -141,7 +139,7 @@ elif python3 -I -c "$keys_py" check "$KEYS_FILE"; then
     answer=${answer:-y}
   fi
   case $answer in
-    [Yy]*) mkdir -p "$(dirname "$KEYS_FILE")"; python3 -I -c "$keys_py" apply "$KEYS_FILE" ;;
+    [Yy]*) mkdir -p "$(dirname "$KEYS_FILE")"; python3 -I -c "$keys_py" apply "$KEYS_FILE" "$ROOT/bin/keybindings.json" ;;
     *) say "not added; to add them later: ./install.sh --keys (or by hand: README.md, Keybindings)" ;;
   esac
 fi

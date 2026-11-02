@@ -6,6 +6,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Added
+
+- `ostrakon doctor` checks your keybindings and names any of ostrakon's keys that aren't bound. Without its binding, `ctrl+x tab` from the prompt focuses the band instead of the pane.
+
 ### Changed
 
 - New notes and the edit card take several lines: the field wraps, grows to 4 rows (2 when the pane sits above the prompt) and scrolls. Shift+Enter, or `\` then Enter, starts a new line, and a pasted note keeps its lines. Notes that contain `↵` can now be edited in the pane too, and the preview no longer repeats the note while you edit it.

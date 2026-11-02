@@ -125,6 +125,44 @@ else
   fi
 fi
 
+# The borrowed chords (bin/keybindings.json, the README's): an action with no key in a context
+# doesn't work there, and Claude Code's own key runs instead (ctrl+x tab focuses the band). An
+# action the person gave another key counts, as install.sh leaves it.
+if has python3; then
+  python3 -I - "$(dirname "$SETTINGS")/keybindings.json" "$ROOT/bin/keybindings.json" "$ROOT" <<'EOF' || problems=$((problems + 1))
+import json, os, sys
+path, wanted, root = sys.argv[1], sys.argv[2], sys.argv[3]
+want = json.load(open(wanted))
+try:
+    keys = json.load(open(path)) if os.path.exists(path) else {}
+    blocks = keys.get('bindings', []) if isinstance(keys, dict) else None
+    assert isinstance(blocks, list)
+except (OSError, ValueError, AssertionError):
+    print(f"  !!  {path} isn't valid keybindings JSON, so none of ostrakon's keys work")
+    sys.exit(1)
+# Each missing action once, with the contexts it's missing from.
+missing = {}
+for context, chords in want.items():
+    bound = {k: v for b in blocks if isinstance(b, dict) and b.get('context') == context
+             for k, v in (b.get('bindings') if isinstance(b.get('bindings'), dict) else {}).items()}
+    for key, action in chords.items():
+        if action in bound.values():
+            continue
+        taken = f": it's bound to {bound[key]}" if bound.get(key) else ''
+        missing.setdefault((key, action, taken), []).append(context)
+if not missing:
+    print(f'  ok  ostrakon\'s keybindings are set ({path})')
+    sys.exit(0)
+if sum(len(contexts) for contexts in missing.values()) == sum(len(chords) for chords in want.values()):
+    print(f'  !!  none of ostrakon\'s keybindings are set in {path}')
+else:
+    for (key, action, taken), contexts in missing.items():
+        print(f'  !!  {key} isn\'t bound to {action} in {", ".join(contexts)}{taken}')
+print(f'      to add them: {root}/install.sh --keys, or by hand (README.md, Keybindings)')
+sys.exit(1)
+EOF
+fi
+
 # What the mod itself last saw (plugin/src/report.ts): proof it runs, not just that it validates.
 if has python3; then
   echo "== the mod in a session"

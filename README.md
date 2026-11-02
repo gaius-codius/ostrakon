@@ -117,7 +117,7 @@ If you installed a release, `update` moves you to the newest one; if you're on a
 ostrakon doctor
 ```
 
-It checks that the mod loads, which Claude Code version last ran it and whether anything went wrong there, your notes folder, the hub and its token, and the tools ostrakon needs, and says what to fix. It changes nothing and never prints your token, so its output is safe to paste into a bug report.
+It checks that the mod loads, that its [keybindings](#keybindings) are set, which Claude Code version last ran it and whether anything went wrong there, your notes folder, the hub and its token, and the tools ostrakon needs, and says what to fix. It changes nothing and never prints your token, so its output is safe to paste into a bug report.
 
 ### Keybindings
 
