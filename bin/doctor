@@ -271,11 +271,122 @@ else
   esac
 fi
 
+PROC=${OSTRAKON_PROC:-/proc}
+tilde() { case $1 in "$HOME"/*) echo "~/${1#"$HOME"/}" ;; *) echo "$1" ;; esac; }
+# The mount a path is on in a mountinfo file, as "<device> <root> <options>": the topmost one at
+# the longest mount point that holds the path. systemd mounts at a path's target, so a symlink
+# (a dotfile manager's ~/.config/gh) is followed first.
+mount_of() { # mountinfo path
+  MOUNT_PATH=$(readlink -f -- "$2" 2>/dev/null || echo "$2") awk '
+    function unescape(s) { gsub(/\\040/, " ", s); gsub(/\\011/, "\t", s); gsub(/\\012/, "\n", s); gsub(/\\134/, "\\", s); return s }
+    BEGIN { path = ENVIRON["MOUNT_PATH"] }
+    { at = unescape($5)
+      if ((at == "/" || path == at || index(path, at "/") == 1) && length(at) >= best) { best = length(at); found = $3 " " $4 " " $6 } }
+    END { print found }' "$1"
+}
+# The writable mount points below a folder in a mountinfo file, one per line.
+writable_below() { # mountinfo folder
+  MOUNT_PATH=$(readlink -f -- "$2" 2>/dev/null || echo "$2") awk '
+    function unescape(s) { gsub(/\\040/, " ", s); gsub(/\\011/, "\t", s); gsub(/\\012/, "\n", s); gsub(/\\134/, "\\", s); return s }
+    BEGIN { path = ENVIRON["MOUNT_PATH"] }
+    { at = unescape($5); if (index(at, path "/") == 1) top[at] = $6 }
+    END { for (at in top) if (top[at] ~ /^rw/) print at }' "$1"
+}
+# What the hub's unit asks for, as systemctl shows it after its drop-ins.
+HUB_CONFIG=''
+hub_prop() { printf '%s\n' "$HUB_CONFIG" | sed -n "s/^$1=//p"; }
+# A list property's paths, one per line, without the - prefix. systemctl quotes a path with a space.
+hub_paths() { hub_prop "$1" | xargs -r printf '%s\n' 2>/dev/null | sed 's/^-//'; }
+hub_listed() { hub_paths "$1" | grep -qxF -- "$2"; } # property path
+# The folder the hub writes: HUB_DATA from the unit's env file (as systemd reads it), else the default.
+hub_data() {
+  local line value=''
+  if [ -r "$ENV_FILE" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      [[ $line =~ ^[[:space:]]*HUB_DATA=(.*)$ ]] || continue
+      value=${BASH_REMATCH[1]}
+      [[ $value =~ ^\"(.*)\"$ || $value =~ ^\'(.*)\'$ ]] && value=${BASH_REMATCH[1]}
+    done <"$ENV_FILE"
+  fi
+  value=${value:-$HOME/.local/share/ostrakon-hub}
+  echo "${value%/}"
+}
+
+# Whether the hub can write its data folder, from the unit's settings, so it's said even when the
+# hub can't start because of it. In your home, only the default and a ReadWritePaths= are writable.
+hub_data_writable() {
+  local data home entry
+  data=$(hub_data) home=$(readlink -f -- "$HOME" 2>/dev/null || echo "$HOME")
+  # The hub's own /tmp is emptied on every stop (a home folder there is another matter).
+  case $(readlink -m -- "$data")/ in
+    "${home%/}"/*) ;;
+    /tmp/* | /var/tmp/*) bad "the hub's data folder $data is in /tmp or /var/tmp, which the hub gets a private copy of, emptied on every restart: set HUB_DATA in $ENV_FILE to a folder that lasts"; return ;;
+  esac
+  [ "$(hub_prop ProtectHome)" = read-only ] || return 0
+  case $(readlink -m -- "$data")/ in "${home%/}"/*) ;; *) return 0 ;; esac
+  while IFS= read -r entry; do
+    case $data/ in "${entry%/}"/*) return 0 ;; esac
+  done < <(hub_paths ReadWritePaths)
+  bad "the hub can't write its data folder $data (HUB_DATA in $ENV_FILE), as its sandbox keeps your home read-only. Run '$ROOT/install.sh' --hub again: it adds the folder to the unit"
+}
+
+# The hub's sandbox (server/ostrakon-hub.service, SPEC §9.2), checked on the running hub itself:
+# where the kernel can't apply a limit, systemd turns it off and starts the hub anyway.
+hub_sandbox() { # pid
+  local at=$PROC/$1 off=() unapplied=() path m family families data default extra
+  if [ "${1:-0}" = 0 ] || ! [ -r "$at/mountinfo" ] || ! [ -r "$at/status" ]; then note "couldn't check the hub's sandbox: $at isn't readable"; return; fi
+  # Each limit: its name, whether the unit asks for it, and whether the running hub has it.
+  limit() { # name configured applied
+    if [ "$2" != 1 ]; then off+=("$1"); elif [ "$3" != 1 ]; then unapplied+=("$1"); fi
+  }
+  is() { "$@" && echo 1; }
+  limit ProtectHome=read-only "$(is [ "$(hub_prop ProtectHome)" = read-only ])" \
+    "$(is grep -q '^ro' <<<"$(mount_of "$at/mountinfo" "$HOME" | cut -d' ' -f3)")"
+  # The paths the unit hides, where they exist here.
+  for path in "$HOME/.ssh" "$HOME/.gnupg" "$HOME/.config/gh" "$HOME/.claude" \
+    "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" /run/dbus/system_bus_socket /run/docker.sock /run/podman; do
+    [ -e "$path" ] || continue
+    m=$(mount_of "$at/mountinfo" "$path" | cut -d' ' -f2)
+    limit "InaccessiblePaths=$(tilde "$path")" "$(is hub_listed InaccessiblePaths "$path")" "$(is grep -q /inaccessible/ <<<"$m")"
+  done
+  limit NoNewPrivileges=yes "$(is [ "$(hub_prop NoNewPrivileges)" = yes ])" "$(is grep -qx $'NoNewPrivs:\t1' "$at/status")"
+  # Its own /tmp: a different mount there than this process sees.
+  limit PrivateTmp=yes "$(is [ "$(hub_prop PrivateTmp)" != no ])" \
+    "$(is [ "$(mount_of "$at/mountinfo" /tmp | cut -d' ' -f1,2)" != "$(mount_of "$PROC/self/mountinfo" /tmp | cut -d' ' -f1,2)" ])"
+  # Only the three families (or fewer): an allow-list, not a deny-list (~).
+  families=$(hub_prop RestrictAddressFamilies)
+  m=1
+  [[ $families == AF_* ]] || m=''
+  for family in $families; do case $family in AF_INET | AF_INET6 | AF_UNIX) ;; *) m='' ;; esac; done
+  limit "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX" "$m" "$(is grep -qx $'Seccomp:\t2' "$at/status")"
+
+  join() { local IFS=, all; all="$*"; echo "${all//,/, }"; }
+  if [ ${#off[@]} -gt 0 ]; then
+    bad "the hub's unit ($(systemctl --user show ostrakon-hub -p FragmentPath --value 2>/dev/null)) leaves out $(join "${off[@]}") (SPEC §9.2), so the hub can reach more than it needs. Run '$ROOT/install.sh' --hub again: it links the unit from this checkout"
+  fi
+  if [ ${#unapplied[@]} -gt 0 ]; then
+    note "the running hub doesn't have $(join "${unapplied[@]}"). If systemctl --user restart ostrakon-hub doesn't add them, this machine can't apply them (the folder limits need unprivileged user namespaces); the hub works without them"
+  fi
+  # A ReadWritePaths= of your own, besides the data folder (and the default one), is the hub's to write too.
+  data=$(readlink -m -- "$(hub_data)") default=$(readlink -m -- "$HOME/.local/share/ostrakon-hub")
+  extra=$(writable_below "$at/mountinfo" "$HOME" | while IFS= read -r m; do
+    case $m/ in "$data"/* | "$default"/*) ;; *) tilde "$m" ;; esac
+  done | sort | paste -sd, - | sed 's/,/, /g')
+  [ -z "$extra" ] || note "besides its data folder, the hub can write $extra (ReadWritePaths= in its unit)"
+  [ ${#off[@]} -gt 0 ] || [ ${#unapplied[@]} -gt 0 ] || ok "the hub runs in its sandbox: your home is read-only to it except its data folder, and it can't see ~/.ssh, ~/.gnupg, ~/.config/gh, ~/.claude, your session's sockets or Docker's"
+}
+
 # The hub on this machine, if it's set up here.
 if has systemctl && systemctl --user cat ostrakon-hub >/dev/null 2>&1; then
   echo "== the hub on this machine"
-  if systemctl --user is-active --quiet ostrakon-hub; then ok "the ostrakon-hub service is running"
+  # HOME as one spelling (no trailing /), for comparing paths.
+  [ "$HOME" = / ] || HOME=${HOME%/}
+  HUB_CONFIG=$(systemctl --user show ostrakon-hub -p ProtectHome -p ReadWritePaths -p InaccessiblePaths -p NoNewPrivileges -p PrivateTmp -p RestrictAddressFamilies 2>/dev/null)
+  if systemctl --user is-active --quiet ostrakon-hub; then
+    ok "the ostrakon-hub service is running"
+    hub_sandbox "$(systemctl --user show ostrakon-hub -p MainPID --value 2>/dev/null)"
   else bad "the ostrakon-hub service isn't running: systemctl --user start ostrakon-hub, and journalctl --user -u ostrakon-hub for why"; fi
+  hub_data_writable
   if has loginctl && [ "$(loginctl show-user "$USER" -p Linger --value 2>/dev/null)" != yes ]; then
     note "it stops when you log out; to keep it running: loginctl enable-linger $USER"
   fi

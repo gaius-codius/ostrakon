@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Lets the hub's sandbox write a HUB_DATA other than the default (SPEC §9.2): the unit keeps your
+# home read-only except ~/.local/share/ostrakon-hub, so for a HUB_DATA set in the env file this
+# writes a drop-in that makes that folder and opens it up. With HUB_DATA back to the default, it
+# removes the drop-in. install.sh --hub and update.sh run it before they reload systemd. It never
+# fails the caller: a HUB_DATA it can't write into a unit is reported and left to the user.
+set -uo pipefail
+
+ENV_FILE=${OSTRAKON_HUB_ENV:-$HOME/.config/ostrakon-hub/env}
+DROPIN=$HOME/.config/systemd/user/ostrakon-hub.service.d/hub-data.conf
+
+# HUB_DATA as systemd reads the env file (KEY=VALUE lines, quotes stripped), as bin/ostrakon does.
+data=''
+if [ -r "$ENV_FILE" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    [[ $line =~ ^[[:space:]]*HUB_DATA=(.*)$ ]] || continue
+    data=${BASH_REMATCH[1]}
+    [[ $data =~ ^\"(.*)\"$ || $data =~ ^\'(.*)\'$ ]] && data=${BASH_REMATCH[1]}
+  done <"$ENV_FILE"
+fi
+data=${data%/}
+
+if [ -z "$data" ] || [ "$data" = "$HOME/.local/share/ostrakon-hub" ]; then
+  if [ -f "$DROPIN" ]; then rm -f "$DROPIN" && echo "ostrakon: the hub's data folder is the default again; removed $DROPIN"; fi
+  exit 0
+fi
+case $data in
+  /*) ;;
+  *) echo "ostrakon: ! HUB_DATA=$data isn't an absolute path, so the hub's sandbox can't open it up; set a full path in $ENV_FILE" >&2; exit 0 ;;
+esac
+# Kept to what a unit file can quote: no ", \ or line breaks. A % is written as %%.
+case $data in
+  *[\"\\]* | *$'\n'*) echo "ostrakon: ! HUB_DATA=$data has a quote or a backslash, so the hub's sandbox can't open it up" >&2; exit 0 ;;
+esac
+path=${data//%/%%}
+want=$(printf '%s\n' \
+  "# Written by ostrakon (bin/hub-data-unit) for HUB_DATA in $ENV_FILE: the folder the hub writes." \
+  '[Service]' \
+  "ExecStartPre=+-/bin/mkdir -p \"$path\"" \
+  "ReadWritePaths=\"-$path\"")
+[ -f "$DROPIN" ] && [ "$(cat "$DROPIN")" = "$want" ] && exit 0
+mkdir -p "$(dirname "$DROPIN")" && printf '%s\n' "$want" >"$DROPIN" &&
+  echo "ostrakon: the hub can write its data folder $data ($DROPIN)"
+exit 0

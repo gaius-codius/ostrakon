@@ -59,6 +59,55 @@ because pairing sends the token to the hub in one (`?token=…`). Leave `HUB_LOG
 safe behind `tailscale serve`. If your proxy puts the hub on the public internet, only the token
 protects it, so read [`SECURITY.md`](../SECURITY.md) first.
 
+### What the hub can reach
+
+The hub answers your other devices, so its systemd unit (`server/ostrakon-hub.service`) keeps it
+away from what it doesn't need. To check that the running hub has these limits:
+
+```
+ostrakon doctor
+```
+
+Under `== the hub on this machine` it says `the hub runs in its sandbox`, or names each limit the
+hub runs without.
+
+- **Your home folder is read-only** to it, except its data folder (`~/.local/share/ostrakon-hub`,
+  backups included).
+- **It can't see** `~/.ssh`, `~/.gnupg`, `~/.config/gh` and `~/.claude`.
+- **It can't reach your session's sockets**: the runtime folder (`/run/user/<uid>`) is hidden, with
+  the D-Bus and systemd sockets and the ssh and gpg agents. So are the system bus and Docker's and
+  Podman's sockets.
+- **It gets its own `/tmp`**, can't gain privileges, and can open only network and local sockets.
+
+It still runs as you, so this limits the damage from a bug in the hub or in Bun; it isn't a wall:
+
+- It can read the rest of your home folder and see your other processes. That includes other
+  logins in `~/.config`, and `~/.claude.json` (Claude Code replaces it on every save, which undoes
+  hiding it).
+- It can still reach sockets elsewhere, and abstract ones (an X11 display, a D-Bus session bus
+  started with `dbus-launch`).
+- A drive or network folder mounted in your home after the hub starts is writable to it until it
+  restarts. `ostrakon doctor` lists anything besides its data folder that the hub can write.
+
+**Keep the checkout, Bun and `HUB_DATA` out of the hidden paths** above, and `HUB_DATA` out of
+`/tmp` and `/var/tmp`: the hub gets an empty private copy of those on every start.
+
+**If you set `HUB_DATA`** to another folder in your home (in `~/.config/ostrakon-hub/env`), run the
+installer again so the hub can write there:
+
+```
+./install.sh --hub
+```
+
+It adds the folder to the unit in a drop-in
+(`~/.config/systemd/user/ostrakon-hub.service.d/hub-data.conf`) and restarts the hub. `ostrakon
+update` keeps that drop-in in step with `HUB_DATA`. Until then the hub can't open its data and
+won't start, and `ostrakon doctor` says so.
+
+**On a kernel without unprivileged user namespaces**, systemd can't apply the folder limits in a
+user unit. It starts the hub without them, and `ostrakon doctor` says which are missing. (Not tested
+on such a machine yet.)
+
 ## Pair your phone
 
 The hub only answers requests that carry its token (`HUB_TOKEN`). The first time the app opens, it

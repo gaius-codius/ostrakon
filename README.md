@@ -179,7 +179,7 @@ To run the hub in the foreground instead: `HUB_TOKEN=$(openssl rand -hex 24) ost
 
 Not using Tailscale? Any HTTPS reverse proxy, tunnel or VPN works too; see [Open it](docs/phone.md#open-it).
 
-The service runs `~/.local/bin/ostrakon hub`, so it doesn't matter where the repo lives. Phone setup, the Home Screen app and the iOS Shortcut are covered in [`docs/phone.md`](docs/phone.md). Read [`SECURITY.md`](SECURITY.md) before making the hub reachable from other devices.
+The service runs `~/.local/bin/ostrakon hub`, so it doesn't matter where the repo lives. It runs in a sandbox: it can't see `~/.ssh`, `~/.gnupg`, `~/.config/gh` or `~/.claude`, and in your home it writes only its data folder ([What the hub can reach](docs/phone.md#what-the-hub-can-reach)). Phone setup, the Home Screen app and the iOS Shortcut are covered in [`docs/phone.md`](docs/phone.md). Read [`SECURITY.md`](SECURITY.md) before making the hub reachable from other devices.
 
 ## Notes from the desktop
 
