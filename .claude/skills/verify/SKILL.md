@@ -60,7 +60,7 @@ curl -fsS -H 'Authorization: Bearer test' "http://127.0.0.1:$PORT/api/changes?si
 
 ## The hub's systemd unit
 
-- Don't restart or edit the installed `ostrakon-hub` unit. Copy `server/ostrakon-hub.service` to a unit with another name (`ostrakon-hub-verify-<branch>.service`) with its own `HUB_PORT`, `HUB_DATA` and env file, start that, and stop and remove it after.
+- Don't restart or edit the installed `ostrakon-hub` unit. Copy `server/ostrakon-hub.service` to a unit with another name (`ostrakon-hub-verify-<branch>.service`) with its own `HUB_PORT`, `HUB_DATA` and env file, start that, and stop and remove it after. The unit's sandbox lets the hub write only `~/.local/share/ostrakon-hub` in your home, so point the copy's `ExecStartPre=+-/bin/mkdir` and `ReadWritePaths=` at its `HUB_DATA` too, or it can't open its data.
 - Probe from inside the sandbox, not only with `systemd-analyze --user security`: run the checks as a sibling unit with the same `[Service]` limits (`systemd-run --user --wait --pipe -p <each limit> sh -c '<probe>'`) and show each result.
 
 ## Outside services (GitHub, Claude)

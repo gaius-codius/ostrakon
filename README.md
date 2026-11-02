@@ -117,7 +117,7 @@ If you installed a release, `update` moves you to the newest one; if you're on a
 ostrakon doctor
 ```
 
-It checks that the mod loads, which Claude Code version last ran it and whether anything went wrong there, your notes folder, the hub and its token, and the tools ostrakon needs, and says what to fix. It changes nothing and never prints your token, so its output is safe to paste into a bug report.
+It checks that the mod loads, that its [keybindings](#keybindings) are set, which Claude Code version last ran it and whether anything went wrong there, your notes folder, the hub and its token, and the tools ostrakon needs, and says what to fix. It changes nothing and never prints your token, so its output is safe to paste into a bug report.
 
 ### Keybindings
 
@@ -179,7 +179,7 @@ To run the hub in the foreground instead: `HUB_TOKEN=$(openssl rand -hex 24) ost
 
 Not using Tailscale? Any HTTPS reverse proxy, tunnel or VPN works too; see [Open it](docs/phone.md#open-it).
 
-The service runs `~/.local/bin/ostrakon hub`, so it doesn't matter where the repo lives. Phone setup, the Home Screen app and the iOS Shortcut are covered in [`docs/phone.md`](docs/phone.md). Read [`SECURITY.md`](SECURITY.md) before making the hub reachable from other devices.
+The service runs `~/.local/bin/ostrakon hub`, so it doesn't matter where the repo lives. It runs in a sandbox: it can't see `~/.ssh`, `~/.gnupg`, `~/.config/gh` or `~/.claude`, and in your home it writes only its data folder ([What the hub can reach](docs/phone.md#what-the-hub-can-reach)). Phone setup, the Home Screen app and the iOS Shortcut are covered in [`docs/phone.md`](docs/phone.md). Read [`SECURITY.md`](SECURITY.md) before making the hub reachable from other devices.
 
 ## Notes from the desktop
 

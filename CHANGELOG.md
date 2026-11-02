@@ -9,11 +9,16 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 ### Added
 
 - The phone and web app can ask for a note to be filed as a GitHub issue (**File as issue** in a note's actions). The hub drafts it, the draft shows under **Drafts** with the target repo and whether it's public, and nothing is filed until you choose **File**. Once filed, the note is marked sent with an `issue:` line. Off until the hub has filing set up (coming in a later release).
+- `ostrakon doctor` checks your keybindings and names any of ostrakon's keys that aren't bound. Without its binding, `ctrl+x tab` from the prompt focuses the band instead of the pane.
 
 ### Changed
 
 - New notes and the edit card take several lines: the field wraps, grows to 4 rows (2 when the pane sits above the prompt) and scrolls. Shift+Enter, or `\` then Enter, starts a new line, and a pasted note keeps its lines. Notes that contain `↵` can now be edited in the pane too, and the preview no longer repeats the note while you edit it.
 - Capture and the edit card sit between accent rules instead of a frame, and the draft is no longer repeated under the field. Needs Claude Code 2.1.301 or later.
+
+### Security
+
+- The hub's systemd unit runs it in a sandbox: your home folder is read-only to it except its data folder, and it can't see `~/.ssh`, `~/.gnupg`, `~/.config/gh`, `~/.claude`, your session's D-Bus and systemd sockets, or Docker's socket. `ostrakon doctor` says whether the running hub has these limits. `ostrakon update` restarts the hub with the new unit. **If you set `HUB_DATA` to another folder in your home**, run `./install.sh --hub` after this update, or the hub can't write its data and won't start (docs/phone.md, What the hub can reach).
 
 ## [0.8.1] - 2026-10-25
 

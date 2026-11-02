@@ -21,5 +21,30 @@ ExecStart=%h/.local/bin/ostrakon hub
 Restart=on-failure
 RestartSec=5
 
+# The sandbox (SPEC §9.2). The hub answers other devices, so a bug in it or in Bun shouldn't reach
+# your keys and logins or change your files. It still runs as you and can read the rest of your
+# home and your other processes: defence in depth, not a wall. In a user unit these need
+# unprivileged user namespaces; where the kernel has none, systemd turns them off and the hub runs
+# without them (`ostrakon doctor` says which). The - prefix skips a path this machine doesn't have.
+ProtectHome=read-only
+# The same for a home folder outside /home, which ProtectHome= doesn't cover.
+ReadOnlyPaths=-%h
+# The data folder is the one place in your home it writes. The + runs mkdir outside the sandbox, so
+# a first start has the folder to open up. A HUB_DATA elsewhere in your home gets the same two
+# lines in a drop-in, ostrakon-hub.service.d/hub-data.conf, which install.sh --hub writes.
+ExecStartPre=+-/bin/mkdir -p %h/.local/share/ostrakon-hub
+ReadWritePaths=-%h/.local/share/ostrakon-hub
+# Not ~/.claude.json: Claude Code replaces that file on every save, which drops a mount over it.
+InaccessiblePaths=-%h/.ssh -%h/.gnupg -%h/.config/gh -%h/.claude
+# The session's runtime folder: the D-Bus and systemd sockets (through which it could start code
+# outside the sandbox) and the ssh and gpg agents' sockets. The hub needs none of it.
+InaccessiblePaths=-%t
+# The system bus, and Docker's and Podman's sockets: for a user in the docker group, that one is root.
+InaccessiblePaths=-/run/dbus/system_bus_socket -/run/docker.sock -/run/podman
+NoNewPrivileges=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# Not MemoryDenyWriteExecute=: Bun's JIT needs memory it can write and then run.
+
 [Install]
 WantedBy=default.target
