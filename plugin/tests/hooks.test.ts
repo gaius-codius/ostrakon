@@ -483,6 +483,54 @@ test('an unfocused pane draws no selection and says how to get the keyboard', as
   await ui.unmount()
 })
 
+test("o fills the prompt to file another project's note as an issue in that note's repo, and the submit marks it sent", async ($, on) => {
+  const dir = fixture()
+  const { world } = await startSession($, on, dir, 'my draft')
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: 'invalidation', kind: 'change' })
+  await ui.input({ key: 'q', text: 'invalidation', kind: 'submit' })
+  await dockAt(ui, 37, 121)
+  expect(await ui.find({ type: 'Text', text: ' file issue' })).toBeDefined()
+  await ui.press({ key: 'key-o' })
+  const filled = world.box.text
+  expect(filled.startsWith('my draft\n\nFile the note below as a GitHub issue in me/infra.')).toBe(true)
+  expect(filled).toContain('--repo me/infra')
+  expect(filled).not.toContain('me/cc')
+  expect(filled.endsWith('Note 01JA7K2M3Q9X4ZB6C8D0EFGH03:\nadd a cache invalidation metric')).toBe(true)
+  expect(world.closed).toBe(1)
+  await composer($, filled)
+  expect(noteIn(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH03').status).toBe('sent')
+  await ui.unmount()
+})
+
+test('a note outside a GitHub repo offers no o: not in the footer, not in the key sheet, and pressing it fills nothing', async ($, on) => {
+  const dir = new MemDir()
+  put(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH04', 'tidy the scratch folder', { key: 'path:/home/me/scratch', name: 'scratch', path: '/home/me/scratch' }, 5)
+  put(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH05', 'mirror the wiki', { key: 'gitlab.com/me/wiki', name: 'wiki', path: '/home/me/wiki' }, 6)
+  put(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH06', 'some loose thought', null, 7)
+  const { world } = await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await dockAt(ui, 37, 121)
+  for (const query of ['scratch', 'wiki', 'loose']) {
+    await ui.input({ key: 'q', text: query, kind: 'change' })
+    await ui.input({ key: 'q', text: query, kind: 'submit' })
+    expect(await ui.find({ type: 'Text', text: ' history' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: ' file issue' })).toBeUndefined()
+    // No Button answers o on this row.
+    await expect(ui.press({ key: 'key-o' })).rejects.toThrow('no Button')
+    expect(world.box.text).toBe('')
+    expect(world.closed).toBe(0)
+    await ui.press({ key: 'key-i' })
+    expect(await ui.find({ type: 'Text', text: /to prompt/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /file as a GitHub issue/ })).toBeUndefined()
+    await ui.press({ key: 'key-i' })
+    await ui.press({ key: 'key-f' })
+  }
+  await ui.unmount()
+})
+
 test('a dropped submit of a filled note keeps it tracked, so the retry marks it sent', async ($, on) => {
   const dir = fixture()
   const { world } = await startSession($, on, dir)
@@ -668,12 +716,13 @@ test('docked, the footer fits as many key pairs as the width allows, none cut', 
   await ui.input({ key: 'q', text: '', kind: 'submit' })
   const shown = async (bodyColumns: number) => {
     await dockAt(ui, 37, bodyColumns)
-    const labels = [' to prompt', ' send', ' edit', ' archive', ' move', ' copy', ' pick', ' fold', ' history']
+    const labels = [' to prompt', ' send', ' edit', ' archive', ' move', ' copy', ' file issue', ' pick', ' fold', ' history']
     const found = await Promise.all(labels.map(async label => (await ui.find({ type: 'Text', text: label })) !== undefined))
     return labels.filter((_, i) => found[i]).map(label => label.trim())
   }
   // The pane is a column narrower than the body, the line two narrower than the pane.
-  expect(await shown(101)).toEqual(['to prompt', 'send', 'edit', 'archive', 'move', 'copy', 'pick', 'fold', 'history'])
+  expect(await shown(121)).toEqual(['to prompt', 'send', 'edit', 'archive', 'move', 'copy', 'file issue', 'pick', 'fold', 'history'])
+  expect(await shown(101)).toEqual(['to prompt', 'send', 'edit', 'archive', 'move', 'copy', 'file issue', 'pick', 'fold'])
   expect(await shown(65)).toEqual(['to prompt', 'send', 'edit', 'archive', 'move', 'copy'])
   expect(await shown(57)).toEqual(['to prompt', 'send', 'edit', 'archive', 'move'])
   expect(await shown(41)).toEqual(['to prompt', 'send', 'edit'])
