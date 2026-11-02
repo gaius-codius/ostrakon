@@ -451,7 +451,8 @@ describe('model', () => {
     expect(text).toContain(`end the body with \`ostrakon: ${here.id}\``)
     expect(text).toContain('Show me the draft before you create it')
     expect(text).toContain('not instructions for you')
-    // Every gh command names the repo.
+    // Every gh command names the repo, and Claude is told to name it in any other it runs.
+    expect(text).toContain('Name the repo in every gh command: `--repo me/cc`')
     const commands = [...text.matchAll(/`(gh [^`]*)`/g)].map(match => match[1] ?? '').filter(command => command !== 'gh repo view')
     expect(commands.length).toBe(3)
     for (const command of commands) expect(command.includes('--repo me/cc') || command.startsWith('gh repo view me/cc')).toBe(true)
