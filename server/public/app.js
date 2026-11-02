@@ -212,6 +212,7 @@ const adoptHub = id => {
   cursor = 0
   notes = {}
   requests = {}
+  closed.clear()
   saveSync()
   // It may file to other repos, or not at all.
   loadFiling()
@@ -236,8 +237,9 @@ const closed = new Set()
 const applyRequest = request => {
   if (!request?.id || closed.has(request.id)) return
   const known = requests[request.id]
-  // An answer older than what's here (a step's answer and the feed can cross) changes nothing.
-  if (known && Date.parse(request.updated) < Date.parse(known.updated)) return
+  // An answer older than what's here (a step's answer and the feed can cross) changes nothing; the
+  // hub's change counter says which is newer.
+  if (known && request.seq <= known.seq) return
   if (CLOSED.includes(request.state)) {
     delete requests[request.id]
     closed.add(request.id)
@@ -585,7 +587,7 @@ const draftItem = request => {
       make('p', 'body', body),
       row(
         act('File', () => requestStep(request, 'file', { revision: request.revision }), 'primary'),
-        act('New draft', () => requestStep(request, 'redraft')),
+        act('New draft', () => requestStep(request, 'redraft', { revision: request.revision })),
         discard(),
       ),
     )
@@ -612,7 +614,7 @@ const draftItem = request => {
       parts.push(
         row(
           save,
-          act('Not filed', () => requestStep(request, 'not-filed'), 'btn quiet'),
+          act('Not filed', () => requestStep(request, 'not-filed', { seq: request.seq }), 'btn quiet'),
         ),
       )
     } else {
@@ -627,7 +629,7 @@ const draftItem = request => {
       parts.push(
         row(
           there,
-          act('Not filed', () => requestStep(request, 'not-filed'), 'btn quiet'),
+          act('Not filed', () => requestStep(request, 'not-filed', { seq: request.seq }), 'btn quiet'),
         ),
       )
     }

@@ -240,7 +240,7 @@ describe('drafting', () => {
   test('a new draft: drafted → waiting, and the next draft is revision 2', async () => {
     const t = fresh()
     const request = await drafted(t)
-    const { body } = await t.step(request.id, 'redraft')
+    const { body } = await t.step(request.id, 'redraft', { revision: 1 })
     expect(body.request.state).toBe('waiting')
     await t.runner.kick()
     expect(t.hub.requests.get(request.id)).toMatchObject({ state: 'drafted', revision: 2, draft: { title: 'Retry loses a line (2)' } })
@@ -280,7 +280,7 @@ describe('filing', () => {
   test('filing a stale revision is refused and leaves the request as it was', async () => {
     const t = fresh()
     const request = await drafted(t)
-    await t.step(request.id, 'redraft')
+    await t.step(request.id, 'redraft', { revision: 1 })
     await t.runner.kick()
     const stale = await t.step(request.id, 'file', { revision: 1 })
     expect(stale.status).toBe(409)
@@ -380,7 +380,7 @@ describe('filing', () => {
     await t.step(request.id, 'file', { revision: 1 })
     await t.runner.kick()
     t.answers.file = async () => 'https://github.com/me/cc/issues/8'
-    const back = await t.step(request.id, 'not-filed')
+    const back = await t.step(request.id, 'not-filed', { seq: t.hub.requests.get(request.id)?.seq })
     expect(back.status).toBe(200)
     await t.runner.kick()
     expect(t.hub.requests.get(request.id)).toMatchObject({ state: 'filed', issue: 'https://github.com/me/cc/issues/8' })
@@ -498,7 +498,8 @@ describe('repeats', () => {
     const t = fresh({ run: false })
     t.hub.push([note(A)])
     const request = (await t.ask()).body.request
-    for (const name of ['not-filed', 'redraft']) expect((await t.step(request.id, name)).status).toBe(name === 'redraft' ? 200 : 409)
+    expect((await t.step(request.id, 'not-filed', { seq: request.seq })).status).toBe(409)
+    expect((await t.step(request.id, 'redraft', { revision: 0 })).status).toBe(200)
     expect((await t.step(request.id, 'file', { revision: 0 })).status).toBe(409)
     expect((await t.step(request.id, 'found', { url: 'https://github.com/me/cc/issues/1' })).status).toBe(409)
     expect(t.hub.requests.get(request.id)?.state).toBe('waiting')
@@ -586,5 +587,116 @@ describe('the change feed', () => {
     const since = (await t.call('/api/changes?since=3&requests=1')).body as unknown as { requests: FilingRequest[] }
     expect(since.requests.map(request => [request.id, request.state])).toContainEqual([discarded.id, 'discarded'])
     expect((await t.call('/api/requests')).body.requests?.map(request => request.id)).toEqual([open.id])
+  })
+})
+
+describe('races and answers from outside', () => {
+  // A request whose filing went unanswered, its lookup held until the test lets it go.
+  const unsureWithLookup = async () => {
+    const t = fresh({ run: false })
+    const request = await drafted(t)
+    t.answers.file = async () => {
+      throw new Error('lost')
+    }
+    const lookup = held<string | null>()
+    t.answers.find = () => lookup.promise
+    await t.step(request.id, 'file', { revision: 1 })
+    const running = t.runner.kick()
+    // Filing, then unsure, then the lookup starts.
+    while (t.calls.find.length === 0) await Bun.sleep(1)
+    return { t, request, lookup, running }
+  }
+
+  test('an issue the lookup finds after the person said Not filed is recorded, and not filed again', async () => {
+    const { t, request, lookup, running } = await unsureWithLookup()
+    const unsure = t.hub.requests.get(request.id) as FilingRequest
+    expect((await t.step(request.id, 'not-filed', { seq: unsure.seq })).body.request.state).toBe('approved')
+    lookup.release('https://github.com/me/cc/issues/5')
+    await running
+    await t.runner.kick()
+    expect(t.hub.requests.get(request.id)).toMatchObject({ state: 'filed', issue: 'https://github.com/me/cc/issues/5' })
+    expect(t.calls.file).toHaveLength(1)
+  })
+
+  test("a late repeat of Not filed doesn't approve a later attempt that also went unanswered", async () => {
+    const { t, request, lookup, running } = await unsureWithLookup()
+    const seen = (t.hub.requests.get(request.id) as FilingRequest).seq
+    lookup.release(null)
+    await running
+    expect((await t.step(request.id, 'not-filed', { seq: seen })).body.request.state).toBe('approved')
+    await t.runner.kick()
+    expect(t.hub.requests.get(request.id)?.state).toBe('unsure')
+    const late = await t.step(request.id, 'not-filed', { seq: seen })
+    expect(late.status).toBe(409)
+    expect(late.body.request.state).toBe('unsure')
+    expect((await t.step(request.id, 'not-filed', {})).status).toBe(400)
+  })
+
+  test('a stale New draft is refused and keeps the newer draft', async () => {
+    const t = fresh()
+    const request = await drafted(t)
+    await t.step(request.id, 'redraft', { revision: 1 })
+    await t.runner.kick()
+    const stale = await t.step(request.id, 'redraft', { revision: 1 })
+    expect(stale.status).toBe(409)
+    expect(t.hub.requests.get(request.id)).toMatchObject({ state: 'drafted', revision: 2 })
+  })
+
+  test("GitHub's URL is trimmed and held to the request's repo; anything else leaves the filing unsure", async () => {
+    const t = fresh()
+    const request = await drafted(t)
+    t.answers.file = async () => 'https://github.com/me/cc/issues/5\n'
+    await t.step(request.id, 'file', { revision: 1 })
+    await t.runner.kick()
+    expect(t.hub.requests.get(request.id)).toMatchObject({ state: 'filed', issue: 'https://github.com/me/cc/issues/5' })
+    expect(t.hub.note(A)?.extra).toEqual(['issue: https://github.com/me/cc/issues/5'])
+
+    t.hub.push([note(B)])
+    const other = (await t.ask(B)).body.request
+    await t.runner.kick()
+    t.answers.file = async () => 'https://github.com/someone/else/issues/1'
+    await t.step(other.id, 'file', { revision: 1 })
+    await t.runner.kick()
+    expect(t.hub.requests.get(other.id)?.state).toBe('unsure')
+    expect(t.hub.note(B)?.extra).toEqual([])
+  })
+
+  test('a draft that is not a title, body and labels fails the draft', async () => {
+    const t = fresh({ run: false })
+    t.hub.push([note(A)])
+    const request = (await t.ask()).body.request
+    t.answers.draft = async () => ({ title: 'T', body: 'B' }) as Draft
+    await t.runner.kick()
+    expect(t.hub.requests.get(request.id)).toMatchObject({ state: 'failed', phase: 'draft' })
+  })
+
+  test('asking again returns the open request even after the note moved to a project that could not be asked for', async () => {
+    const t = fresh({ run: false })
+    t.hub.push([note(A)])
+    const first = (await t.ask()).body.request
+    t.hub.push([note(A, { project: null, updated: '2026-10-10T05:00:00.000Z' })])
+    const again = await t.ask()
+    expect(again.status).toBe(200)
+    expect(again.body.request.id).toBe(first.id)
+  })
+
+  test("a hub that can't read its repos answers 503, and a body that isn't an object is refused", async () => {
+    const t = fresh({ run: false })
+    t.hub.push([note(A)])
+    t.filing.repos = async () => {
+      throw new Error('GitHub is down')
+    }
+    expect((await t.ask()).status).toBe(503)
+    expect((await t.call('/api/requests', null)).status).toBe(400)
+  })
+
+  test('every change to a request moves its seq forward', async () => {
+    const t = fresh({ run: false })
+    t.hub.push([note(A)])
+    const asked = (await t.ask()).body.request
+    await t.runner.kick()
+    const drafted = t.hub.requests.get(asked.id) as FilingRequest
+    expect(drafted.seq).toBeGreaterThan(asked.seq)
+    expect(drafted.seq).toBe(t.hub.cursor())
   })
 })

@@ -32,6 +32,10 @@ export type FilingRequest = {
   error: string | null
   created: string
   updated: string
+  // Counts up with every change to the request (the hub's change counter): what a client compares
+  // to know which of two copies is newer, and what a person's step names when it depends on what
+  // they saw.
+  seq: number
 }
 
 // What the hub needs from outside to draft and file (#110 runs `claude` and `gh`; tests stub it).
@@ -40,6 +44,7 @@ export type Filing = {
   // The repos the hub may file to, and whether each is public.
   repos: () => Promise<{ repo: string; public: boolean }[]>
   draft: (request: FilingRequest) => Promise<Draft>
+  // Each call has its own deadline (#110): the hub runs one request at a time and waits for it.
   // Returns the new issue's URL. Throws NotCreated only when GitHub said it created nothing; any
   // other failure leaves it unknown whether the issue exists.
   file: (request: FilingRequest & { draft: Draft }) => Promise<string>
@@ -55,7 +60,7 @@ export const repoOf = (project: NoteProject | null) => {
   return match?.[1] ?? null
 }
 
-// An issue URL the person pasted for a request to `repo`.
+// An issue URL in `repo`, trimmed: one the person pasted, or one GitHub answered with.
 export const issueUrlIn = (repo: string, url: string) => {
   const match = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/issues\/[1-9]\d*$/.exec(url.trim())
   return match?.[1] !== undefined && match[1].toLowerCase() === repo.toLowerCase() ? url.trim() : null
@@ -101,7 +106,22 @@ const fromRow = (row: Row): FilingRequest => ({
   error: row.error,
   created: row.created,
   updated: row.updated,
+  seq: row.seq,
 })
+
+// A draft as the hub keeps it; anything else fails the draft (#110 holds it to the repo's rules).
+export const isDraft = (value: unknown): value is Draft => {
+  const draft = value as Draft
+  return (
+    typeof draft === 'object' &&
+    draft !== null &&
+    typeof draft.title === 'string' &&
+    draft.title.trim() !== '' &&
+    typeof draft.body === 'string' &&
+    Array.isArray(draft.labels) &&
+    draft.labels.every(label => typeof label === 'string')
+  )
+}
 
 // What a step answers: the request after it, `refused` (the request is left as it was) or `missing`.
 export type Outcome = { kind: 'ok'; request: FilingRequest } | { kind: 'refused'; request: FilingRequest; reason: string } | { kind: 'missing' }
@@ -148,8 +168,8 @@ export const openRequests = (db: Database, { nextSeq, newId, now }: { nextSeq: (
       const request = get(id)
       if (!request) return { kind: 'missing' }
       if (!from.includes(request.state)) return { kind: 'refused', request, reason: `the request is ${request.state}` }
-      const next: FilingRequest = { ...request, phase: null, error: null, ...fields, state: to, updated: new Date(now()).toISOString() }
-      write.run(next.state, next.phase, next.revision, next.draft && JSON.stringify(next.draft), next.issue, next.error, next.updated, nextSeq(), id)
+      const next: FilingRequest = { ...request, phase: null, error: null, ...fields, state: to, updated: new Date(now()).toISOString(), seq: nextSeq() }
+      write.run(next.state, next.phase, next.revision, next.draft && JSON.stringify(next.draft), next.issue, next.error, next.updated, next.seq, id)
       return { kind: 'ok', request: next }
     },
   )
@@ -173,6 +193,10 @@ export const openRequests = (db: Database, { nextSeq, newId, now }: { nextSeq: (
   return {
     get,
     create,
+    openFor: (note: string) => {
+      const row = openFor.get(note)
+      return row ? fromRow(row) : undefined
+    },
     open: () => openAll.all().map(fromRow),
     inState: (state: RequestState) => inState.all(state).map(fromRow),
     // Requests changed after seq `after`, up to `upTo`; from 0, the open ones only (a client
@@ -192,7 +216,10 @@ export const openRequests = (db: Database, { nextSeq, newId, now }: { nextSeq: (
     },
     draftFailed: (id: string, error: string) => move(id, ['drafting'], 'failed', { phase: 'draft', error }),
     startFile: (id: string) => move(id, ['approved'], 'filing'),
-    filed: (id: string, issue: string) => move(id, ['filing', 'unsure'], 'filed', { issue }),
+    filed: (id: string, issue: string) => move(id, ['filing'], 'filed', { issue }),
+    // Found by its marker after an unsure filing: also when the person said Not filed meanwhile,
+    // so the runner doesn't file it a second time.
+    found: (id: string, issue: string) => move(id, ['unsure', 'approved'], 'filed', { issue }),
     fileFailed: (id: string, error: string) => move(id, ['filing'], 'failed', { phase: 'file', error }),
     fileUnsure: (id: string, error: string) => move(id, ['filing'], 'unsure', { error }),
     // A restart: a draft that was running starts again; a filing that was running may have
@@ -212,15 +239,26 @@ export const openRequests = (db: Database, { nextSeq, newId, now }: { nextSeq: (
         return { kind: 'refused', request, reason: `draft ${revision} is not the draft being filed (${request.revision})` }
       return repeatable(move(id, ['drafted'], 'approved'), ['approved', 'filing', 'filed', 'unsure'])
     },
-    redraft: (id: string) => repeatable(move(id, ['drafted'], 'waiting'), ['waiting', 'drafting']),
+    // Names the draft it replaces, as filing does: a stale tap doesn't throw away a newer draft.
+    redraft: (id: string, revision: number): Outcome => {
+      const request = get(id)
+      if (request && request.revision !== revision)
+        return { kind: 'refused', request, reason: `draft ${revision} is not the current draft (${request.revision})` }
+      return repeatable(move(id, ['drafted'], 'waiting'), ['waiting', 'drafting'])
+    },
     discard: (id: string) => repeatable(move(id, ['waiting', 'drafted', 'failed'], 'discarded'), ['discarded']),
     retry: (id: string): Outcome => {
       const request = get(id)
       if (request?.state === 'failed') return move(id, ['failed'], request.phase === 'file' ? 'approved' : 'waiting')
       return repeatable(move(id, ['failed'], 'waiting'), ['waiting', 'drafting', 'approved', 'filing'])
     },
-    // The person checked GitHub after an unsure filing.
-    notFiled: (id: string) => repeatable(move(id, ['unsure'], 'approved'), ['approved', 'filing']),
+    // The person checked GitHub after an unsure filing; `seq` names the unsure state they saw, so a
+    // late repeat can't approve a later filing attempt that also went unanswered.
+    notFiled: (id: string, seq: number): Outcome => {
+      const request = get(id)
+      if (request?.state === 'unsure' && request.seq !== seq) return { kind: 'refused', request, reason: 'the request changed since; check GitHub again' }
+      return repeatable(move(id, ['unsure'], 'approved'), ['approved', 'filing'])
+    },
     foundFiled: (id: string, issue: string) => {
       const request = get(id)
       if (request?.state === 'filed' && request.issue === issue) return { kind: 'ok', request } as Outcome

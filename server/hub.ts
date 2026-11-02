@@ -24,7 +24,7 @@ import { parseNote, serializeNote } from '../plugin/src/frontmatter'
 import { PURGE_AFTER_MS, isPurgeable, nextStamp, winner } from '../plugin/src/merge'
 import { ulid } from '../plugin/src/ulid'
 import manifest from '../plugin/.claude-plugin/plugin.json'
-import { type Draft, type Filing, NotCreated, type Outcome, issueUrlIn, openRequests, repoOf, shortError } from './requests'
+import { type Draft, type Filing, NotCreated, isDraft, type Outcome, issueUrlIn, openRequests, repoOf, shortError } from './requests'
 
 // The release this hub is, from the mod's manifest (one version for the repo); shown on /healthz.
 export const VERSION: string = manifest.version
@@ -166,18 +166,33 @@ export const openHub = (dataDir: string, { now = Date.now, origin = hostname() }
     const sent = note.status === 'open' ? { status: 'sent' as const, sentAt: new Date(at).toISOString() } : {}
     upsert([toNote({ ...note, ...sent, extra, updated: nextStamp(at, note.updated), origin })])
   }
-  const markFiled = db.transaction((id: string, url: string, byPerson: boolean): Outcome => {
+  // The request's move to `filed` stands on its own: the issue exists whatever happens to the note.
+  const markFiled = (id: string, url: string, move: (id: string, url: string) => Outcome): Outcome => {
     const wasFiled = requests.get(id)?.state === 'filed'
-    const outcome = byPerson ? requests.foundFiled(id, url) : requests.filed(id, url)
-    if (outcome.kind === 'ok' && !wasFiled) noteIssue(outcome.request.note, url)
+    const outcome = move(id, url)
+    if (outcome.kind === 'ok' && !wasFiled) {
+      try {
+        noteIssue(outcome.request.note, url)
+      } catch (error) {
+        console.error(`filing: request ${id} is filed as ${url}, but its note wasn't changed: ${shortError(error)}`)
+      }
+    }
     return outcome
-  })
+  }
+  // An issue URL from GitHub (through `filing`), held to the request's repo like the person's.
+  const issueIn = (id: string, url: string) => {
+    const known = requests.get(id)
+    return known && issueUrlIn(known.repo, url)
+  }
 
   // A request for note `id`, refused (a reason) unless it's open, under a github.com project that
   // `repos` holds. Repo names match whatever their case, as GitHub's do.
   const request = (id: string, repos: { repo: string; public: boolean }[]): Outcome | { kind: 'refused'; reason: string } => {
     const note = getNote(id)
     if (!note || note.deleted) return { kind: 'missing' }
+    // Asking again returns the open request, whatever happened to the note since.
+    const open = requests.openFor(id)
+    if (open) return { kind: 'ok', request: open }
     if (note.status !== 'open') return { kind: 'refused', reason: 'only an open note can be filed as an issue' }
     const repo = repoOf(note.project)
     if (!repo) return { kind: 'refused', reason: "the note's project isn't a GitHub repo" }
@@ -199,21 +214,32 @@ export const openHub = (dataDir: string, { now = Date.now, origin = hostname() }
     drafted: (id: string, draft: Draft) => changing(() => requests.drafted(id, draft)),
     draftFailed: (id: string, error: string) => changing(() => requests.draftFailed(id, error)),
     startFile: (id: string) => changing(() => requests.startFile(id)),
-    filed: (id: string, url: string) => changing(() => markFiled(id, url, false)),
+    filed: (id: string, url: string) =>
+      changing(() => {
+        const issue = issueIn(id, url)
+        return issue ? markFiled(id, issue, requests.filed) : requests.fileUnsure(id, `GitHub answered without an issue URL: ${shortError(url)}`)
+      }),
+    // Found by the request's marker after an unsure filing.
+    found: (id: string, url: string): Outcome | { kind: 'refused'; reason: string } => {
+      const issue = issueIn(id, url)
+      return issue
+        ? changing(() => markFiled(id, issue, requests.found))
+        : { kind: 'refused', reason: `not an issue URL in the request's repo: ${shortError(url)}` }
+    },
     fileFailed: (id: string, error: string) => changing(() => requests.fileFailed(id, error)),
     fileUnsure: (id: string, error: string) => changing(() => requests.fileUnsure(id, error)),
     approve: (id: string, revision: number) => changing(() => requests.approve(id, revision)),
-    redraft: (id: string) => changing(() => requests.redraft(id)),
+    redraft: (id: string, revision: number) => changing(() => requests.redraft(id, revision)),
     discard: (id: string) => changing(() => requests.discard(id)),
     retry: (id: string) => changing(() => requests.retry(id)),
-    notFiled: (id: string) => changing(() => requests.notFiled(id)),
+    notFiled: (id: string, seq: number) => changing(() => requests.notFiled(id, seq)),
     // The person found the issue on GitHub after an unsure filing.
     foundFiled: (id: string, url: string): Outcome | { kind: 'refused'; reason: string } => {
       const known = requests.get(id)
       if (!known) return { kind: 'missing' }
       const issue = issueUrlIn(known.repo, url)
       if (!issue) return { kind: 'refused', request: known, reason: `expected an issue URL in ${known.repo}: https://github.com/${known.repo}/issues/<number>` }
-      return changing(() => markFiled(id, issue, true))
+      return changing(() => markFiled(id, issue, requests.foundFiled))
     },
   }
 
@@ -286,7 +312,9 @@ export const startFiling = (hub: Hub, filing: Filing) => {
     const started = hub.requests.startDraft(id)
     if (started.kind !== 'ok') return
     try {
-      hub.requests.drafted(id, await filing.draft(started.request))
+      const made = await filing.draft(started.request)
+      if (isDraft(made)) hub.requests.drafted(id, made)
+      else hub.requests.draftFailed(id, 'the draft came back without a title, body and labels')
     } catch (error) {
       hub.requests.draftFailed(id, shortError(error))
     }
@@ -308,7 +336,9 @@ export const startFiling = (hub: Hub, filing: Filing) => {
     if (request?.state !== 'unsure') return
     try {
       const url = await filing.find(request)
-      if (url) hub.requests.filed(id, url)
+      const outcome = url ? hub.requests.found(id, url) : undefined
+      if (outcome && outcome.kind !== 'ok')
+        console.error(`filing: request ${id} found as ${url}, not recorded: ${'reason' in outcome ? outcome.reason : 'gone'}`)
     } catch (error) {
       console.error(`filing: looking for request ${id} failed: ${shortError(error)}`)
     }
@@ -496,23 +526,29 @@ export const handler = (
       if (path === '/api/requests' && request.method === 'GET') return json({ requests: hub.requests.open() })
       if (path === '/api/requests' && request.method === 'POST') {
         if (!filing) return json({ error: 'filing is off on this hub' }, 409)
-        const body = (await request.json()) as { note?: unknown }
-        if (typeof body.note !== 'string') return json({ error: 'expected { note }' }, 400)
-        const outcome = hub.requests.request(body.note, await filing.repos())
+        const body = (await request.json()) as { note?: unknown } | null
+        if (typeof body?.note !== 'string') return json({ error: 'expected { note }' }, 400)
+        let repos: { repo: string; public: boolean }[]
+        try {
+          repos = await filing.repos()
+        } catch (error) {
+          return json({ error: `couldn't read which repos the hub files to: ${shortError(error)}` }, 503)
+        }
+        const outcome = hub.requests.request(body.note, repos)
         if (outcome.kind === 'ok') kick()
         return answer(outcome)
       }
       const step = /^\/api\/requests\/([0-9A-Za-z]{26})\/(file|redraft|discard|retry|not-filed|found)$/.exec(path)
       if (step && request.method === 'POST') {
         const [, id = '', name] = step
-        const body = (await request.json().catch(() => ({}))) as { revision?: unknown; url?: unknown }
+        const body = ((await request.json().catch(() => ({}))) ?? {}) as { revision?: unknown; url?: unknown; seq?: unknown }
         const steps: Record<string, () => Response | Parameters<typeof answer>[0]> = {
           file: () => (typeof body.revision === 'number' ? hub.requests.approve(id, body.revision) : json({ error: 'expected { revision }' }, 400)),
           found: () => (typeof body.url === 'string' ? hub.requests.foundFiled(id, body.url) : json({ error: 'expected { url }' }, 400)),
-          redraft: () => hub.requests.redraft(id),
+          redraft: () => (typeof body.revision === 'number' ? hub.requests.redraft(id, body.revision) : json({ error: 'expected { revision }' }, 400)),
           discard: () => hub.requests.discard(id),
           retry: () => hub.requests.retry(id),
-          'not-filed': () => hub.requests.notFiled(id),
+          'not-filed': () => (typeof body.seq === 'number' ? hub.requests.notFiled(id, body.seq) : json({ error: 'expected { seq }' }, 400)),
         }
         const outcome = steps[name ?? '']?.() ?? json({ error: 'not found' }, 404)
         if (outcome instanceof Response) return outcome
