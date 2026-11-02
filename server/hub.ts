@@ -24,7 +24,7 @@ import { parseNote, serializeNote } from '../plugin/src/frontmatter'
 import { PURGE_AFTER_MS, isPurgeable, nextStamp, winner } from '../plugin/src/merge'
 import { ulid } from '../plugin/src/ulid'
 import manifest from '../plugin/.claude-plugin/plugin.json'
-import { type Draft, type Filing, NotCreated, isDraft, type Outcome, issueUrlIn, openRequests, repoOf, shortError } from './requests'
+import { type Draft, type Filing, NotCreated, isDraft, type Outcome, issueUrl, issueUrlIn, openRequests, repoOf, shortError } from './requests'
 
 // The release this hub is, from the mod's manifest (one version for the repo); shown on /healthz.
 export const VERSION: string = manifest.version
@@ -179,11 +179,6 @@ export const openHub = (dataDir: string, { now = Date.now, origin = hostname() }
     }
     return outcome
   }
-  // An issue URL from GitHub (through `filing`), held to the request's repo like the person's.
-  const issueIn = (id: string, url: string) => {
-    const known = requests.get(id)
-    return known && issueUrlIn(known.repo, url)
-  }
 
   // A request for note `id`, refused (a reason) unless it's open, under a github.com project that
   // `repos` holds. Repo names match whatever their case, as GitHub's do.
@@ -216,12 +211,13 @@ export const openHub = (dataDir: string, { now = Date.now, origin = hostname() }
     startFile: (id: string) => changing(() => requests.startFile(id)),
     filed: (id: string, url: string) =>
       changing(() => {
-        const issue = issueIn(id, url)
+        // GitHub's own answer may name the repo by a new name (renamed, transferred): any issue URL.
+        const issue = issueUrl(url)
         return issue ? markFiled(id, issue, requests.filed) : requests.fileUnsure(id, `GitHub answered without an issue URL: ${shortError(url)}`)
       }),
     // Found by the request's marker after an unsure filing.
     found: (id: string, url: string): Outcome | { kind: 'refused'; reason: string } => {
-      const issue = issueIn(id, url)
+      const issue = issueUrl(url)
       return issue
         ? changing(() => markFiled(id, issue, requests.found))
         : { kind: 'refused', reason: `not an issue URL in the request's repo: ${shortError(url)}` }

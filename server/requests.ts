@@ -60,9 +60,12 @@ export const repoOf = (project: NoteProject | null) => {
   return match?.[1] ?? null
 }
 
-// An issue URL in `repo`, trimmed: one the person pasted, or one GitHub answered with.
+// A GitHub issue URL, trimmed, and the repo it names.
+const ISSUE_URL = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/issues\/[1-9]\d*$/
+export const issueUrl = (url: string) => (ISSUE_URL.test(url.trim()) ? url.trim() : null)
+// One the person pasted for a request to `repo`: in that repo, so a slip of the paste is caught.
 export const issueUrlIn = (repo: string, url: string) => {
-  const match = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/issues\/[1-9]\d*$/.exec(url.trim())
+  const match = ISSUE_URL.exec(url.trim())
   return match?.[1] !== undefined && match[1].toLowerCase() === repo.toLowerCase() ? url.trim() : null
 }
 

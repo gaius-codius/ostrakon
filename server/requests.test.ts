@@ -642,7 +642,7 @@ describe('races and answers from outside', () => {
     expect(t.hub.requests.get(request.id)).toMatchObject({ state: 'drafted', revision: 2 })
   })
 
-  test("GitHub's URL is trimmed and held to the request's repo; anything else leaves the filing unsure", async () => {
+  test("GitHub's URL is trimmed and must be an issue URL; anything else leaves the filing unsure", async () => {
     const t = fresh()
     const request = await drafted(t)
     t.answers.file = async () => 'https://github.com/me/cc/issues/5\n'
@@ -654,11 +654,20 @@ describe('races and answers from outside', () => {
     t.hub.push([note(B)])
     const other = (await t.ask(B)).body.request
     await t.runner.kick()
-    t.answers.file = async () => 'https://github.com/someone/else/issues/1'
+    t.answers.file = async () => 'https://github.com/me/cc/pull/1'
     await t.step(other.id, 'file', { revision: 1 })
     await t.runner.kick()
     expect(t.hub.requests.get(other.id)?.state).toBe('unsure')
     expect(t.hub.note(B)?.extra).toEqual([])
+  })
+
+  test("GitHub's URL may name the repo by a new name: a renamed repo's issue is recorded", async () => {
+    const t = fresh()
+    const request = await drafted(t)
+    t.answers.file = async () => 'https://github.com/me/renamed/issues/3'
+    await t.step(request.id, 'file', { revision: 1 })
+    await t.runner.kick()
+    expect(t.hub.requests.get(request.id)).toMatchObject({ state: 'filed', issue: 'https://github.com/me/renamed/issues/3' })
   })
 
   test('a draft that is not a title, body and labels fails the draft', async () => {
