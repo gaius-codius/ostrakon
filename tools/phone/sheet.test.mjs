@@ -604,13 +604,15 @@ test("an unsure filing: the person checks GitHub, then says Not filed or It's th
 })
 
 test('Discard on an unsure filing says the issue may exist, and drops the request', async () => {
-  const id = '01JA7K2M3Q9X4ZB6C8D0EFGK0H'
+  const id = '01JA7K2M3Q9X4ZB6C8D0EFGK0M'
   await push(note(id, '[unsure] The band drops a chip on resize', 'ostrakon'))
   await askDraft(id)
   await tapIn(draftOf(id, 'drafted'), 'File')
   const item = draftOf(id, 'unsure')
   await item.waitFor()
   assert.equal(await item.locator('.state').textContent(), 'Discard stops the hub checking. The issue may still exist.')
+  await (await import('node:fs/promises')).mkdir(SCREENS, { recursive: true })
+  await item.screenshot({ path: `${SCREENS}/drafts-unsure.png` })
   await tapIn(item, 'Discard')
   await draftOf(id).waitFor({ state: 'detached' })
   assert.equal((await requestOf(id)) ?? null, null)
@@ -628,6 +630,8 @@ test('a request waiting to file behind another can be discarded, and is never fi
   const item = draftOf(behind, 'approved')
   await item.waitFor()
   assert.equal(await item.locator('.state').textContent(), 'waiting to file')
+  await (await import('node:fs/promises')).mkdir(SCREENS, { recursive: true })
+  await item.screenshot({ path: `${SCREENS}/drafts-approved.png` })
   await tapIn(item, 'Discard')
   await draftOf(behind).waitFor({ state: 'detached' })
   await draftOf(slow).waitFor({ state: 'detached', timeout: 10000 })
