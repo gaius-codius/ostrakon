@@ -22,9 +22,10 @@ import { join } from 'node:path'
 import type { Note } from '../plugin/types'
 import { parseNote, serializeNote } from '../plugin/src/frontmatter'
 import { PURGE_AFTER_MS, isPurgeable, nextStamp, winner } from '../plugin/src/merge'
+import { repoOf } from '../plugin/src/project'
 import { ulid } from '../plugin/src/ulid'
 import manifest from '../plugin/.claude-plugin/plugin.json'
-import { type Draft, type Filing, NotCreated, isDraft, type Outcome, issueUrl, issueUrlIn, openRequests, repoOf, shortError } from './requests'
+import { type Draft, type Filing, NotCreated, isDraft, type Outcome, issueUrl, issueUrlIn, openRequests, shortError } from './requests'
 
 // The release this hub is, from the mod's manifest (one version for the repo); shown on /healthz.
 export const VERSION: string = manifest.version

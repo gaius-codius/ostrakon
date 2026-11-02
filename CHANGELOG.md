@@ -9,6 +9,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 ### Added
 
 - The phone and web app can ask for a note to be filed as a GitHub issue (**File as issue** in a note's actions). The hub drafts it, the draft shows under **Drafts** with the target repo and whether it's public, and nothing is filed until you choose **File**. Once filed, the note is marked sent with an `issue:` line. Off until the hub has filing set up (coming in a later release).
+- `o` on a note in the pane fills the prompt to file it as a GitHub issue in the note's own repo, even from another project's session. Claude reads the repo's labels, checks for an issue already filed from the note, says whether the repo is public, and shows you the draft before creating it. Offered only on notes whose project is a github.com repo.
 - `ostrakon doctor` checks your keybindings and names any of ostrakon's keys that aren't bound. Without its binding, `ctrl+x tab` from the prompt focuses the band instead of the pane.
 
 ### Changed
