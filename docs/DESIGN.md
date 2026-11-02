@@ -232,6 +232,7 @@ Strings the surfaces or the docs depend on, each checked word for word in every 
 | `Couldn't tell if it was filed. Check GitHub.` | server/public/app.js, docs/SPEC.md | a filing with no clear answer |
 | `It's there` | server/public/app.js, docs/SPEC.md | its button to paste the issue's URL |
 | `Not filed` | server/public/app.js, docs/SPEC.md | its button to file again |
+| `Filed` | server/public/app.js, docs/SPEC.md | the toast once a request is filed: `Filed · owner/repo#12` |
 
 ## 7. Motion
 
@@ -308,7 +309,7 @@ Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one
 ### 6.1.0 — 2026-11-02
 - Change: The phone's note actions add **File as issue** (an issue icon: a ring with a dot) on a note under a GitHub repo the hub files to, and a **Drafts** section above the inbox lists the requests with their state, the draft's repo and visibility (`owner/repo · public`), title, labels and body, and File, New draft and Discard. New copy in §6.
 - Why: Filing a note as an issue from the phone (#108) needs a place to read the draft before anything reaches GitHub, and to say what the hub is doing with it.
-Fingerprint: 268ab2962328
+Fingerprint: a55df8cfe757
 
 ### 6.0.0 — 2026-11-02
 - Change: Capture, its target picker and the edit card sit between accent rules (`── ✎ new note ──── cc ──`, `── edit ──`; the bottom rule docked only) instead of a `round` frame, with the field across the pane and growing to several lines. `↵` is gone: a field holds real newlines.

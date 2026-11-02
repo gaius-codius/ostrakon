@@ -23,6 +23,18 @@ note from Claude, `▪` one from the phone. Notes Claude proposed (harvest) come
 
 Moving, archiving and marking sent can all be undone from the message that pops up afterwards.
 
+**File a note as a GitHub issue** (once the hub has filing set up; that comes in a later release):
+
+- **File as issue** in a note's actions asks the hub for a draft. It shows only for a note under
+  a GitHub repo the hub can file to.
+- The draft shows under **Drafts**, above the inbox: the repo and whether it's public, then the
+  title, labels and body. **File** files it, **New draft** asks again, **Discard** drops it.
+  Nothing is filed until you choose **File**.
+- Once filed, the note is marked sent with an `issue:` line pointing at the issue.
+- If the hub couldn't tell whether GitHub took it, check the repo's issues, then choose
+  **It's there** (paste the issue's link) or **Not filed** (file it again).
+- These buttons need the hub: they're off while it can't be reached, and never queued.
+
 **It works offline.** Saving never waits for the network: notes are queued on the phone and sent
 as soon as the hub answers. Until then the page shows something like `hub offline · 2 queued` and
 keeps trying. Your inbox is kept on the phone too, and the app (fonts and all) opens straight away
