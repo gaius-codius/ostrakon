@@ -460,3 +460,220 @@ test('picking a project on Move to moves the note and closes the menu', async ()
   // And the picker's list is back in its drawer, for File under.
   assert.equal(await page.evaluate(() => document.getElementById('picker-body').closest('dialog').id), 'picker')
 })
+
+// ---- filing a note as an issue: File as issue in the menu, then Drafts ----
+// The test hub (hub.ts) files to me/ostrakon (public) and me/pane (private), and a note's text
+// steers it: `[nodraft]` fails the draft, `[unsure]` gets no answer from GitHub.
+
+const SCREENS = process.env.SCREENS_DIR || '/tmp/ostrakon-phone-screens'
+
+// Notes for one test, older than the rest so they sit last in their groups.
+const push = async (...notes) => {
+  const pushed = await fetch(`${HUB}/api/notes`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ notes: notes.map(one => ({ ...one, created: '2026-10-08T01:00:00.000Z', updated: '2026-10-08T01:00:00.000Z' })) }),
+  })
+  assert.equal(pushed.status, 200, await pushed.text())
+}
+// A step on a request straight at the hub, for setting up and tidying up.
+const hubStep = async (path, body) => {
+  const answer = await fetch(`${HUB}/api/requests${path}`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' },
+    body: JSON.stringify(body ?? {}),
+  })
+  return answer.json()
+}
+
+const rowOf = (id, on = page) => on.locator(`li.note[data-id="${id}"]`)
+const draftOf = (id, state, on = page) => on.locator(`#drafts-list li[data-note="${id}"]${state ? `[data-state="${state}"]` : ''}`)
+const fileAction = (on = page) => on.locator('#sheet-actions .action', { hasText: 'File as issue' })
+const requestOf = (id, on = page) => on.evaluate(note => Object.values(requests).find(request => request.note === note) ?? null, id)
+
+const openMenu = async (id, on = page) => {
+  const row = rowOf(id, on)
+  await row.waitFor()
+  await row.scrollIntoViewIfNeeded()
+  await row.locator('.more').tap()
+  await on.waitForFunction(() => document.getElementById('sheet').open)
+  // The hub's filing setup, loaded with the page.
+  await on.waitForFunction(() => filing.on)
+}
+const closeMenu = async (on = page) => {
+  await on.locator('#sheet-cancel').tap()
+  await on.waitForFunction(() => !document.getElementById('sheet').open)
+}
+// Asks for a draft from the menu, and waits for the hub's draft.
+const askDraft = async id => {
+  await openMenu(id)
+  await fileAction().tap()
+  await sheetShut()
+  await draftOf(id, 'drafted').waitFor()
+}
+const tapIn = (item, name) => item.getByRole('button', { name, exact: true }).tap()
+
+test('File as issue shows under a repo the hub files to, drafts the note, and File files it', async () => {
+  const [covered, other] = ['01JA7K2M3Q9X4ZB6C8D0EFGK0A', '01JA7K2M3Q9X4ZB6C8D0EFGK0B']
+  await push(
+    note(covered, 'Crash when the repo is empty\nOpen ostrakon in a repo with no commits: it throws.', 'ostrakon'),
+    note(other, 'Look at how the other tool files issues', 'elsewhere'),
+  )
+  await openMenu(other)
+  assert.equal(await fileAction().count(), 0, 'File as issue shows under a repo the hub does not file to')
+  await closeMenu()
+  await openMenu(covered)
+  assert.equal(await fileAction().isEnabled(), true, 'File as issue is off')
+  await fileAction().tap()
+  await sheetShut()
+  await page.locator('#toast-text', { hasText: 'Asked for a draft' }).waitFor()
+  const item = draftOf(covered, 'drafted')
+  await item.waitFor()
+  assert.equal(await page.locator('#drafts h2').textContent(), 'Drafts')
+  assert.equal(await item.locator('.for').textContent(), 'me/ostrakon · public')
+  assert.equal(await item.locator('.title').textContent(), 'Crash when the repo is empty')
+  assert.equal(await item.locator('.labels').textContent(), 'bug')
+  assert.match(await item.locator('.body').textContent(), /no commits: it throws\.$/)
+  // The menu now says it's in Drafts, and doesn't ask again.
+  await openMenu(covered)
+  assert.equal(await fileAction().isDisabled(), true, 'File as issue can ask again')
+  assert.match(await fileAction().textContent(), /in Drafts/)
+  await closeMenu()
+  await tapIn(item, 'File')
+  // Filed: it leaves Drafts, and the note (sent, with the issue) leaves the inbox.
+  await draftOf(covered).waitFor({ state: 'detached' })
+  await rowOf(covered).waitFor({ state: 'detached' })
+  await page.locator('#toast-text', { hasText: /Filed · me\/ostrakon#\d+/ }).waitFor()
+  assert.equal(await page.locator('#drafts').isHidden(), true, 'Drafts shows with nothing in it')
+})
+
+test('New draft drafts again, and Discard drops the request and keeps the note', async () => {
+  const id = '01JA7K2M3Q9X4ZB6C8D0EFGK0C'
+  await push(note(id, 'Band chips cut a word in half', 'pane'))
+  await askDraft(id)
+  const item = draftOf(id, 'drafted')
+  assert.equal(await item.locator('.for').textContent(), 'me/pane · private')
+  assert.equal((await requestOf(id)).revision, 1)
+  await tapIn(item, 'New draft')
+  await page.waitForFunction(note => Object.values(requests).find(request => request.note === note)?.revision === 2, id)
+  await draftOf(id, 'drafted').waitFor()
+  await tapIn(draftOf(id, 'drafted'), 'Discard')
+  await draftOf(id).waitFor({ state: 'detached' })
+  assert.equal(await rowOf(id).count(), 1, 'Discard took the note away')
+  await openMenu(id)
+  assert.equal(await fileAction().isEnabled(), true, 'File as issue is off after Discard')
+  await closeMenu()
+})
+
+test("an unsure filing: the person checks GitHub, then says Not filed or It's there", async () => {
+  const id = '01JA7K2M3Q9X4ZB6C8D0EFGK0D'
+  await push(note(id, '[unsure] The hub test flakes on a slow disk', 'ostrakon'))
+  await askDraft(id)
+  await tapIn(draftOf(id, 'drafted'), 'File')
+  const item = draftOf(id, 'unsure')
+  await item.waitFor()
+  assert.equal(await item.locator('.reason').first().textContent(), "Couldn't tell if it was filed. Check GitHub.")
+  const link = item.locator('a')
+  assert.equal(await link.getAttribute('href'), 'https://github.com/me/ostrakon/issues')
+  assert.equal(await link.getAttribute('target'), '_blank')
+  assert.equal(await link.getAttribute('rel'), 'noopener')
+  // Not filed: filed again, and (this hub never answers) unsure again.
+  const before = (await requestOf(id)).updated
+  await tapIn(item, 'Not filed')
+  await page.waitForFunction(
+    ([note, was]) => {
+      const request = Object.values(requests).find(one => one.note === note)
+      return request?.state === 'unsure' && request.updated !== was
+    },
+    [id, before],
+  )
+  // It's there: a URL in another repo is refused, under the field; the right one files it.
+  await tapIn(draftOf(id, 'unsure'), "It's there")
+  const field = draftOf(id, 'unsure').locator('input')
+  assert.equal(await page.evaluate(() => document.activeElement?.type), 'url', "the URL field doesn't have focus")
+  await field.fill('https://github.com/me/pane/issues/3')
+  await tapIn(draftOf(id, 'unsure'), 'Save')
+  await draftOf(id, 'unsure').locator('.reason', { hasText: 'expected an issue URL in me/ostrakon' }).waitFor()
+  assert.equal(await field.inputValue(), 'https://github.com/me/pane/issues/3', 'the URL typed was wiped')
+  await field.fill('https://github.com/me/ostrakon/issues/77')
+  await tapIn(draftOf(id, 'unsure'), 'Save')
+  await draftOf(id).waitFor({ state: 'detached' })
+  await rowOf(id).waitFor({ state: 'detached' })
+  await page.locator('#toast-text', { hasText: 'Filed · me/ostrakon#77' }).waitFor()
+})
+
+test('a draft that fails shows why, with Retry and Discard', async () => {
+  const id = '01JA7K2M3Q9X4ZB6C8D0EFGK0E'
+  await push(note(id, '[nodraft] Write up the hub setup', 'pane'))
+  await openMenu(id)
+  await fileAction().tap()
+  await sheetShut()
+  const item = draftOf(id, 'failed')
+  await item.waitFor()
+  assert.equal(await item.locator('.reason').textContent(), 'drafting timed out')
+  const before = (await requestOf(id)).updated
+  await tapIn(item, 'Retry')
+  await page.waitForFunction(
+    ([note, was]) => {
+      const request = Object.values(requests).find(one => one.note === note)
+      return request?.state === 'failed' && request.updated !== was
+    },
+    [id, before],
+  )
+  await tapIn(draftOf(id, 'failed'), 'Discard')
+  await draftOf(id).waitFor({ state: 'detached' })
+})
+
+test("while the hub can't be reached, filing's buttons are off and nothing is queued", async t => {
+  const [drafted, plain] = ['01JA7K2M3Q9X4ZB6C8D0EFGK0F', '01JA7K2M3Q9X4ZB6C8D0EFGK0G']
+  await push(note(drafted, 'Pair codes expire too soon', 'ostrakon'), note(plain, 'Retry the pairing claim once', 'ostrakon'))
+  await askDraft(drafted)
+  const { request } = await hubStep('', { note: drafted })
+  t.after(() => hubStep(`/${request.id}/discard`))
+  const away = await pageWith(devices['iPhone 15'])
+  t.after(() => away.context().close())
+  await away.goto(HUB)
+  await draftOf(drafted, 'drafted', away).waitFor()
+  await away.waitForFunction(() => filing.on)
+  // The hub stops answering; the next poll finds out.
+  await away.route('**/api/**', route => route.abort())
+  await away.evaluate(() => startPoll())
+  await away.locator('#status', { hasText: 'hub offline' }).waitFor()
+  const buttons = draftOf(drafted, 'drafted', away).locator('button')
+  assert.equal(await buttons.count(), 3)
+  for (const one of await buttons.all()) assert.equal(await one.isDisabled(), true, `${await one.textContent()} is on offline`)
+  await openMenu(plain, away)
+  assert.equal(await fileAction(away).isDisabled(), true, 'File as issue is on offline')
+  assert.match(await fileAction(away).textContent(), /hub offline/)
+  // A click that gets through anyway does nothing either.
+  await away.evaluate(() => {
+    document.querySelector('#sheet-actions [data-key="File as issue"]').click()
+    for (const one of document.querySelectorAll('#drafts-list button')) one.click()
+  })
+  await away.waitForTimeout(300)
+  assert.deepEqual(await away.evaluate(() => JSON.parse(localStorage.getItem('sp.outbox') ?? '[]')), [], 'something was queued')
+  assert.equal((await requestOf(drafted, away)).state, 'drafted')
+})
+
+// Screenshots of Drafts and of the menu with File as issue, light and dark, for a person to look at.
+test('screenshots: Drafts with a draft, and the menu with File as issue', async t => {
+  const id = '01JA7K2M3Q9X4ZB6C8D0EFGK0H'
+  await push(
+    note(id, "The menu jumps when opened twice\nOpen a note's menu, close it and open it again: the panel drops a few pixels before it rises.", 'ostrakon'),
+  )
+  const { request } = await hubStep('', { note: id })
+  t.after(() => hubStep(`/${request.id}/discard`))
+  const { mkdir } = await import('node:fs/promises')
+  await mkdir(SCREENS, { recursive: true })
+  for (const colorScheme of ['light', 'dark']) {
+    const shot = await pageWith({ ...devices['iPhone 15'], colorScheme })
+    await shot.goto(HUB)
+    await draftOf(id, 'drafted', shot).waitFor()
+    await shot.locator('#drafts').screenshot({ path: `${SCREENS}/drafts-${colorScheme}.png` })
+    await shot.screenshot({ path: `${SCREENS}/inbox-${colorScheme}.png` })
+    await openMenu('01JA7K2M3Q9X4ZB6C8D0EFGH0A', shot)
+    await shot.waitForTimeout(500)
+    await shot.screenshot({ path: `${SCREENS}/sheet-${colorScheme}.png` })
+    await shot.context().close()
+  }
+})

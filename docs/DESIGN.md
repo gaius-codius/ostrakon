@@ -1,6 +1,6 @@
 # Ostrakon design system
 
-Version: 6.0.0
+Version: 6.1.0
 
 What the terminal mod (the pane, the band and the prompt hint, in `plugin/`) and the phone (`server/public/`) must agree on: colour roles, the project palette, the phone's tokens, symbols, fixed copy, motion and the accessibility bar. [`SPEC.md`](SPEC.md) describes behaviour and points here for these values instead of repeating them. The code holds the values: `plugin/src/ui/look.ts` for the terminal, `style.css`, `app.js` and `index.html` for the phone.
 
@@ -220,6 +220,19 @@ Strings the surfaces or the docs depend on, each checked word for word in every 
 | `Paste a hub token instead` | server/public/index.html, docs/SPEC.md | the folded token form |
 | `Archived and sent notes aren't searched.` | server/public/index.html, docs/SPEC.md | a search with no match |
 | `File under` | server/public/index.html, docs/SPEC.md | the project picker's title |
+| `File as issue` | server/public/app.js, docs/SPEC.md | the sheet action that asks the hub to draft an issue |
+| `in Drafts` | server/public/app.js, docs/SPEC.md | its subtitle once the note has an open request |
+| `Asked for a draft` | server/public/app.js, docs/SPEC.md | the toast after it |
+| `Drafts` | server/public/index.html, docs/SPEC.md | the heading over open requests |
+| `waiting to draft` | server/public/app.js, docs/SPEC.md | a request the hub hasn't drafted yet |
+| `drafting…` | server/public/app.js, docs/SPEC.md | while it drafts |
+| `New draft` | server/public/app.js, docs/SPEC.md | a draft's button to draft again |
+| `waiting to file` | server/public/app.js, docs/SPEC.md | a draft the person filed, not yet sent to GitHub |
+| `filing…` | server/public/app.js, docs/SPEC.md | while the hub files it |
+| `Couldn't tell if it was filed. Check GitHub.` | server/public/app.js, docs/SPEC.md | a filing with no clear answer |
+| `It's there` | server/public/app.js, docs/SPEC.md | its button to paste the issue's URL |
+| `Not filed` | server/public/app.js, docs/SPEC.md | its button to file again |
+| `Filed` | server/public/app.js, docs/SPEC.md | the toast once a request is filed: `Filed · owner/repo#12` |
 
 ## 7. Motion
 
@@ -292,6 +305,11 @@ Keys, layout and behaviour are in [`SPEC.md`](SPEC.md). The terminal's spacing i
 ## 11. Changelog
 
 Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one or more `- Change:` lines and one or more `- Why:` lines. The newest entry ends with `Fingerprint: <hash>` of the design values in the code (`bun tools/check-design.ts --fingerprint` prints it). Versions: major when a meaning changes or something goes (a glyph means something else, a colour role moves); minor when something is added; patch for a value tweak or a doc fix. Entries are never removed.
+
+### 6.1.0 — 2026-11-02
+- Change: The phone's note actions add **File as issue** (an issue icon: a ring with a dot) on a note under a GitHub repo the hub files to, and a **Drafts** section above the inbox lists the requests with their state, the draft's repo and visibility (`owner/repo · public`), title, labels and body, and File, New draft and Discard. New copy in §6.
+- Why: Filing a note as an issue from the phone (#108) needs a place to read the draft before anything reaches GitHub, and to say what the hub is doing with it.
+Fingerprint: a55df8cfe757
 
 ### 6.0.0 — 2026-11-02
 - Change: Capture, its target picker and the edit card sit between accent rules (`── ✎ new note ──── cc ──`, `── edit ──`; the bottom rule docked only) instead of a `round` frame, with the field across the pane and growing to several lines. `↵` is gone: a field holds real newlines.
