@@ -246,7 +246,9 @@ export const openRequests = (db: Database, { nextSeq, newId, now }: { nextSeq: (
         return { kind: 'refused', request, reason: `draft ${revision} is not the current draft (${request.revision})` }
       return repeatable(move(id, ['drafted'], 'waiting'), ['waiting', 'drafting'])
     },
-    discard: (id: string) => repeatable(move(id, ['waiting', 'drafted', 'failed'], 'discarded'), ['discarded']),
+    // Any state the hub isn't working on. An approved one only before filing claims it; an unsure
+    // one is the person's to handle from then on (the issue may exist), and the hub stops looking.
+    discard: (id: string) => repeatable(move(id, ['waiting', 'drafted', 'failed', 'approved', 'unsure'], 'discarded'), ['discarded']),
     retry: (id: string): Outcome => {
       const request = get(id)
       if (request?.state === 'failed') return move(id, ['failed'], request.phase === 'file' ? 'approved' : 'waiting')
