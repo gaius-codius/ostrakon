@@ -26,7 +26,9 @@ token, adds a few notes, and runs `sheet.test.mjs` against it:
 - New draft drafts again; Discard drops the request and keeps the note.
 - a filing with no clear answer shows `Couldn't tell if it was filed. Check GitHub.` and a link to
   the repo's issues; Not filed files it again, and It's there refuses a URL in another repo under
-  the field, then files it with the right one.
+  the field, then files it with the right one. Discard there, below `Discard stops the hub
+  checking. The issue may still exist.`, drops the request and keeps the note.
+- a request waiting to file behind a slow filing can be discarded, and the hub never files it.
 - a draft that fails shows the reason, with Retry and Discard.
 - while the hub can't be reached, File as issue and every Drafts button are off, and nothing is
   queued.

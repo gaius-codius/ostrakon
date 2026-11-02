@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -479,8 +479,12 @@ describe('discarding', () => {
     const running = t.runner.kick()
     while (t.calls.find.length === 0) await Bun.sleep(1)
     expect((await t.step(request.id, 'discard')).body.request.state).toBe('discarded')
+    const errors = spyOn(console, 'error').mockImplementation(() => {})
     lookup.release('https://github.com/me/cc/issues/5')
     await running
+    // The person took it over: nothing to report either.
+    expect(errors).not.toHaveBeenCalled()
+    errors.mockRestore()
     expect(t.hub.requests.get(request.id)).toMatchObject({ state: 'discarded', issue: null })
     expect(t.hub.note(A)?.extra).toEqual([])
   })

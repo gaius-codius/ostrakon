@@ -335,7 +335,8 @@ export const startFiling = (hub: Hub, filing: Filing) => {
     try {
       const url = await filing.find(request)
       const outcome = url ? hub.requests.found(id, url) : undefined
-      if (outcome && outcome.kind !== 'ok')
+      // Discarded meanwhile: the person took it over, so nothing to record or report.
+      if (outcome && outcome.kind !== 'ok' && hub.requests.get(id)?.state !== 'discarded')
         console.error(`filing: request ${id} found as ${url}, not recorded: ${'reason' in outcome ? outcome.reason : 'gone'}`)
     } catch (error) {
       console.error(`filing: looking for request ${id} failed: ${shortError(error)}`)

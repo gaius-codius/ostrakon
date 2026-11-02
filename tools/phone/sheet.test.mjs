@@ -463,7 +463,7 @@ test('picking a project on Move to moves the note and closes the menu', async ()
 
 // ---- filing a note as an issue: File as issue in the menu, then Drafts ----
 // The test hub (hub.ts) files to me/ostrakon (public) and me/pane (private), and a note's text
-// steers it: `[nodraft]` fails the draft, `[unsure]` gets no answer from GitHub, `[slow]` takes 3 s
+// steers it: `[nodraft]` fails the draft, `[unsure]` gets no answer from GitHub, `[slow]` takes 6 s
 // to file.
 
 const SCREENS = process.env.SCREENS_DIR || '/tmp/ostrakon-phone-screens'
@@ -634,8 +634,12 @@ test('a request waiting to file behind another can be discarded, and is never fi
   await item.screenshot({ path: `${SCREENS}/drafts-approved.png` })
   await tapIn(item, 'Discard')
   await draftOf(behind).waitFor({ state: 'detached' })
-  await draftOf(slow).waitFor({ state: 'detached', timeout: 10000 })
-  assert.equal(await rowOf(behind).count(), 1, 'the discarded note was filed')
+  await draftOf(slow).waitFor({ state: 'detached', timeout: 15000 })
+  // The hub's own record: filed one, never the other.
+  const feed = await fetch(`${HUB}/api/changes?since=1&requests=1`, { headers: { authorization: `Bearer ${TOKEN}` } }).then(answer => answer.json())
+  const ended = id => feed.requests.filter(request => request.note === id).at(-1)
+  assert.equal(ended(slow)?.state, 'filed')
+  assert.deepEqual([ended(behind)?.state, ended(behind)?.issue], ['discarded', null])
 })
 
 test('a draft that fails shows why, with Retry and Discard', async () => {
