@@ -418,7 +418,11 @@ describe('filing', () => {
 
   test('finds the marker on a line of its own, also with text added below it since', async () => {
     const f = fakes()
-    f.issues([['https://github.com/me/cc/issues/6', `The retry drops it.\n\nostrakon: ${ID}\n\nSteps added later.`]])
+    f.issues([
+      ['https://github.com/me/cc/issues/12', `Quoting #6:\n\nostrakon: ${ID}`],
+      ['https://github.com/me/cc/issues/6', `The retry drops it.\n\nostrakon: ${ID}\n\nSteps added later.`],
+    ])
+    // Newest first, as GitHub lists them: the oldest match is the one filed.
     expect(await f.open().find(request())).toBe('https://github.com/me/cc/issues/6')
   })
 

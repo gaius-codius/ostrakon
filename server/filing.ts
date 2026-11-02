@@ -104,8 +104,6 @@ const run = async (cmd: string[], { env, cwd, stdin, ms, name }: { env: Record<s
     return { code, stdout, stderr } satisfies Ran
   } finally {
     clearTimeout(timer)
-    // Nothing it left running outlives the call.
-    killGroup()
   }
 }
 
@@ -257,11 +255,13 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
       ],
       `couldn't list ${request.repo}'s issues`,
     )
+    // GitHub lists the newest first: the last match is the one filed, not a later one quoting it.
+    let found: string | null = null
     for (const line of out.split('\n').filter(Boolean)) {
       const [url, body] = JSON.parse(line) as [unknown, unknown]
-      if (typeof url === 'string' && typeof body === 'string' && hasMarker(body, request.id)) return url
+      if (typeof url === 'string' && typeof body === 'string' && hasMarker(body, request.id)) found = url
     }
-    return null
+    return found
   }
 
   return {
