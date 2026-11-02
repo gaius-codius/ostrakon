@@ -16,6 +16,7 @@
 
 import { Database } from 'bun:sqlite'
 import { mkdirSync, readdirSync, rmSync } from 'node:fs'
+import { hostname } from 'node:os'
 import { join } from 'node:path'
 
 import type { Note } from '../plugin/types'
@@ -23,6 +24,7 @@ import { parseNote, serializeNote } from '../plugin/src/frontmatter'
 import { PURGE_AFTER_MS, isPurgeable, nextStamp, winner } from '../plugin/src/merge'
 import { ulid } from '../plugin/src/ulid'
 import manifest from '../plugin/.claude-plugin/plugin.json'
+import { type Draft, type Filing, NotCreated, type Outcome, issueUrlIn, openRequests, repoOf, shortError } from './requests'
 
 // The release this hub is, from the mod's manifest (one version for the repo); shown on /healthz.
 export const VERSION: string = manifest.version
@@ -73,7 +75,8 @@ export const toNote = (value: unknown): Note => {
   return read
 }
 
-export const openHub = (dataDir: string) => {
+// `origin` names the hub in the notes it changes itself (the issue it filed for one).
+export const openHub = (dataDir: string, { now = Date.now, origin = hostname() }: { now?: () => number; origin?: string } = {}) => {
   mkdirSync(dataDir, { recursive: true })
   const db = new Database(join(dataDir, 'hub.sqlite'), { create: true })
   db.run('PRAGMA journal_mode = WAL')
@@ -94,7 +97,15 @@ export const openHub = (dataDir: string) => {
 
   const getSeq = db.query<{ value: number }, []>("SELECT value FROM meta WHERE key = 'seq'")
   const putSeq = db.query("INSERT OR REPLACE INTO meta (key, value) VALUES ('seq', ?)")
-  let cursor = Math.max(maxSeq.get()?.seq ?? 0, getSeq.get()?.value ?? 0)
+  let cursor = 0
+  // One counter for notes and requests (requests.ts), so one long poll wakes for either.
+  const nextSeq = () => {
+    cursor += 1
+    putSeq.run(cursor)
+    return cursor
+  }
+  const requests = openRequests(db, { nextSeq, newId: () => ulid(now()), now })
+  cursor = Math.max(maxSeq.get()?.seq ?? 0, getSeq.get()?.value ?? 0, requests.maxSeq())
   // Recorded at once: a database from before the meta table has its high-water mark only in a row
   // that a purge may remove.
   putSeq.run(cursor)
@@ -102,6 +113,13 @@ export const openHub = (dataDir: string) => {
   const wake = () => {
     for (const resolve of waiters) resolve()
     waiters.clear()
+  }
+  // Runs a change, and wakes the long polls when it moved the cursor.
+  const changing = <T>(change: () => T) => {
+    const before = cursor
+    const result = change()
+    if (cursor !== before) wake()
+    return result
   }
 
   // Each note merged with the stored copy (SPEC §6.3); the winner is stored, and gets a new seq
@@ -112,26 +130,91 @@ export const openHub = (dataDir: string) => {
       const row = getOne.get(note.id)
       const stored = row ? (JSON.parse(row.doc) as Note) : undefined
       const best = stored ? winner(stored, note) : note
-      if (!stored || serializeNote(best) !== serializeNote(stored)) {
-        cursor += 1
-        putSeq.run(cursor)
-        put.run(best.id, JSON.stringify(best), best.updated, best.origin, cursor)
-      }
+      if (!stored || serializeNote(best) !== serializeNote(stored)) put.run(best.id, JSON.stringify(best), best.updated, best.origin, nextSeq())
       winners.push(best)
     }
     return winners
   })
 
-  const push = (incoming: Note[]) => {
-    const before = cursor
-    const winners = upsert(incoming)
-    if (cursor !== before) wake()
-    return winners
+  const push = (incoming: Note[]) => changing(() => upsert(incoming))
+
+  const getNote = (id: string) => {
+    const row = getOne.get(id)
+    return row ? (JSON.parse(row.doc) as Note) : undefined
   }
 
-  const changes = (after: number, limit = MAX_BATCH) => {
+  // `withRequests`: the requests changed in the same span too (the phone's Drafts).
+  const changes = (after: number, limit = MAX_BATCH, withRequests = false) => {
     const rows = since.all(after, limit)
-    return { hub: hubId, notes: rows.map(row => JSON.parse(row.doc) as Note), cursor: rows.length === limit ? (rows.at(-1)?.seq ?? cursor) : cursor }
+    const upTo = rows.length === limit ? (rows.at(-1)?.seq ?? cursor) : cursor
+    return {
+      hub: hubId,
+      notes: rows.map(row => JSON.parse(row.doc) as Note),
+      cursor: upTo,
+      ...(withRequests ? { requests: requests.since(after, upTo) } : {}),
+    }
+  }
+
+  // The filed issue on its note, as an ordinary change with the clock of SPEC §6.3: an `issue:`
+  // line, and an open note becomes sent. Best effort: a newer copy from elsewhere that lacks them
+  // wins the merge, and the request keeps the URL. A deleted or purged note is left alone.
+  const noteIssue = (id: string, url: string) => {
+    const note = getNote(id)
+    if (!note || note.deleted) return
+    const at = now()
+    const extra = [...note.extra.filter(line => !/^issue:/.test(line)), `issue: ${url}`]
+    const sent = note.status === 'open' ? { status: 'sent' as const, sentAt: new Date(at).toISOString() } : {}
+    upsert([toNote({ ...note, ...sent, extra, updated: nextStamp(at, note.updated), origin })])
+  }
+  const markFiled = db.transaction((id: string, url: string, byPerson: boolean): Outcome => {
+    const wasFiled = requests.get(id)?.state === 'filed'
+    const outcome = byPerson ? requests.foundFiled(id, url) : requests.filed(id, url)
+    if (outcome.kind === 'ok' && !wasFiled) noteIssue(outcome.request.note, url)
+    return outcome
+  })
+
+  // A request for note `id`, refused (a reason) unless it's open, under a github.com project that
+  // `repos` holds. Repo names match whatever their case, as GitHub's do.
+  const request = (id: string, repos: { repo: string; public: boolean }[]): Outcome | { kind: 'refused'; reason: string } => {
+    const note = getNote(id)
+    if (!note || note.deleted) return { kind: 'missing' }
+    if (note.status !== 'open') return { kind: 'refused', reason: 'only an open note can be filed as an issue' }
+    const repo = repoOf(note.project)
+    if (!repo) return { kind: 'refused', reason: "the note's project isn't a GitHub repo" }
+    const covered = repos.find(known => known.repo.toLowerCase() === repo.toLowerCase())
+    if (!covered) return { kind: 'refused', reason: `the hub can't file to ${repo}` }
+    return { kind: 'ok', request: changing(() => requests.create(note, repo, covered.public)) }
+  }
+
+  // A restart: requests caught mid-step (requests.ts recover).
+  changing(requests.recover)
+
+  // Every step on a request, waking the long polls when it changed one.
+  const steps = {
+    get: requests.get,
+    open: requests.open,
+    inState: requests.inState,
+    request,
+    startDraft: (id: string) => changing(() => requests.startDraft(id)),
+    drafted: (id: string, draft: Draft) => changing(() => requests.drafted(id, draft)),
+    draftFailed: (id: string, error: string) => changing(() => requests.draftFailed(id, error)),
+    startFile: (id: string) => changing(() => requests.startFile(id)),
+    filed: (id: string, url: string) => changing(() => markFiled(id, url, false)),
+    fileFailed: (id: string, error: string) => changing(() => requests.fileFailed(id, error)),
+    fileUnsure: (id: string, error: string) => changing(() => requests.fileUnsure(id, error)),
+    approve: (id: string, revision: number) => changing(() => requests.approve(id, revision)),
+    redraft: (id: string) => changing(() => requests.redraft(id)),
+    discard: (id: string) => changing(() => requests.discard(id)),
+    retry: (id: string) => changing(() => requests.retry(id)),
+    notFiled: (id: string) => changing(() => requests.notFiled(id)),
+    // The person found the issue on GitHub after an unsure filing.
+    foundFiled: (id: string, url: string): Outcome | { kind: 'refused'; reason: string } => {
+      const known = requests.get(id)
+      if (!known) return { kind: 'missing' }
+      const issue = issueUrlIn(known.repo, url)
+      if (!issue) return { kind: 'refused', request: known, reason: `expected an issue URL in ${known.repo}: https://github.com/${known.repo}/issues/<number>` }
+      return changing(() => markFiled(id, issue, true))
+    },
   }
 
   // Resolves once something past `after` exists, or after `ms`.
@@ -187,10 +270,79 @@ export const openHub = (dataDir: string) => {
     return file
   }
 
-  return { push, changes, waitFor, projects, purge, backup, id: hubId, cursor: () => cursor, close: () => db.close() }
+  return { push, changes, waitFor, projects, purge, backup, note: getNote, requests: steps, id: hubId, cursor: () => cursor, close: () => db.close() }
 }
 
 export type Hub = ReturnType<typeof openHub>
+
+// Drafts and files the requests, one at a time, with `filing` (SPEC §9.2 Filing): an approved
+// request first, then a lookup for an unsure one, then a waiting draft. `kick` sets it going when
+// there may be work, and resolves once it has run out.
+export const startFiling = (hub: Hub, filing: Filing) => {
+  // Each unsure request is looked up once per run of the hub, after its filing went unanswered or
+  // at start; one not found stays unsure for the person to check.
+  const looked = new Set<string>()
+  const draft = async (id: string) => {
+    const started = hub.requests.startDraft(id)
+    if (started.kind !== 'ok') return
+    try {
+      hub.requests.drafted(id, await filing.draft(started.request))
+    } catch (error) {
+      hub.requests.draftFailed(id, shortError(error))
+    }
+  }
+  const file = async (id: string) => {
+    const started = hub.requests.startFile(id)
+    if (started.kind !== 'ok' || !started.request.draft) return
+    try {
+      hub.requests.filed(id, await filing.file({ ...started.request, draft: started.request.draft }))
+    } catch (error) {
+      // Only GitHub saying it created nothing makes it a plain failure; anything else may have filed it.
+      if (error instanceof NotCreated) hub.requests.fileFailed(id, shortError(error))
+      else hub.requests.fileUnsure(id, shortError(error))
+    }
+  }
+  const lookUp = async (id: string) => {
+    looked.add(id)
+    const request = hub.requests.get(id)
+    if (request?.state !== 'unsure') return
+    try {
+      const url = await filing.find(request)
+      if (url) hub.requests.filed(id, url)
+    } catch (error) {
+      console.error(`filing: looking for request ${id} failed: ${shortError(error)}`)
+    }
+  }
+  const step = async () => {
+    const [approved] = hub.requests.inState('approved')
+    if (approved) return file(approved.id).then(() => true)
+    const unsure = hub.requests.inState('unsure').find(request => !looked.has(request.id))
+    if (unsure) return lookUp(unsure.id).then(() => true)
+    const [waiting] = hub.requests.inState('waiting')
+    if (waiting) return draft(waiting.id).then(() => true)
+    return false
+  }
+  let running: Promise<void> | null = null
+  // Set by a kick while it runs: work that came in after it last looked.
+  let isAsked = false
+  const kick = () => {
+    isAsked = true
+    running ??= (async () => {
+      try {
+        while (isAsked) {
+          isAsked = false
+          while (await step());
+        }
+      } catch (error) {
+        console.error(`filing failed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`)
+      } finally {
+        running = null
+      }
+    })()
+    return running
+  }
+  return { kick }
+}
 
 // Compares a secret in time that doesn't depend on where the first difference is.
 const sameText = (a: string, b: string) => {
@@ -203,7 +355,23 @@ const sameText = (a: string, b: string) => {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } })
 
-export const handler = (hub: Hub, auth: { token?: string; login?: string }, { now = Date.now }: { now?: () => number } = {}) => {
+// A step on a request, answered: the request, or why not (409 with the request as it stays, when
+// it's the request's state that stops it).
+const answer = (outcome: Outcome | { kind: 'refused'; reason: string }) =>
+  outcome.kind === 'ok'
+    ? json({ request: outcome.request })
+    : outcome.kind === 'missing'
+      ? json({ error: 'no such note or request' }, 404)
+      : 'request' in outcome
+        ? json({ error: outcome.reason, request: outcome.request }, 409)
+        : json({ error: outcome.reason }, 400)
+
+// `filing`: drafts and files requests (off without it); `kick` starts its runner (startFiling).
+export const handler = (
+  hub: Hub,
+  auth: { token?: string; login?: string },
+  { now = Date.now, filing, kick = () => {} }: { now?: () => number; filing?: Filing; kick?: () => unknown } = {},
+) => {
   const seenLogins = new Set<string>()
   // One-time pairing codes (code → expiry ms), in memory only: a restart drops them all, which is fine for codes that live 5 minutes.
   const codes = new Map<string, number>()
@@ -289,7 +457,7 @@ export const handler = (hub: Hub, auth: { token?: string; login?: string }, { no
         // A cursor from before a reset of the database (larger than any seq) starts over.
         const from = after > hub.cursor() ? 0 : after
         await hub.waitFor(from, wait * 1000)
-        return json(hub.changes(from))
+        return json(hub.changes(from, undefined, url.searchParams.get('requests') === '1'))
       }
       if (path === '/api/notes' && request.method === 'POST') {
         const body = (await request.json()) as { notes?: unknown }
@@ -316,6 +484,41 @@ export const handler = (hub: Hub, auth: { token?: string; login?: string }, { no
         return json({ code, expiresIn: PAIR_TTL_MS / 1000 })
       }
       if (path === '/api/projects' && request.method === 'GET') return json({ projects: hub.projects() })
+      // Filing notes as issues (SPEC §9.2 Filing): whether it's on, and the repos it covers.
+      if (path === '/api/filing' && request.method === 'GET') {
+        if (!filing) return json({ on: false, repos: [] })
+        try {
+          return json({ on: true, repos: await filing.repos() })
+        } catch (error) {
+          return json({ on: true, repos: [], error: shortError(error) })
+        }
+      }
+      if (path === '/api/requests' && request.method === 'GET') return json({ requests: hub.requests.open() })
+      if (path === '/api/requests' && request.method === 'POST') {
+        if (!filing) return json({ error: 'filing is off on this hub' }, 409)
+        const body = (await request.json()) as { note?: unknown }
+        if (typeof body.note !== 'string') return json({ error: 'expected { note }' }, 400)
+        const outcome = hub.requests.request(body.note, await filing.repos())
+        if (outcome.kind === 'ok') kick()
+        return answer(outcome)
+      }
+      const step = /^\/api\/requests\/([0-9A-Za-z]{26})\/(file|redraft|discard|retry|not-filed|found)$/.exec(path)
+      if (step && request.method === 'POST') {
+        const [, id = '', name] = step
+        const body = (await request.json().catch(() => ({}))) as { revision?: unknown; url?: unknown }
+        const steps: Record<string, () => Response | Parameters<typeof answer>[0]> = {
+          file: () => (typeof body.revision === 'number' ? hub.requests.approve(id, body.revision) : json({ error: 'expected { revision }' }, 400)),
+          found: () => (typeof body.url === 'string' ? hub.requests.foundFiled(id, body.url) : json({ error: 'expected { url }' }, 400)),
+          redraft: () => hub.requests.redraft(id),
+          discard: () => hub.requests.discard(id),
+          retry: () => hub.requests.retry(id),
+          'not-filed': () => hub.requests.notFiled(id),
+        }
+        const outcome = steps[name ?? '']?.() ?? json({ error: 'not found' }, 404)
+        if (outcome instanceof Response) return outcome
+        if (outcome.kind === 'ok') kick()
+        return answer(outcome)
+      }
       // A note from one line of text: what an iOS Shortcut or a curl sends (docs/phone.md). Without a
       // `source` it's the phone's; with one (`slack`, a script) it's yours, and the source is its origin.
       if (path === '/api/jot' && request.method === 'POST') {
@@ -420,18 +623,14 @@ const pair = async (args: string[]) => {
   else console.log('The code and the link work once, within 5 minutes; the phone then holds the hub token.')
 }
 
-if (import.meta.main && process.argv[2] === 'pair') {
-  await pair(process.argv.slice(3))
-} else if (import.meta.main) {
-  const port = Number(process.env.HUB_PORT ?? 8790)
-  const dataDir = process.env.HUB_DATA ?? join(process.env.HOME ?? '.', '.local/share/ostrakon-hub')
-  const auth = { token: process.env.HUB_TOKEN, login: process.env.HUB_LOGIN }
-  if (!auth.token && !auth.login) throw new Error('set HUB_TOKEN (and/or HUB_LOGIN)')
+// The hub, running: served on 127.0.0.1, with a backup and a tombstone purge at start and once a
+// day, and the filing runner when there's `filing`.
+export const serve = ({ port, dataDir, auth, filing }: { port: number; dataDir: string; auth: { token?: string; login?: string }; filing?: Filing }) => {
   const hub = openHub(dataDir)
+  const runner = filing && startFiling(hub, filing)
   // Long polls hold a request up to MAX_WAIT_S; Bun's default idle timeout is 10 s.
-  const server = Bun.serve({ hostname: '127.0.0.1', port, idleTimeout: MAX_WAIT_S + 15, fetch: handler(hub, auth) })
-  console.log(`ostrakon hub ${VERSION} on http://127.0.0.1:${server.port} (data ${dataDir})`)
-  // A backup and a tombstone purge at start and once a day.
+  const server = Bun.serve({ hostname: '127.0.0.1', port, idleTimeout: MAX_WAIT_S + 15, fetch: handler(hub, auth, { filing, kick: runner?.kick }) })
+  console.log(`ostrakon hub ${VERSION} on http://127.0.0.1:${server.port} (data ${dataDir}; filing ${filing ? 'on' : 'off'})`)
   const backup = () => {
     try {
       console.log(`backup ${hub.backup()}; purged ${hub.purge()} tombstones older than ${PURGE_AFTER_MS / 86_400_000} days`)
@@ -441,4 +640,16 @@ if (import.meta.main && process.argv[2] === 'pair') {
   }
   backup()
   setInterval(backup, 24 * 60 * 60 * 1000)
+  // Requests left from the last run: waiting ones, and unsure ones to look up.
+  runner?.kick()
+  return { hub, server }
+}
+
+if (import.meta.main && process.argv[2] === 'pair') {
+  await pair(process.argv.slice(3))
+} else if (import.meta.main) {
+  const auth = { token: process.env.HUB_TOKEN, login: process.env.HUB_LOGIN }
+  if (!auth.token && !auth.login) throw new Error('set HUB_TOKEN (and/or HUB_LOGIN)')
+  // Filing stays off until the hub has its own credentials for it (#110).
+  serve({ port: Number(process.env.HUB_PORT ?? 8790), dataDir: process.env.HUB_DATA ?? join(process.env.HOME ?? '.', '.local/share/ostrakon-hub'), auth })
 }
