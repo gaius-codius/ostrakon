@@ -233,10 +233,67 @@ else
   esac
 fi
 
+PROC=${OSTRAKON_PROC:-/proc}
+tilde() { case $1 in "$HOME"/*) echo "~/${1#"$HOME"/}" ;; *) echo "$1" ;; esac; }
+# The mount a path is on in a mountinfo file, as "<device> <root> <options>": the topmost one at
+# the longest mount point that holds the path.
+mount_of() { # mountinfo path
+  awk -v path="$2" '
+    function unescape(s) { gsub(/\\040/, " ", s); gsub(/\\011/, "\t", s); gsub(/\\012/, "\n", s); gsub(/\\134/, "\\", s); return s }
+    { at = unescape($5)
+      if ((at == "/" || path == at || index(path, at "/") == 1) && length(at) >= best) { best = length(at); found = $3 " " $4 " " $6 } }
+    END { print found }' "$1"
+}
+
+# The hub's sandbox (server/ostrakon-hub.service, SPEC §9.2), checked on the running hub itself:
+# where the kernel can't apply a limit, systemd turns it off and starts the hub anyway.
+hub_sandbox() { # pid
+  local at=$PROC/$1 config off=() unapplied=() data path m
+  if ! [ -r "$at/mountinfo" ] || ! [ -r "$at/status" ]; then note "couldn't check the hub's sandbox: $at isn't readable"; return; fi
+  config=$(systemctl --user show ostrakon-hub -p ProtectHome -p InaccessiblePaths -p NoNewPrivileges -p PrivateTmp -p RestrictAddressFamilies 2>/dev/null)
+  prop() { printf '%s\n' "$config" | sed -n "s/^$1=//p"; }
+  # Each limit: its name, whether the unit asks for it, and whether the running hub has it.
+  limit() { # name configured applied
+    if [ "$2" != 1 ]; then off+=("$1"); elif [ "$3" != 1 ]; then unapplied+=("$1"); fi
+  }
+  is() { "$@" && echo 1; }
+  listed() { local word; for word in $(prop InaccessiblePaths); do [ "${word#-}" = "$1" ] && return 0; done; return 1; }
+  limit ProtectHome=read-only "$(is [ "$(prop ProtectHome)" = read-only ])" \
+    "$(is grep -q '^ro' <<<"$(mount_of "$at/mountinfo" "$HOME" | cut -d' ' -f3)")"
+  for path in "$HOME/.ssh" "$HOME/.gnupg" "$HOME/.config/gh" "$HOME/.claude" "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"; do
+    [ -e "$path" ] || continue
+    m=$(mount_of "$at/mountinfo" "$path" | cut -d' ' -f2)
+    limit "InaccessiblePaths=$(tilde "$path")" "$(is listed "$path")" \
+      "$(is grep -q /inaccessible/ <<<"$m")"
+  done
+  limit NoNewPrivileges=yes "$(is [ "$(prop NoNewPrivileges)" = yes ])" "$(is grep -qx $'NoNewPrivs:\t1' "$at/status")"
+  # Its own /tmp: a different mount there than this process sees.
+  limit PrivateTmp=yes "$(is [ "$(prop PrivateTmp)" != no ])" \
+    "$(is [ "$(mount_of "$at/mountinfo" /tmp | cut -d' ' -f1,2)" != "$(mount_of "$PROC/self/mountinfo" /tmp | cut -d' ' -f1,2)" ])"
+  limit RestrictAddressFamilies "$(is grep -q '^AF_' <<<"$(prop RestrictAddressFamilies)")" "$(is grep -qx $'Seccomp:\t2' "$at/status")"
+
+  join() { local IFS=, all; all="$*"; echo "${all//,/, }"; }
+  if [ ${#off[@]} -gt 0 ]; then
+    bad "the hub's unit ($(systemctl --user show ostrakon-hub -p FragmentPath --value 2>/dev/null)) leaves out $(join "${off[@]}") (SPEC §9.2), so the hub can reach more of your files than it needs. Use the unit from this checkout: ln -sf $ROOT/server/ostrakon-hub.service ~/.config/systemd/user/ && systemctl --user daemon-reload && systemctl --user restart ostrakon-hub"
+  fi
+  if [ ${#unapplied[@]} -gt 0 ]; then
+    note "the running hub doesn't have $(join "${unapplied[@]}"). If systemctl --user restart ostrakon-hub doesn't add them, this machine can't apply them (they need unprivileged user namespaces); the hub works without them"
+  fi
+  [ ${#off[@]} -gt 0 ] || [ ${#unapplied[@]} -gt 0 ] || ok "the hub runs in its sandbox: your home is read-only to it except its data folder, and it can't see ~/.ssh, ~/.gnupg, ~/.config/gh, ~/.claude or your session's sockets"
+  # Its data folder is where it writes; a HUB_DATA elsewhere in your home needs its own ReadWritePaths=.
+  data=$(tr '\0' '\n' <"$at/environ" 2>/dev/null | sed -n 's/^HUB_DATA=//p' | tail -n 1)
+  data=${data:-$HOME/.local/share/ostrakon-hub}
+  case $(mount_of "$at/mountinfo" "$data" | cut -d' ' -f3) in
+    ro*) bad "the hub can't write its data folder $data. Add it to the sandbox: systemctl --user edit ostrakon-hub, then under [Service] ReadWritePaths=$data" ;;
+  esac
+}
+
 # The hub on this machine, if it's set up here.
 if has systemctl && systemctl --user cat ostrakon-hub >/dev/null 2>&1; then
   echo "== the hub on this machine"
-  if systemctl --user is-active --quiet ostrakon-hub; then ok "the ostrakon-hub service is running"
+  if systemctl --user is-active --quiet ostrakon-hub; then
+    ok "the ostrakon-hub service is running"
+    hub_sandbox "$(systemctl --user show ostrakon-hub -p MainPID --value 2>/dev/null)"
   else bad "the ostrakon-hub service isn't running: systemctl --user start ostrakon-hub, and journalctl --user -u ostrakon-hub for why"; fi
   if has loginctl && [ "$(loginctl show-user "$USER" -p Linger --value 2>/dev/null)" != yes ]; then
     note "it stops when you log out; to keep it running: loginctl enable-linger $USER"

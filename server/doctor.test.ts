@@ -27,14 +27,27 @@ const STUBS = {
 for arg in "$@"; do [ "$arg" = @- ] && token=$(cat); done
 echo "$url \${token#Authorization: Bearer }" >> "$CURL_LOG"
 case $url in */healthz) printf 'ok 0' ;; *) printf 200 ;; esac`,
-  systemctl: 'exit 1',
+  // With HUB_SHOW set, a running ostrakon-hub (MainPID 4242) whose settings are in that file.
+  systemctl: `[ -n "\${HUB_SHOW:-}" ] || exit 1
+case "$*" in
+  '--user cat ostrakon-hub' | '--user is-active --quiet ostrakon-hub') ;;
+  *'-p MainPID --value') echo 4242 ;;
+  *'-p FragmentPath --value') echo /units/ostrakon-hub.service ;;
+  *' show '*) cat "$HUB_SHOW" ;;
+  *) exit 1 ;;
+esac`,
 }
 
 type Where = 'home' | 'config' | 'cwd'
 
 // Runs doctor with the settings in ~/.claude, in CLAUDE_CONFIG_DIR, or (CLAUDE_CONFIG_DIR set but
 // empty) in the working directory; env adds to a clean environment.
-const doctor = (settings: unknown, where: Where = 'home', env: Record<string, string> = {}, before = (_at: { home: string; config: string }) => {}) => {
+const doctor = (
+  settings: unknown,
+  where: Where = 'home',
+  env: Record<string, string> = {},
+  before = (_at: { home: string; config: string; root: string }) => {},
+) => {
   const root = temp()
   const home = join(root, 'home')
   const config = join(root, 'config')
@@ -48,7 +61,7 @@ const doctor = (settings: unknown, where: Where = 'home', env: Record<string, st
   const at = { home: join(home, '.claude'), config, cwd }[where]
   // undefined: no settings file at all.
   if (settings !== undefined) writeFileSync(join(at, 'settings.json'), typeof settings === 'string' ? settings : JSON.stringify(settings))
-  before({ home, config })
+  before({ home, config, root })
   const log = join(root, 'curl.log')
   writeFileSync(log, '')
   const run = Bun.spawnSync(['bash', DOCTOR], {
@@ -158,5 +171,78 @@ describe('ostrakon doctor', () => {
       expect(out).not.toContain('no hubUrl set')
       expect(curled).toEqual([])
     }
+  })
+})
+
+// The hub's sandbox, as doctor reads it from a fake /proc: the running hub's mounts, status and
+// environment next to doctor's own mounts, and the unit's settings from systemctl.
+describe('ostrakon doctor on the hub sandbox', () => {
+  const SANDBOX = ['ProtectHome=read-only', 'NoNewPrivileges=yes', 'PrivateTmp=yes', 'RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX']
+  const NONE = ['ProtectHome=no', 'InaccessiblePaths=', 'NoNewPrivileges=no', 'PrivateTmp=no', 'RestrictAddressFamilies=~']
+  const mount = (at: string, root = '/', opts = 'rw', dev = '0:1') => `1 1 ${dev} ${root} ${at.replaceAll(' ', '\\040')} ${opts},relatime shared:1 - fs src rw`
+  const OWN = [mount('/'), mount('/tmp', '/', 'rw', '0:2')]
+
+  // applied: whether the running hub has the limits; data: the HUB_DATA it runs with, if any.
+  const run = ({ unit = 'sandbox', applied = true, data = '' }: { unit?: 'sandbox' | 'none'; applied?: boolean; data?: string } = {}) => {
+    let home = ''
+    let runtime = ''
+    // Filled in once the folders exist; doctor reads it when it runs.
+    const env: Record<string, string> = {}
+    const result = doctor(undefined, 'home', env, at => {
+      home = at.home
+      runtime = join(at.root, 'run')
+      for (const dir of [runtime, join(home, '.ssh'), join(home, '.config/gh')]) mkdirSync(dir, { recursive: true })
+      const hidden = [join(home, '.ssh'), join(home, '.gnupg'), join(home, '.config/gh'), join(home, '.claude'), runtime]
+      const show = join(at.root, 'show')
+      writeFileSync(show, (unit === 'sandbox' ? [...SANDBOX, `InaccessiblePaths=${hidden.map(path => `-${path}`).join(' ')}`] : NONE).join('\n'))
+      const proc = join(at.root, 'proc')
+      mkdirSync(join(proc, 'self'), { recursive: true })
+      mkdirSync(join(proc, '4242'))
+      writeFileSync(join(proc, 'self/mountinfo'), OWN.join('\n'))
+      const sandboxed = [
+        mount('/'),
+        mount('/tmp', '/', 'rw', '0:2'),
+        mount('/tmp', '/systemd-private-x/tmp', 'rw', '0:2'),
+        mount(home, '/home', 'ro'),
+        mount(join(home, '.local/share/ostrakon-hub'), '/home/.local/share/ostrakon-hub'),
+        ...hidden.map(path => mount(path, '/systemd/inaccessible/dir', 'ro')),
+      ]
+      writeFileSync(join(proc, '4242/mountinfo'), (applied ? sandboxed : OWN).join('\n'))
+      writeFileSync(join(proc, '4242/status'), applied ? 'NoNewPrivs:\t1\nSeccomp:\t2\n' : 'NoNewPrivs:\t0\nSeccomp:\t0\n')
+      writeFileSync(join(proc, '4242/environ'), ['HUB_TOKEN=secret', ...(data ? [`HUB_DATA=${data.replace('~', home)}`] : [])].join('\0'))
+      Object.assign(env, { HUB_SHOW: show, OSTRAKON_PROC: proc, XDG_RUNTIME_DIR: runtime })
+    })
+    const section = result.out.slice(result.out.indexOf('== the hub on this machine'), result.out.indexOf('== tools'))
+    return { section, home, runtime }
+  }
+
+  test('says the hub runs in its sandbox when the running hub has every limit', () => {
+    const { section } = run()
+    expect(section).toContain('ok  the hub runs in its sandbox')
+    expect(section).not.toContain('!!')
+    expect(section).not.toContain('secret')
+  })
+
+  test("names each limit the running hub doesn't have, skipping paths this machine doesn't have, and counts it as no problem", () => {
+    const { section, runtime } = run({ applied: false })
+    expect(section).toContain(
+      `--  the running hub doesn't have ProtectHome=read-only, InaccessiblePaths=~/.ssh, InaccessiblePaths=~/.config/gh, InaccessiblePaths=~/.claude, InaccessiblePaths=${runtime}, NoNewPrivileges=yes, PrivateTmp=yes, RestrictAddressFamilies. If systemctl --user restart ostrakon-hub doesn't add them, this machine can't apply them`,
+    )
+    expect(section).not.toContain('.gnupg')
+    expect(section).not.toContain('!!')
+    expect(section).not.toContain('runs in its sandbox')
+  })
+
+  test('flags a unit without the sandbox, and says which unit file', () => {
+    const { section } = run({ unit: 'none', applied: false })
+    expect(section).toContain("!!  the hub's unit (/units/ostrakon-hub.service) leaves out ProtectHome=read-only, InaccessiblePaths=~/.ssh,")
+    expect(section).toContain('ln -sf ')
+    expect(section).not.toContain("the running hub doesn't have")
+  })
+
+  test('flags a HUB_DATA in the home folder that the sandbox leaves read-only', () => {
+    expect(run({ data: '~/notes-hub' }).section).toContain("!!  the hub can't write its data folder")
+    expect(run({ data: '~/.local/share/ostrakon-hub' }).section).not.toContain("can't write")
+    expect(run({ data: '~/notes-hub', applied: false }).section).not.toContain("can't write")
   })
 })

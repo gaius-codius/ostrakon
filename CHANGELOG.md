@@ -11,6 +11,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 - New notes and the edit card take several lines: the field wraps, grows to 4 rows (2 when the pane sits above the prompt) and scrolls. Shift+Enter, or `\` then Enter, starts a new line, and a pasted note keeps its lines. Notes that contain `↵` can now be edited in the pane too, and the preview no longer repeats the note while you edit it.
 - Capture and the edit card sit between accent rules instead of a frame, and the draft is no longer repeated under the field. Needs Claude Code 2.1.301 or later.
 
+### Security
+
+- The hub's systemd unit runs it in a sandbox: your home folder is read-only to it except its data folder, and it can't see `~/.ssh`, `~/.gnupg`, `~/.config/gh`, `~/.claude` or your session's D-Bus and systemd sockets. `ostrakon doctor` says whether the running hub has these limits. If you set `HUB_DATA` to another folder in your home, add it to the unit (docs/phone.md, What the hub can reach). `ostrakon update` restarts the hub with the new unit.
+
 ## [0.8.1] - 2026-10-25
 
 ### Fixed
