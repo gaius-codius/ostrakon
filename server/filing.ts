@@ -246,7 +246,7 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
         '--method=GET',
         '--paginate',
         // Only issues that mention the marker come back, so a busy repo stays under the cap; the
-        // exact check (its last line) is below. The id is a ULID, safe in the filter.
+        // exact check (a line that is the marker) is below. The id is a ULID, safe in the filter.
         `--jq=.[] | select(.pull_request == null and ((.body // "") | contains("${marker(request.id)}"))) | [.html_url, .body] | @json`,
         `repos/${request.repo}/issues`,
         '--raw-field=state=all',
