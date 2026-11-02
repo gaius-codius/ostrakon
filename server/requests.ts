@@ -69,10 +69,13 @@ export const issueUrlIn = (repo: string, url: string) => {
   return match?.[1] !== undefined && match[1].toLowerCase() === repo.toLowerCase() ? url.trim() : null
 }
 
-// Short, one line: what the phone shows as a request's error.
+// Short, one line: what the phone shows as a request's error. Token-like strings are removed, so
+// what gh or claude said never shows a credential: GitHub's (ghp_, github_pat_, gho_…),
+// Anthropic's (sk-ant-…), and any other run of 32 or more letters, digits, _ and -.
 const MAX_ERROR = 300
+const TOKEN_LIKE = /\b(?:gh[a-z]_|github_pat_|sk-ant-)[A-Za-z0-9_-]+|[A-Za-z0-9_-]{32,}/g
 export const shortError = (error: unknown) => {
-  const text = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, ' ').trim() || 'unknown error'
+  const text = (error instanceof Error ? error.message : String(error)).replace(TOKEN_LIKE, '[redacted]').replace(/\s+/g, ' ').trim() || 'unknown error'
   return text.length > MAX_ERROR ? `${text.slice(0, MAX_ERROR - 1)}…` : text
 }
 
