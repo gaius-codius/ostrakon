@@ -2,22 +2,7 @@ import type { Elements } from 'claude-code'
 
 import type { Note, NoteProblem, NoteProject, PaneState } from '../../types'
 import type { Action, Ctx, Focus, Key, Line, Page } from '../model'
-import {
-  ageOf,
-  cells,
-  cut,
-  fitFooter,
-  fitStatuses,
-  footerPairs,
-  fromField,
-  groupLabel,
-  isSheetPair,
-  labelOf,
-  oneLine,
-  sheetLines,
-  uniqueKeys,
-  wrap,
-} from '../model'
+import { ageOf, cells, cut, fitFooter, fitStatuses, footerPairs, groupLabel, isSheetPair, labelOf, oneLine, sheetLines, uniqueKeys, wrap } from '../model'
 import { CHORD, COLOUR, GLYPH, SHARD, TEXT, WIDTH, colourOf } from './look'
 import type { Tone } from './look'
 
@@ -288,57 +273,79 @@ const SearchRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Ha
   )
 }
 
-// Docked, the capture row is the pane's one card: a round accent frame, because it's the one
-// moment the pane is a text field rather than a list.
-const CaptureRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handlers }) => {
-  const { Box, Text, Input } = el
-  const isFramed = !view.isInline
-  const inner = view.width - (isFramed ? 4 : 0)
-  const lead = `${GLYPH.capture} ${TEXT.captureLabel} `
+// A field being typed in sits between accent rules, the top one naming it: a multi-line field
+// draws right only across the pane's whole width (SPEC §2.3), so it can't have a frame or a label
+// beside it. Inline, there's only the top rule.
+const Rule = ({ el, width, label, right }: { el: E; width: number; label?: string; right?: string }) => {
+  const { Text } = el
+  const lead = label === undefined ? '' : `${GLYPH.rule.repeat(2)} `
+  const name = label === undefined ? '' : `${label} `
+  // The right label gives up its end to fit, and goes when there's no room for it.
+  const room = width - cells(lead) - cells(name) - 1 - 2 - 2
+  const tail = right === undefined || room < 1 ? '' : ` ${cut(right, room)} `
+  const end = tail === '' ? '' : GLYPH.rule.repeat(2)
+  const fill = Math.max(0, width - cells(lead) - cells(name) - cells(tail) - cells(end))
   return (
-    <Box width={view.width} borderStyle={isFramed ? 'round' : undefined} borderColor={isFramed ? COLOUR.accent : undefined} paddingX={isFramed ? 1 : 0}>
-      <Box flexShrink={0}>
-        <Text color={COLOUR.accent} bold>
-          {lead}
-        </Text>
-      </Box>
-      {/* An explicit width: left to flex, the field's own "⏎ save" hint wraps onto a second row. */}
-      <Box width={Math.max(10, inner - cells(lead) - 1 - cells(cut(view.captureLabel, WIDTH.label)))}>
+    <Text>
+      <Text color={COLOUR.accent} dimColor>
+        {lead}
+      </Text>
+      <Text color={COLOUR.accent} bold>
+        {name}
+      </Text>
+      <Text color={COLOUR.accent} dimColor>
+        {GLYPH.rule.repeat(fill)}
+      </Text>
+      <Text color={COLOUR.accent}>{tail}</Text>
+      <Text color={COLOUR.accent} dimColor>
+        {end}
+      </Text>
+    </Text>
+  )
+}
+
+// The rows a field takes: as many as its text wraps to beside the field's own hint, up to a few.
+// Never fewer than two: a field of one row holds one line, so Shift+Enter would start none.
+export const fieldRows = (text: string, width: number, isInline: boolean) =>
+  Math.min(isInline ? WIDTH.fieldRowsInline : WIDTH.fieldRows, Math.max(2, wrap(text, width - WIDTH.fieldHint).length))
+
+// Docked, capture's field gives up rows before the footer does, down to two: its rules, the blank
+// under them, capture's top padding and the footer take six rows, and the hint keeps one.
+const captureRows = (view: { pane: PaneState; isInline: boolean; width: number; bodyRows: number }) => {
+  const rows = fieldRows(view.pane.capture.draft, view.width, view.isInline)
+  return view.isInline ? rows : Math.max(2, Math.min(rows, view.bodyRows - 7))
+}
+
+const CaptureRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handlers }) => {
+  const { Box, Input } = el
+  return (
+    <Box flexDirection='column' width={view.width} flexShrink={0}>
+      <Rule el={el} width={view.width} label={`${GLYPH.capture} ${TEXT.captureLabel}`} right={cut(view.captureLabel, WIDTH.label)} />
+      <Box width={view.width}>
         <Input
           key={CAPTURE_KEY}
           placeholder='write a note'
           value={view.pane.capture.draft}
           submitLabel=''
+          rows={captureRows(view)}
           autoFocus
           onInput={value => handlers.captureInput(value)}
           onSubmit={value => handlers.captureSubmit(value)}
         />
       </Box>
-      <Box flexShrink={0}>
-        <Text color={isFramed ? COLOUR.accent : undefined} dimColor={!isFramed}>
-          {' '}
-          {cut(view.captureLabel, WIDTH.label)}
-        </Text>
-      </Box>
+      {!view.isInline && <Rule el={el} width={view.width} />}
     </Box>
   )
 }
 
-// Capture's target picker (ctrl+s) takes capture's row, framed the same: typing narrows the projects
-// under it, and Enter picks the first.
+// Capture's target picker (ctrl+s) takes capture's place, between the same rules: typing narrows
+// the projects under it, and Enter picks the first.
 const TargetRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handlers }) => {
-  const { Box, Text, Input } = el
-  const isFramed = !view.isInline
-  const inner = view.width - (isFramed ? 4 : 0)
-  const lead = `${GLYPH.capture} ${TEXT.targetLabel} `
+  const { Box, Input } = el
   return (
-    <Box width={view.width} borderStyle={isFramed ? 'round' : undefined} borderColor={isFramed ? COLOUR.accent : undefined} paddingX={isFramed ? 1 : 0}>
-      <Box flexShrink={0}>
-        <Text color={COLOUR.accent} bold>
-          {lead}
-        </Text>
-      </Box>
-      <Box width={Math.max(10, inner - cells(lead))}>
+    <Box flexDirection='column' width={view.width} flexShrink={0}>
+      <Rule el={el} width={view.width} label={`${GLYPH.capture} ${TEXT.targetLabel}`} />
+      <Box width={view.width}>
         <Input
           key={TARGET_KEY}
           placeholder={TEXT.targetPlaceholder}
@@ -349,6 +356,7 @@ const TargetRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Ha
           onSubmit={value => handlers.targetSubmit(value)}
         />
       </Box>
+      {!view.isInline && <Rule el={el} width={view.width} />}
     </Box>
   )
 }
@@ -424,14 +432,20 @@ export const FOOTER_ROWS = 1
 // Docked in a body too short for the preview and three rows (one between the ↑ and ↓ counts)
 // besides, the preview goes, as inline, so the footer stays on screen.
 const hasPreview = (view: { isInline: boolean; bodyRows: number }) => !view.isInline && view.bodyRows >= 2 + PREVIEW_ROWS + 3 + 1 + FOOTER_ROWS
-// The edit card is three rows taller than its row, so editing in a body too short for both, the
-// preview gives up text lines (the draft keeps its end) rather than be cut at the footer.
-const EDIT_ROWS = 3
+// The edit card is taller than its row by its rules (the bottom one docked only), its buttons and
+// the field's rows past the first. Editing, the preview goes: the field holds the note's text.
+const editRows = (view: Sized) => (view.isInline ? 1 : 2) + editFieldRows(view)
+// Docked, the edit field gives up rows before the footer does, down to two: the header, ↑ and ↓
+// above and below the card, its rules and buttons, and the footer take nine rows.
+const editFieldRows = (view: Sized) => {
+  const rows = view.pane.edit ? fieldRows(view.pane.edit.draft, view.width, view.isInline) : 2
+  return view.isInline ? rows : Math.max(2, Math.min(rows, view.bodyRows - 9))
+}
 // The move picker lists places on as many rows as there are places, up to a few, and keeps them
 // while typing narrows the list, so the rows above keep their window. In a short body the preview
 // gives up text lines first, then the places give up rows, down to one.
 const MOVE_PLACES = 5
-type Sized = { pane: PaneState; bodyRows: number; isInline: boolean; projects: NoteProject[] }
+type Sized = { pane: PaneState; bodyRows: number; isInline: boolean; projects: NoteProject[]; width: number }
 const wantedPlaces = (view: Sized) => Math.max(1, Math.min(MOVE_PLACES, view.projects.length))
 // Docked: the header, three rows, the field, the places, the preview's frame and the footer.
 const movePreviewLines = (view: Sized) => Math.max(1, Math.min(WIDTH.previewLines, view.bodyRows - (2 + 3 + 1 + wantedPlaces(view) + 2 + 1 + FOOTER_ROWS)))
@@ -441,14 +455,13 @@ const placeRows = (view: Sized) => {
   return Math.max(1, Math.min(wantedPlaces(view), view.bodyRows - chrome))
 }
 const previewLinesOf = (view: Sized) => {
-  if (view.pane.mode === 'edit') return Math.max(1, Math.min(WIDTH.previewLines, view.bodyRows - (2 + 2 + 3 + EDIT_ROWS + 1 + FOOTER_ROWS)))
   if (view.pane.mode === 'move') return movePreviewLines(view)
   return WIDTH.previewLines
 }
 const previewRows = (view: Sized) => 1 + previewLinesOf(view) + 1
 
-// A draft being typed, wrapped: the one-line field cuts it off, so this is where it reads whole.
-// Too long for `rows`, it shows its end (where the typing is), led by …
+// A query being typed, wrapped: the one-line search field cuts it off, so this is where it reads
+// whole. Too long for `rows`, it shows its end (where the typing is), led by …
 const draftLines = (text: string, width: number, rows: number) => {
   const lines = wrap(text, width)
   if (lines.length <= rows) return lines
@@ -459,18 +472,14 @@ const draftLines = (text: string, width: number, rows: number) => {
 
 const Preview = ({ el, view, note }: { el: E; view: PaneView; note: Note }) => {
   const { Box, Text } = el
-  const { edit } = view.pane
-  // While the note is being edited, the preview is the draft, whole.
-  const isEditing = view.pane.mode === 'edit' && edit !== null && edit.id === note.id
   // Quoted: a dim bar down the left, the way the bundle shows what it will send. The bar sits
   // under the rows' text, so the preview reads as the selected row's.
   const width = Math.max(1, view.width - TEXT_COLUMN - 2)
-  const lines = wrap(isEditing ? fromField(edit.draft) : note.text, width)
+  const lines = wrap(note.text, width)
   const rows = previewLinesOf(view)
-  let shown = lines.slice(0, rows)
-  if (isEditing) shown = draftLines(fromField(edit.draft), width, rows)
+  const shown = lines.slice(0, rows)
   // A last line that fills the width gives up its end to the … rather than run past it.
-  else if (lines.length > rows) shown[shown.length - 1] = cut(`${shown[shown.length - 1] ?? ''}${GLYPH.more}`, width)
+  if (lines.length > rows) shown[shown.length - 1] = cut(`${shown[shown.length - 1] ?? ''}${GLYPH.more}`, width)
   return (
     <Box flexDirection='column' width={view.width} height={previewRows(view)} paddingLeft={TEXT_COLUMN}>
       <Box height={1} />
@@ -585,22 +594,17 @@ const Rows = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
       {page.lines.map((line, slot) => {
         if (view.pane.mode === 'edit' && view.pane.edit && line.key === view.pane.edit.id) {
           return (
-            <Box key={`row-${slot}`} width={view.width} borderStyle='round' borderColor={COLOUR.accent} flexDirection='column' paddingX={1}>
-              <Box>
-                <Box flexShrink={0}>
-                  <Text color={COLOUR.accent} bold>
-                    edit{' '}
-                  </Text>
-                </Box>
-                <Box flexGrow={1} flexShrink={1}>
-                  <Input
-                    key={EDIT_KEY}
-                    value={view.pane.edit.draft}
-                    submitLabel=''
-                    onInput={value => handlers.editInput(value)}
-                    onSubmit={value => handlers.editSubmit(value)}
-                  />
-                </Box>
+            <Box key={`row-${slot}`} width={view.width} flexDirection='column'>
+              <Rule el={el} width={view.width} label={TEXT.editLabel} />
+              <Box width={view.width}>
+                <Input
+                  key={EDIT_KEY}
+                  value={view.pane.edit.draft}
+                  submitLabel=''
+                  rows={editFieldRows(view)}
+                  onInput={value => handlers.editInput(value)}
+                  onSubmit={value => handlers.editSubmit(value)}
+                />
               </Box>
               <Box gap={2}>
                 <Button key='edit-cancel' label={TEXT.editBack} onPress={() => handlers.editCancel()} />
@@ -609,6 +613,7 @@ const Rows = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
                 {/* Only when it fits: wrapped, it adds a row the paging doesn't budget for. */}
                 {editHintFits(view.width) && <Text dimColor>{TEXT.editHint}</Text>}
               </Box>
+              {!view.isInline && <Rule el={el} width={view.width} />}
             </Box>
           )
         }
@@ -621,11 +626,11 @@ const Rows = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
   )
 }
 
-// The edit card's button row: its frame and padding, both buttons, three gaps of 2, the hint.
-const editHintFits = (width: number) => width - 4 >= cells(`[ ${TEXT.editBack} ]`) + cells(`[ ${TEXT.editSave} ]`) + 3 * 2 + cells(TEXT.editHint)
+// The edit card's button row: both buttons, three gaps of 2, the hint.
+const editHintFits = (width: number) => width >= cells(`[ ${TEXT.editBack} ]`) + cells(`[ ${TEXT.editSave} ]`) + 3 * 2 + cells(TEXT.editHint)
 
 // Enter saves the query as a note, so this is capture's start: a query the field cuts off reads
-// whole here, as capture's draft does, and one that fits isn't repeated. The footer has the keys.
+// whole here, and one that fits isn't repeated. The footer has the keys.
 const NoMatch = ({ el, view }: { el: E; view: PaneView }) => {
   const { Box, Text } = el
   const query = view.pane.query.trim()
@@ -697,18 +702,12 @@ const Capture = ({ el, view }: { el: E; view: PaneView }) => {
   const { Box, Text } = el
   const { capture } = view.pane
   // Docked, the rows between capture's and the footer's, inside the padding. A short body keeps the
-  // hint (or the error) first, then the newest save, then the draft's lines, then the earlier saves.
-  const room = view.bodyRows - topRows('capture', false) - (1 + FOOTER_ROWS) - 2
+  // hint (or the error) first, then the newest save, then the earlier saves.
+  const room = view.bodyRows - topRows(view) - (1 + FOOTER_ROWS) - 2
   const newest = Math.min(1, capture.saved.length, room - 1)
-  const draftRows = view.isInline ? 1 : Math.min(WIDTH.previewLines, room - 1 - newest - 1)
-  const draft = capture.draft.trim() === '' || draftRows < 1 ? [] : draftLines(capture.draft, view.width, draftRows)
-  const keep = view.isInline ? WIDTH.savedInline : Math.max(0, newest, Math.min(WIDTH.savedDocked, room - 1 - (draft.length > 0 ? draft.length + 1 : 0)))
+  const keep = view.isInline ? WIDTH.savedInline : Math.max(0, newest, Math.min(WIDTH.savedDocked, room - 1))
   return (
     <Box flexDirection='column' paddingY={view.isInline ? 0 : 1}>
-      {draft.map(line => (
-        <Text>{line === '' ? ' ' : line}</Text>
-      ))}
-      {draft.length > 0 && !view.isInline && <Box height={1} />}
       {/* The newest save is bright; earlier ones step back. */}
       {capture.saved.slice(capture.saved.length - Math.min(keep, capture.saved.length)).map((text, i, saved) => (
         <Text>
@@ -810,12 +809,14 @@ const Move = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
 // between (SPEC §4.5): the problems first, then the keys. Too short for a line inside the frame
 // (5 rows docked, 4 inline), it drops the frame rather than cover the footer.
 const sheetTop = (isInline: boolean) => (isInline ? 1 : 2)
-// The rows above what the mode shows: the search row, or capture's (framed docked), and a blank
-// docked. The bundle has neither.
-const topRows = (mode: PaneState['mode'], isInline: boolean) => {
+// The rows above what the mode shows: the search row, or capture's field and its rules (the bottom
+// one docked only), and a blank docked. The bundle has neither.
+const topRows = (view: { pane: PaneState; isInline: boolean; width: number; bodyRows: number }) => {
+  const { mode } = view.pane
   if (mode === 'bundle') return 0
-  if (mode === 'capture' || mode === 'target') return isInline ? 1 : 3 + 1
-  return sheetTop(isInline)
+  const field = mode === 'capture' ? captureRows(view) : mode === 'target' ? 1 : 0
+  if (field > 0) return view.isInline ? 1 + field : 1 + field + 1 + 1
+  return sheetTop(view.isInline)
 }
 const isSheetFramed = (bodyRows: number, isInline: boolean) => bodyRows - sheetTop(isInline) - FOOTER_ROWS - 2 >= 1
 export const sheetRoom = (bodyRows: number, isInline: boolean) =>
@@ -871,9 +872,9 @@ const KeySheet = ({ el, view }: { el: E; view: PaneView }) => {
 // Rows the chrome around the lines takes, so the mod can page the lines to fit (SPEC §4.8).
 export const chromeRows = (view: Omit<PaneView, 'page'>) => {
   const header = view.isInline ? 1 : 2
-  const preview = hasPreview(view) ? previewRows(view) : 0
+  const preview = hasPreview(view) && view.pane.mode !== 'edit' ? previewRows(view) : 0
   const footer = view.isInline ? FOOTER_ROWS : 1 + FOOTER_ROWS
-  const edit = view.pane.mode === 'edit' ? EDIT_ROWS : 0
+  const edit = view.pane.mode === 'edit' ? editRows(view) : 0
   const move = view.pane.mode === 'move' ? 1 + placeRows(view) : 0
   return header + preview + footer + edit + move
 }
@@ -888,7 +889,7 @@ export const Pane = ({ el, view, handlers, hasHub, hasHarvest }: { el: E; view: 
   // the pane is only as tall as what it shows.
   const isSheet = pane.mode === 'sheet'
   const isFilled = isSheet || !view.isInline
-  const middleRows = Math.max(0, view.bodyRows - topRows(pane.mode, view.isInline) - (view.isInline ? FOOTER_ROWS : 1 + FOOTER_ROWS))
+  const middleRows = Math.max(0, view.bodyRows - topRows(view) - (view.isInline ? FOOTER_ROWS : 1 + FOOTER_ROWS))
   const hasNotes = view.lines.some(line => line.kind !== 'group')
   const body = () => {
     if (pane.mode === 'capture') return <Capture el={el} view={view} />
@@ -899,7 +900,7 @@ export const Pane = ({ el, view, handlers, hasHub, hasHarvest }: { el: E; view: 
     if (view.lines.length === 0 && pane.query.trim() === '') return <Empty el={el} view={view} hasHub={hasHub} hasHarvest={hasHarvest} />
     return <Rows el={el} view={view} handlers={handlers} />
   }
-  const showPreview = hasPreview(view) && (pane.mode === 'browse' || pane.mode === 'sheet' || pane.mode === 'move' || pane.mode === 'edit') && hasNotes
+  const showPreview = hasPreview(view) && (pane.mode === 'browse' || pane.mode === 'sheet' || pane.mode === 'move') && hasNotes
   const middle = [
     body(),
     pane.mode === 'move' && <Move el={el} view={view} handlers={handlers} />,

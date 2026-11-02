@@ -27,6 +27,7 @@ Ideas for what might come next, roughly in order within each section. Nothing he
 
 Mostly waiting on Claude Code rather than on ostrakon.
 
-- **Long drafts in the capture and edit fields.** The text field mods get is a single line that doesn't scroll: past its end, the text disappears while the cursor keeps moving, and can drop to an empty second line. As a stopgap, ostrakon shows the whole draft under the field. A real fix needs a field that wraps or scrolls to the cursor, from Claude Code.
+- **Rules instead of a frame around capture and edit.** Claude Code's multi-line text field draws right only across the pane's whole width: in a frame, beside a label or indented, it collapses to one cut line. So capture and the edit card sit between rules (SPEC §2.3). They can go back in a frame once the field works inside one.
+- **Long search queries.** The search and picker fields are still one line that doesn't scroll. A search with no match shows the whole query under the field.
 - **The mods interface is still changing.** Expect things to break between Claude Code versions until it settles.
 - **Folder sync edge cases.** If the mirror folder holds a single note and that file disappears, the note is archived. And if two machines name a new note's file differently before your sync app has copied either one across, you get two files for one note (they merge, and nothing is lost). See SPEC §7.2.

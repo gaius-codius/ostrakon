@@ -54,7 +54,7 @@ Use one or the other. The install script offers to add the [keybindings](#keybin
 
 ### Requirements
 
-- **Claude Code** with mods support (see the [mods docs](https://code.claude.com/docs/en/plugins/mods/overview)). Tested with 2.1.310; mods are still changing, so a much older or newer version may not work.
+- **Claude Code** with mods support (see the [mods docs](https://code.claude.com/docs/en/plugins/mods/overview)). Needs 2.1.301 or later, tested with 2.1.310; mods are still changing, so a much older or newer version may not work.
 - **git**, and **python3** for the install script (without it, the script tells you the one line to add yourself).
 - **For the hub:** [Bun](https://bun.sh) (tested with 1.4.4) to run the hub and to use `ostrakon pair` and `ostrakon jot`, and `qrencode` for the pairing QR code. `install.sh --hub` sets the hub up as a systemd service, so that part is Linux-only for now; elsewhere, run `ostrakon hub` however you like to keep things running.
 
@@ -221,7 +221,6 @@ A Slack bot, a script or another machine can post to the hub's `/api/jot` with a
 
 These come from Claude Code's mods interface, which is still new, and should go away as it matures.
 
-- **Long notes in the pane's text field.** When a note is longer than the capture or edit field, the text doesn't scroll with you: it disappears past the end of the field, while the cursor keeps moving and can even drop to an empty "second" line. What you type is all there, though, and the whole note shows in full just below the field as you write. It needs a text field that wraps or scrolls, which mods don't have yet.
 - **Claude Code updates can break things.** Mods change between versions. If something stops working after an update, run `ostrakon doctor` and mention your Claude Code version when you report it.
 
 More, including a couple of folder-sync edge cases, in [`ROADMAP.md`](ROADMAP.md#known-limitations).

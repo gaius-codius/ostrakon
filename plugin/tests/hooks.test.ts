@@ -4,7 +4,7 @@ import type { Engine } from 'claude-code/testing'
 import { MemDir } from './memdir'
 import { cells } from '../src/model'
 import { FOOTER_KEY, PREVIEW_ROWS, TEXT_COLUMN } from '../src/ui/pane'
-import { COLOUR, GLYPH, JOT_CONTEXT } from '../src/ui/look'
+import { COLOUR, GLYPH, JOT_CONTEXT, WIDTH } from '../src/ui/look'
 import { CC, INFRA, NOTE, PANE, mountPane, noteIn, put, run, startSession, texts } from './world'
 import { serializeNote } from '../src/frontmatter'
 
@@ -592,13 +592,14 @@ const textOf = (node: unknown): string => {
   return children.map(textOf).join('')
 }
 
-// Rows a drawn element takes, for the column layouts the pane's states draw: a Text is a row, a
-// Box its fixed height, or its rows (summed down a column, the tallest across a row), padding and
+// Rows a drawn element takes, for the column layouts the pane's states draw: a Text is a row, an
+// Input its `rows`, a Box its fixed height, or its rows (summed down a column, the tallest across a row), padding and
 // border (a quote border is only a bar down the left).
 const rowsOf = (node: unknown): number => {
   if (typeof node !== 'object' || node === null) return 0
   const { type, props = {}, children = [] } = node as Drawn
-  if (type === 'Text' || type === 'Button' || type === 'Input') return 1
+  if (type === 'Input') return Number(props.rows ?? 1)
+  if (type === 'Text' || type === 'Button') return 1
   if (props.display === 'none' || props.position === 'absolute') return 0
   if (typeof props.height === 'number') return props.height
   const inner = children.map(rowsOf)
@@ -702,18 +703,20 @@ test("docked at short heights, the footer keeps the body's last row with notes, 
   await ui.press({ key: 'key-pane:next' })
   for (const text of ['first idea', 'second idea', 'third idea']) await ui.input({ key: 'capture', text, kind: 'submit' })
   await ui.input({ key: 'capture', text: Array.from({ length: 120 }, (_, i) => `word${i}`).join(' '), kind: 'change' })
-  // From 14 rows capture keeps its hint, the newest save and the draft's end, nothing cut.
+  // The field has grown to its most rows, giving some up in the shortest bodies, down to two. From 9
+  // rows capture keeps its hint; from 14 the newest save under it too, nothing cut.
   await everyHeight(async bodyRows => {
+    expect((await ui.find({ type: 'Input', key: 'capture' }))?.props?.rows).toBe(Math.max(2, Math.min(WIDTH.fieldRows, bodyRows - 7)))
+    if (bodyRows >= 9) expect((await texts(ui)).some(text => /saves to/.test(text))).toBe(true)
     if (bodyRows < 14) return
     expect(await spill(ui)).toBeLessThanOrEqual(0)
     expect((await texts(ui)).some(text => /saves to/.test(text))).toBe(true)
     expect(await ui.find({ type: 'Text', text: /third idea/ })).toBeDefined()
-    expect((await texts(ui)).some(text => /word119$/.test(text))).toBe(true)
   })
   await ui.unmount()
 })
 
-test("docked at short heights, editing a note in a long list keeps the draft's end and the footer", async ($, on) => {
+test('docked at short heights, editing a note in a long list grows its field and keeps the footer', async ($, on) => {
   const dir = new MemDir()
   for (let i = 10; i < 40; i += 1) put(dir, `01JA7K2M3Q9X4ZB6C8D0EFGH${i}`, `note number ${i}`, CC, i)
   await startSession($, on, dir)
@@ -723,17 +726,16 @@ test("docked at short heights, editing a note in a long list keeps the draft's e
   for (let i = 0; i < 12; i += 1) await ui.press({ key: 'key-j' })
   await ui.press({ key: 'key-e' })
   await ui.input({ key: 'edit', text: `${Array.from({ length: 80 }, (_, i) => `word${i}`).join(' ')} TAIL`, kind: 'change' })
-  for (let bodyRows = 15; bodyRows <= 20; bodyRows += 1) {
+  for (let bodyRows = 11; bodyRows <= 20; bodyRows += 1) {
     await dockAt(ui, bodyRows)
     expect(await footerRow(ui)).toBe(bodyRows - 1)
     expect(await spill(ui)).toBeLessThanOrEqual(0)
-    expect((await texts(ui)).some(text => /TAIL$/.test(text))).toBe(true)
-    // Each of the draft's lines is one row: wrapped to the indented preview's width, none runs past it.
+    const field = await ui.find({ type: 'Input', key: 'edit' })
+    expect(field?.props?.rows).toBe(Math.max(2, Math.min(WIDTH.fieldRows, bodyRows - 9)))
+    expect(String(field?.props?.value)).toMatch(/TAIL$/)
+    // The field holds the text, so the preview doesn't repeat it.
     const boxes = (await ui.findAll({ type: 'Box' })) as Drawn[]
-    const preview = boxes.find(box => box.props?.paddingLeft === TEXT_COLUMN)
-    const lines = (preview?.children ?? []).map(textOf).filter(text => text.startsWith(GLYPH.quote))
-    expect(lines.length).toBeGreaterThan(1)
-    for (const line of lines) expect(cells(line)).toBeLessThanOrEqual(Number(preview?.props?.width) - TEXT_COLUMN)
+    expect(boxes.some(box => box.props?.paddingLeft === TEXT_COLUMN)).toBe(false)
   }
   await ui.unmount()
 })
@@ -778,9 +780,10 @@ test('docked in a very short body, a failed capture save still says why', async 
   await ui.input({ key: 'capture', text: 'first idea', kind: 'submit' })
   dir.failWrites = true
   await ui.input({ key: 'capture', text: 'second idea', kind: 'submit' })
+  // At 9 rows only capture's bottom padding is cut.
   for (let bodyRows = 9; bodyRows <= 14; bodyRows += 1) {
     await dockAt(ui, bodyRows)
-    expect(await spill(ui)).toBeLessThanOrEqual(0)
+    expect(await spill(ui)).toBeLessThanOrEqual(bodyRows > 9 ? 0 : 1)
     expect((await texts(ui)).some(text => /EROFS/.test(text))).toBe(true)
   }
   await ui.unmount()
@@ -873,6 +876,24 @@ test("docked, the preview's bar starts in the note text's column, with no blank 
   const lines = (preview?.children ?? []).filter(child => textOf(child).startsWith(GLYPH.quote))
   expect(lines.map(textOf)).toEqual([`${GLYPH.quote} check why the cache test is flaky`, expect.stringMatching(new RegExp(`^${GLYPH.quote} you · ~/Work/cc`))])
   expect(preview?.children?.length).toBe(1 + lines.length)
+  await ui.unmount()
+})
+
+test("docked and narrow, capture's rule cuts the project's name, then drops it, to fit its row", async ($, on) => {
+  const name = 'a-rather-long-project-name'
+  await startSession($, on, fixture(), '', { repo: { root: `/home/me/code/${name}`, remote: `git@github.com:me/${name}.git` }, root: `/home/me/code/${name}` })
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.press({ key: 'key-pane:next' })
+  const rule = async () =>
+    ((await ui.findAll({ type: 'Text' })) as Drawn[]).map(textOf).find(text => text.startsWith(`${GLYPH.rule.repeat(2)} ${GLYPH.capture}`)) ?? ''
+  for (let bodyColumns = 21; bodyColumns <= 60; bodyColumns += 1) {
+    await dockAt(ui, 20, bodyColumns)
+    // The pane is a column narrower than the body.
+    expect(cells(await rule())).toBeLessThanOrEqual(bodyColumns - 1)
+  }
+  await dockAt(ui, 20, 120)
+  expect(await rule()).toContain(name.slice(0, 20))
   await ui.unmount()
 })
 

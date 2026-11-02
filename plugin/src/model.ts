@@ -129,12 +129,6 @@ export const ageOf = (stamp: string, now: number) => {
   return `${Math.floor(days / 365)}y`
 }
 
-// Edit fields are one line: newlines show as ↵ and come back on save. A note that already holds a
-// literal ↵ can't round-trip and isn't edited inline.
-export const canEditInline = (text: string) => !text.includes(GLYPH.newline)
-export const toField = (text: string) => text.replaceAll('\n', GLYPH.newline)
-export const fromField = (text: string) => text.replaceAll(GLYPH.newline, '\n')
-
 // ---- projects ----
 
 const segmentsOf = (key: string) =>

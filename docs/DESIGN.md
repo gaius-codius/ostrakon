@@ -1,6 +1,6 @@
 # Ostrakon design system
 
-Version: 5.0.1
+Version: 6.0.0
 
 What the terminal mod (the pane, the band and the prompt hint, in `plugin/`) and the phone (`server/public/`) must agree on: colour roles, the project palette, the phone's tokens, symbols, fixed copy, motion and the accessibility bar. [`SPEC.md`](SPEC.md) describes behaviour and points here for these values instead of repeating them. The code holds the values: `plugin/src/ui/look.ts` for the terminal, `style.css`, `app.js` and `index.html` for the phone.
 
@@ -10,7 +10,7 @@ To change the design, change the code and this file in the same commit, bump `Ve
 
 | Rule | Why |
 |---|---|
-| Quiet by default: no rules, no boxes but the one you're typing in, metadata dim. | Note text should be the brightest thing on screen. |
+| Quiet by default: no boxes, rules only around a field you're typing in, metadata dim. | Note text should be the brightest thing on screen. |
 | Accent means act, now or yours: the current project, picks, `◆`, the primary button. | One colour that always means the same thing is easy to read. |
 | Colour is never the only signal: a dot sits beside a name, a status has words. | Some people can't tell the colours apart, and 16-colour terminals have few. |
 | Copy is plain, short and literal. | Short literal words are quick to read and promise nothing the app doesn't do. |
@@ -23,7 +23,7 @@ Terminal colours are theme keys (they follow the person's theme), except project
 <!-- check: roles -->
 | Role | Terminal key | Phone token | Use | Why |
 |---|---|---|---|---|
-| `accent` | `claude` | `--accent`, `--accent-text` | current project, row numbers, the band's keys, picks, `◆`, search hits, the capture frame, Save | the one colour for act, now or yours |
+| `accent` | `claude` | `--accent`, `--accent-text` | current project, row numbers, the band's keys, picks, `◆`, search hits, the rules around a field being typed in, Save | the one colour for act, now or yours |
 | `band` | `subtle` | `--raised` | the selected row's background | marks the row without a rule |
 | `unfiled` | `inactive` | `--dim` | the unfiled ring | grey: no project, nothing to say |
 | `history` | `inactive` | — | sent and archived rows, unpicked marks | done, so out of the way |
@@ -165,7 +165,7 @@ The terminal column names `look.ts` `GLYPH` keys; the phone column names `app.js
 | `✓` | saved | `saved` | `saved` |
 | `…` | text cut short | `more` | — |
 | `⏎` | Enter | `enter` | — |
-| `↵` | a newline in a one-line field | `newline` | — |
+| `─` | the rules above and below a field being typed in | `rule` | — |
 | `↑` | more rows above | `up` | — |
 | `↑` | waiting to sync (`↑ queued`) | — | `queued` |
 | `↓` | more rows below | `down` | — |
@@ -292,6 +292,11 @@ Keys, layout and behaviour are in [`SPEC.md`](SPEC.md). The terminal's spacing i
 ## 11. Changelog
 
 Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one or more `- Change:` lines and one or more `- Why:` lines. The newest entry ends with `Fingerprint: <hash>` of the design values in the code (`bun tools/check-design.ts --fingerprint` prints it). Versions: major when a meaning changes or something goes (a glyph means something else, a colour role moves); minor when something is added; patch for a value tweak or a doc fix. Entries are never removed.
+
+### 6.0.0 — 2026-11-02
+- Change: Capture, its target picker and the edit card sit between accent rules (`── ✎ new note ──── cc ──`, `── edit ──`; the bottom rule docked only) instead of a `round` frame, with the field across the pane and growing to several lines. `↵` is gone: a field holds real newlines.
+- Why: Claude Code's multi-line field draws right only across the pane's whole width; in a frame or beside a label it collapses to one cut line. The one-line field it replaces cut long notes off and couldn't hold a newline.
+Fingerprint: 681f9b90aa57
 
 ### 5.0.1 — 2026-10-25
 - Change: A custom theme's file is read from the session's folder when `CLAUDE_CONFIG_DIR` is set but empty.

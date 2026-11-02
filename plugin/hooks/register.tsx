@@ -7,11 +7,9 @@ import { createMirrorStore } from '../src/mirror'
 import type { Action, Ctx, Focus, Line } from '../src/model'
 import {
   bundleText,
-  canEditInline,
   carriedIn,
   dispatchText,
   freshPane,
-  fromField,
   keysFor,
   labelOf,
   placesOf,
@@ -21,7 +19,6 @@ import {
   ownKeys,
   pageOf,
   parseQuery,
-  toField,
   visibleNotes,
 } from '../src/model'
 import {
@@ -1076,15 +1073,11 @@ const act = async ($: EngineInterface, action: Action) => {
       return
     case 'edit': {
       if (!note) return
-      if (!canEditInline(note.text)) {
-        await $.ui.copy({ text: `${store.root(await storeIO($))}/notes/${note.id}.md` }).catch(() => undefined)
-        return toast($, TOAST.hasNewline)
-      }
       // Editing the same note again picks its kept draft back up.
       await setPane($, current => ({
         ...current,
         mode: 'edit',
-        edit: current.edit?.id === note.id ? current.edit : { id: note.id, draft: toField(note.text) },
+        edit: current.edit?.id === note.id ? current.edit : { id: note.id, draft: note.text.replaceAll('\r\n', '\n') },
       }))
       focusKey($, EDIT_KEY)
       return
@@ -1270,7 +1263,7 @@ const editSubmit = async ($: EngineInterface, value: string) => {
   const state = await read($, pane)
   if (!state.edit) return
   const id = state.edit.id
-  const text = fromField(value).trim()
+  const text = value.trim()
   let before: string | undefined
   if (text !== '') {
     const changed = await changeNote($, id, note => {
