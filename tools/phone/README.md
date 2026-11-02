@@ -1,8 +1,8 @@
 # Phone tests
 
 The phone app (`server/public/`) in WebKit, the engine under iOS Safari, at iPhone 15 size with
-touch. `run.sh` starts a test hub with its own data and token, adds a few notes, and runs
-`sheet.test.mjs` against it:
+touch. `run.sh` starts a test hub (`hub.ts`: the real hub with filing stubbed) with its own data and
+token, adds a few notes, and runs `sheet.test.mjs` against it:
 
 - the note menu, opened from ⋯ and from a tap on the note, and the File under drawer each rise from below
   and stop where they rest: the panel never shows in place first and then drops, never goes past
@@ -20,11 +20,24 @@ touch. `run.sh` starts a test hub with its own data and token, adds a few notes,
   visualViewport plays the keyboard, since Playwright's WebKit has none).
 - the page behind the menu doesn't scroll (desktop WebKit at iPhone size, since mobile
   WebKit can't be scrolled from a test).
+- File as issue shows only on a note under a repo the hub files to; it puts a request under
+  Drafts, whose draft shows the repo, `public` or `private`, title, labels and body, and File files
+  it (it leaves Drafts and the note leaves the inbox).
+- New draft drafts again; Discard drops the request and keeps the note.
+- a filing with no clear answer shows `Couldn't tell if it was filed. Check GitHub.` and a link to
+  the repo's issues; Not filed files it again, and It's there refuses a URL in another repo under
+  the field, then files it with the right one.
+- a draft that fails shows the reason, with Retry and Discard.
+- while the hub can't be reached, File as issue and every Drafts button are off, and nothing is
+  queued.
+- screenshots of Drafts and of the menu with File as issue, light and dark, go to `$SCREENS_DIR`
+  (default `/tmp/ostrakon-phone-screens`).
 
 ```sh
 tools/phone/run.sh                           # all of them
 tools/phone/run.sh --test-name-pattern=picker
 PHONE_DEBUG=1 tools/phone/run.sh             # print each panel's top, frame by frame
+SCREENS_DIR=~/screens tools/phone/run.sh     # where the screenshots go
 ```
 
 WebKit's Linux build wants Ubuntu's libraries, so where `docker` is, the tests run in Playwright's

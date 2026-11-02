@@ -20,18 +20,23 @@ const store = (key, value) => {
   }
 }
 
-// The hub's copy of the notes, the cursor they're current to, and which run of the hub that was,
-// under one key: a cursor is never kept without the notes it describes.
+// The hub's copy of the notes and of the open requests to file one as an issue, the cursor they're
+// current to, and which run of the hub that was, under one key: a cursor is never kept without the
+// notes and requests it describes.
 const synced = load('sp.sync', null)
 let hubId = synced?.hub ?? null
-let cursor = synced?.cursor ?? 0
+// Kept from before requests were: its cursor starts over, so no request older than it is missed.
+let cursor = synced && 'requests' in synced ? (synced.cursor ?? 0) : 0
 let notes = synced?.notes ?? {} // id → the hub's copy
-const saveSync = () => store('sp.sync', { hub: hubId, cursor, notes })
+let requests = synced?.requests ?? {} // id → an open request (SPEC §9.3 Drafts)
+const saveSync = () => store('sp.sync', { hub: hubId, cursor, notes, requests })
 
 let token = load('sp.token', '')
 let outbox = load('sp.outbox', []) // notes not yet accepted by the hub, one per id
 let refused = load('sp.refused', []) // { id, text, reason, note }: notes the hub wouldn't take (older entries have no note)
 let projects = load('sp.projects', [])
+// Whether the hub files notes as issues, and to which repos ({ repo: 'owner/repo', public }).
+let filing = load('sp.filing', { on: false, repos: [] })
 // Set when the outbox couldn't be written: nothing is queued until it can be.
 let storageError = ''
 let online = null
@@ -106,8 +111,14 @@ const ageOf = iso => {
 }
 
 class Unauthorized extends Error {}
-// The hub understood the request and said no (4xx): sending it again won't help.
-class Refused extends Error {}
+// The hub understood the request and said no (4xx): sending it again won't help. `body`: what it
+// answered (a refused step on a filing request carries the request as it stays).
+class Refused extends Error {
+  constructor(message, body = {}) {
+    super(message)
+    this.body = body
+  }
+}
 
 // Every call gives up after `timeoutMs`: a hub host that accepts and never answers counts as offline
 // rather than leaving a send in flight forever.
@@ -141,7 +152,7 @@ const request = async (path, init) => {
   }
   if (response.status >= 400 && response.status < 500) {
     const body = await response.json().catch(() => ({}))
-    throw new Refused(body.error || `hub answered ${response.status}`)
+    throw new Refused(body.error || `hub answered ${response.status}`, body)
   }
   if (!response.ok) throw new Error(`hub answered ${response.status}`)
   return response.json()
@@ -200,7 +211,10 @@ const adoptHub = id => {
   hubId = id
   cursor = 0
   notes = {}
+  requests = {}
   saveSync()
+  // It may file to other repos, or not at all.
+  loadFiling()
   return isKnown
 }
 
@@ -208,6 +222,28 @@ const setOnline = value => {
   online = value
   renderStatus()
   renderSaved()
+  // Filing's buttons work only while the hub answers.
+  renderDrafts()
+  if (sheetFor !== null) renderSheet()
+}
+
+// A request from the hub: kept while open, dropped once filed or discarded. One the phone knew that
+// turns filed says so.
+const CLOSED = ['filed', 'discarded']
+// Requests seen closed while the page is open: an older open copy arriving late (a step's answer
+// crossing the feed) doesn't bring one back.
+const closed = new Set()
+const applyRequest = request => {
+  if (!request?.id || closed.has(request.id)) return
+  const known = requests[request.id]
+  // An answer older than what's here (a step's answer and the feed can cross) changes nothing.
+  if (known && Date.parse(request.updated) < Date.parse(known.updated)) return
+  if (CLOSED.includes(request.state)) {
+    delete requests[request.id]
+    closed.add(request.id)
+  } else requests[request.id] = request
+  if (request.state === 'filed' && known && known.state !== 'filed')
+    toast('Filed', null, `${request.repo}#${request.issue?.match(/\/issues\/(\d+)$/)?.[1] ?? ''}`)
 }
 
 const BATCH = 200
@@ -262,7 +298,7 @@ const poll = async gen => {
       const controller = new AbortController()
       pollAbort = controller
       const since = cursor
-      const body = await api(`/api/changes?since=${since}&wait=${wait}`, { signal: controller.signal }, (wait + 15) * 1000)
+      const body = await api(`/api/changes?since=${since}&wait=${wait}&requests=1`, { signal: controller.signal }, (wait + 15) * 1000)
       if (gen !== pollGen) return
       // A new run of the hub: start over from nothing, unless this pull already did.
       if (adoptHub(body.hub) && since !== 0) {
@@ -271,6 +307,7 @@ const poll = async gen => {
         continue
       }
       for (const note of body.notes) notes[note.id] = winner(notes[note.id], note)
+      for (const request of body.requests ?? []) applyRequest(request)
       cursor = body.cursor
       saveSync()
       setOnline(true)
@@ -304,6 +341,23 @@ const loadProjects = async () => {
     renderPickerList()
   } catch {}
 }
+
+const loadFiling = async () => {
+  try {
+    const body = await api('/api/filing')
+    filing = { on: body.on === true, repos: Array.isArray(body.repos) ? body.repos : [] }
+    store('sp.filing', filing)
+    if (sheetFor !== null) renderSheet()
+  } catch {}
+}
+
+// The repo note `note` would be filed to, when the hub files there: its project key names it
+// exactly (`github.com/owner/repo`), and GitHub's names match whatever their case.
+const filingRepo = note => {
+  const repo = filing.on && /^github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/.exec(note.project?.key ?? '')?.[1]
+  return repo ? (filing.repos.find(known => known.repo.toLowerCase() === repo.toLowerCase()) ?? null) : null
+}
+const openRequestFor = id => Object.values(requests).find(request => request.note === id)
 
 // ---- drawing ----
 
@@ -454,6 +508,170 @@ const renderRefused = () => {
   $('refused-title').textContent = `The hub wouldn't take ${items.length === 1 ? '1 note' : `${items.length} notes`}`
   $('refused-list').replaceChildren(...items)
   $('refused').hidden = items.length === 0
+}
+
+// ---- drafts: requests to file a note as an issue ----
+
+// The unsure request whose issue URL is being typed: { id, url, error }.
+let found = null
+// Each request's item as last drawn, with what it was drawn from: a sync that leaves a request as
+// it was leaves its item (and the focus or typing in it) alone.
+const draftItems = new Map() // id → { key, node }
+
+// A step on a request, at the hub at once: never queued, so it's offered only while the hub
+// answers. True when it was taken.
+const requestStep = async (request, name, body = {}) => {
+  try {
+    const answer = await api(`/api/requests/${request.id}/${name}`, { method: 'POST', body: JSON.stringify(body) })
+    applyRequest(answer.request)
+    return true
+  } catch (error) {
+    if (error instanceof Unauthorized) return false
+    if (error instanceof Refused) {
+      // Refused for its state: the request as it stays.
+      applyRequest(error.body.request)
+      if (name === 'found' && found?.id === request.id) found.error = error.message
+      else toast(error.message)
+      return false
+    }
+    setOnline(false)
+    toast('hub offline')
+    return false
+  } finally {
+    saveSync()
+    renderDrafts()
+  }
+}
+
+// Asked from the action sheet: the hub drafts the issue, and the request shows under Drafts.
+const askDraft = async id => {
+  try {
+    const answer = await api('/api/requests', { method: 'POST', body: JSON.stringify({ note: id }) })
+    applyRequest(answer.request)
+    saveSync()
+    renderDrafts()
+    toast('Asked for a draft', null, current()[id]?.text)
+  } catch (error) {
+    if (error instanceof Unauthorized) return
+    if (error instanceof Refused) return toast(error.message)
+    setOnline(false)
+    toast('hub offline')
+  }
+}
+
+const draftItem = request => {
+  const id = request.id
+  const isOff = online !== true
+  const act = (label, run, className = 'btn') => {
+    const node = button(label, run, className)
+    node.disabled = isOff
+    node.dataset.focus = `${label}:${id}`
+    return node
+  }
+  const parts = [make('p', 'quote', request.text)]
+  const row = (...buttons) => make('div', 'row', ...buttons)
+  const discard = () => act('Discard', () => requestStep(request, 'discard'), 'btn quiet')
+  const state = request.state
+  if (state === 'waiting') parts.push(make('p', 'state', 'waiting to draft'), row(discard()))
+  if (state === 'drafting') parts.push(make('p', 'state', 'drafting…'))
+  if (state === 'approved') parts.push(make('p', 'state', 'waiting to file'))
+  if (state === 'filing') parts.push(make('p', 'state', 'filing…'))
+  if (state === 'drafted' && request.draft) {
+    const { title, body, labels } = request.draft
+    parts.push(
+      make('p', 'for', dot(request.project), `${request.repo} · ${request.public ? 'public' : 'private'}`),
+      make('p', 'title', title),
+      ...(labels.length > 0 ? [make('p', 'labels', ...labels.map(label => make('span', 'label', label)))] : []),
+      make('p', 'body', body),
+      row(
+        act('File', () => requestStep(request, 'file', { revision: request.revision }), 'primary'),
+        act('New draft', () => requestStep(request, 'redraft')),
+        discard(),
+      ),
+    )
+  }
+  if (state === 'unsure') {
+    const link = make('a', 'issues', `github.com/${request.repo}/issues`)
+    link.href = `https://github.com/${request.repo}/issues`
+    link.target = '_blank'
+    link.rel = 'noopener'
+    parts.push(make('p', 'reason', "Couldn't tell if it was filed. Check GitHub."), make('p', 'link', link))
+    if (found?.id === id) {
+      const field = document.createElement('input')
+      field.type = 'url'
+      field.value = found.url
+      field.placeholder = `https://github.com/${request.repo}/issues/…`
+      field.setAttribute('aria-label', 'Issue URL')
+      field.autocapitalize = 'off'
+      field.spellcheck = false
+      field.dataset.focus = `url:${id}`
+      field.addEventListener('input', () => (found.url = field.value))
+      const save = act('Save', () => found.url.trim() !== '' && requestStep(request, 'found', { url: found.url.trim() }), 'primary')
+      parts.push(field)
+      if (found.error) parts.push(make('p', 'reason', found.error))
+      parts.push(
+        row(
+          save,
+          act('Not filed', () => requestStep(request, 'not-filed'), 'btn quiet'),
+        ),
+      )
+    } else {
+      // The person pastes the issue's URL.
+      const there = act("It's there", () => {
+        found = { id, url: '', error: '' }
+        renderDrafts()
+        $('drafts-list')
+          .querySelector(`[data-focus="${CSS.escape(`url:${id}`)}"]`)
+          ?.focus()
+      })
+      parts.push(
+        row(
+          there,
+          act('Not filed', () => requestStep(request, 'not-filed'), 'btn quiet'),
+        ),
+      )
+    }
+  }
+  if (state === 'failed')
+    parts.push(
+      make('p', 'reason', request.error ?? ''),
+      row(
+        act('Retry', () => requestStep(request, 'retry')),
+        discard(),
+      ),
+    )
+  const item = make('li', '', ...parts)
+  item.dataset.id = id
+  item.dataset.note = request.note
+  item.dataset.state = state
+  return item
+}
+
+const renderDrafts = () => {
+  // The URL field goes once its request is no longer unsure.
+  if (found && requests[found.id]?.state !== 'unsure') found = null
+  const shown = Object.values(requests).sort((a, b) => order(a.created, b.created) || order(a.id, b.id))
+  const nodes = shown.map(request => {
+    const key = JSON.stringify([request, online === true, found?.id === request.id ? found.error : null, colourOf(request.project)])
+    const drawn = draftItems.get(request.id)
+    if (drawn?.key === key) return drawn.node
+    const node = draftItem(request)
+    draftItems.set(request.id, { key, node })
+    return node
+  })
+  for (const id of draftItems.keys()) if (!requests[id]) draftItems.delete(id)
+  const list = $('drafts-list')
+  $('drafts').hidden = nodes.length === 0
+  if (nodes.length === list.children.length && nodes.every((node, at) => list.children[at] === node)) return
+  // Focus stays on the same control when an item is drawn again, else on its item's first button.
+  const active = list.contains(document.activeElement) ? document.activeElement : null
+  const focused = active?.dataset.focus
+  const within = active?.closest('li')?.dataset.id
+  list.replaceChildren(...nodes)
+  if (!active || active.isConnected) return active?.focus({ preventScroll: true })
+  const same = focused ? list.querySelector(`[data-focus="${CSS.escape(focused)}"]:not(:disabled)`) : null
+  const first = within ? list.querySelector(`li[data-id="${CSS.escape(within)}"] :is(button, input, a):not(:disabled)`) : null
+  ;(same ?? first)?.focus({ preventScroll: true })
 }
 
 const labelOf = project => {
@@ -639,6 +857,7 @@ const ICONS = {
   clear: '<path d="M6 6l12 12M18 6 6 18"></path>',
   chevron: '<path d="m6 9 6 6 6-6"></path>',
   check: '<path d="m5 12.5 4.5 4.5L19 7.5"></path>',
+  issue: '<circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="2"></circle>',
 }
 
 let textIds = 0
@@ -698,6 +917,7 @@ const render = () => {
   renderStatus()
   // A refused note being edited isn't drawn again under the typing.
   if (!refusedEditing) renderRefused()
+  renderDrafts()
   renderSaved()
   renderList()
   if (sheetFor !== null) renderSheet()
@@ -1175,7 +1395,12 @@ const sheetAction = (iconName, label, run, { sub = '', aside = '', className = '
 const renderSheet = () => {
   const note = current()[sheetFor]
   if (!isActionable(note)) return closeSheet()
-  const drawn = JSON.stringify([note.text, note.project, note.by, ageOf(note.updated)])
+  // File as issue, on a note under a repo the hub files to: off while the hub doesn't answer (it's
+  // never queued), and while the note has a change the hub hasn't got (the hub drafts its own copy).
+  const repo = filingRepo(note)
+  const request = repo ? openRequestFor(note.id) : undefined
+  const fileSub = !repo ? null : request ? 'in Drafts' : online !== true ? 'hub offline' : outbox.some(queued => queued.id === note.id) ? 'waiting to sync' : ''
+  const drawn = JSON.stringify([note.text, note.project, note.by, ageOf(note.updated), fileSub])
   if (drawn === sheetDrawn) return
   sheetDrawn = drawn
   const list = $('sheet-actions')
@@ -1196,12 +1421,16 @@ const renderSheet = () => {
       act(async id => toast((await copy(current()[id]?.text ?? '')) ? 'Copied' : "Couldn't copy")),
     ),
     sheetAction('move', 'Move to project', showMovePage, { aside: `${labelOf(note.project)} ${GLYPH.next}` }),
+    ...(fileSub === null ? [] : [sheetAction('issue', 'File as issue', act(askDraft), { sub: fileSub })]),
     sheetAction('sent', 'Mark sent', act(markSent, 'gone'), { sub: 'used elsewhere; leaves open notes' }),
     sheetAction('archive', 'Archive', act(archive, 'gone'), { className: 'danger' }),
   ]
+  // Off whenever its line under it says why.
+  const fileItem = items.find(item => item.dataset.key === 'File as issue')
+  if (fileItem) fileItem.disabled = fileSub !== ''
   list.replaceChildren(...items)
   if ($('sheet').open) markScrolls()
-  if (focused !== undefined) (items.find(item => item.dataset.key === focused) ?? items[0]).focus({ preventScroll: true })
+  if (focused !== undefined) (items.find(item => item.dataset.key === focused && !item.disabled) ?? items[0]).focus({ preventScroll: true })
 }
 
 // A long note's text, and actions that don't fit (large text, a short screen), scroll, and a swipe
@@ -1590,6 +1819,7 @@ const start = () => {
   render()
   renderCapture()
   loadProjects()
+  loadFiling()
   startPoll()
   flush()
 }
@@ -1697,7 +1927,7 @@ const drawMode = after => {
   document.body.dataset.mode = mode
   $('close-capture').hidden = !isCapture
   // While typing, the list beneath is dimmed and out of reach; a tap on it closes the form.
-  for (const id of ['refused', 'inbox']) $(id).inert = isCapture
+  for (const id of ['refused', 'drafts', 'inbox']) $(id).inert = isCapture
   // Filtering: the search bar takes the header's place, and the form steps aside.
   $('search-bar').hidden = !isSearch
   $('capture').hidden = isSearch
@@ -1775,7 +2005,9 @@ const tabOut = event => {
   const stops = [...$('capture').querySelectorAll('textarea, button')].filter(stop => !stop.disabled && isShown(stop))
   if (event.shiftKey || event.target !== stops[stops.length - 1]) return
   event.preventDefault()
-  closeCapture(() => [...document.querySelectorAll('#refused button, #list button')].find(isShown) ?? $('open-search'))
+  closeCapture(
+    () => [...document.querySelectorAll('#refused button, #drafts button, #list button')].find(stop => isShown(stop) && !stop.disabled) ?? $('open-search'),
+  )
 }
 
 $('text').addEventListener('focus', startCapture)

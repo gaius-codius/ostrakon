@@ -6,6 +6,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Added
+
+- The phone and web app can ask for a note to be filed as a GitHub issue (**File as issue** in a note's actions). The hub drafts it, the draft shows under **Drafts** with the target repo and whether it's public, and nothing is filed until you choose **File**. Once filed, the note is marked sent with an `issue:` line. Off until the hub has filing set up (coming in a later release).
+
 ### Changed
 
 - New notes and the edit card take several lines: the field wraps, grows to 4 rows (2 when the pane sits above the prompt) and scrolls. Shift+Enter, or `\` then Enter, starts a new line, and a pasted note keeps its lines. Notes that contain `↵` can now be edited in the pane too, and the preview no longer repeats the note while you edit it.
