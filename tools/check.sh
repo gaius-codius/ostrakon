@@ -9,8 +9,11 @@ P=$(cd "$(dirname "${BASH_SOURCE[0]}")/../plugin" && pwd)
 echo "== validate"; claude plugin validate "$P" | grep -E '✔|✘|❯ .*(error|refus)' || true
 claude plugin validate "$P" >/dev/null
 "$P/../tools/check-names.sh"
-# docs/DESIGN.md against the code, and its changelog against origin/main's when there is one.
-echo "== design"; bun "$P/../tools/check-design.ts" --base origin/main
+# docs/DESIGN.md against the code, and its changelog against the one where this branch left
+# origin/main, when there is one: a branch that is only behind main isn't removing main's entries.
+# CI checks the branch merged into main, so it catches two branches taking the same version.
+base=$(git -C "$P" merge-base origin/main HEAD 2>/dev/null || echo origin/main)
+echo "== design"; bun "$P/../tools/check-design.ts" --base "$base"
 bun test "$P/../tools/check-design.test.ts"
 # The TypeScript server/package.json pins, for both configs. The mod's on its own line: set -e
 # ignores a failure on the left of &&.
