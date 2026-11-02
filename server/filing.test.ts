@@ -258,7 +258,7 @@ describe('drafting', () => {
     f.answer('gh', `case "$1 $2" in 'repo view') echo '{"visibility":"PRIVATE"}' ;; *) echo '[]' ;; esac`)
     // In a fence, as a model may answer.
     f.answer('claude', `printf '%s' '{"is_error":false,"result":"\`\`\`json\\n{\\"title\\":\\"T\\",\\"body\\":\\"\\",\\"labels\\":[]}\\n\`\`\`"}'`)
-    const made = await f.open().draft(request({ repo: '-x/cc' }))
+    const made = await f.open().draft(request({ repo: '-x/cc', public: false }))
     const [labels, view, claude] = f.calls()
     expect(labels?.args).toEqual(['label', 'list', '--repo=-x/cc', '--limit=1000', '--json=name,description'])
     expect(view?.args).toEqual(['repo', 'view', '--json=visibility', '--', '-x/cc'])
@@ -323,6 +323,21 @@ describe('drafting', () => {
     const claude = f.calls().find(isClaude) as Call
     await Bun.sleep(50)
     expect(isAlive(claude.pid)).toBe(false)
+  })
+
+  test('kills what the tool started too, so nothing it left runs on', async () => {
+    const f = fakes()
+    // A launcher that starts the real tool and waits on it.
+    f.answer('claude', 'sleep 30 & echo $! > "$dir/started"; wait')
+    await expect(f.open({ draftMs: 300 }).draft(request())).rejects.toThrow('claude took longer than 0.3 s')
+    await Bun.sleep(50)
+    expect(isAlive(Number(readFileSync(join(f.bin, 'started'), 'utf8')))).toBe(false)
+  })
+
+  test('fails the draft when the repo is no longer as public or private as the request says', async () => {
+    const f = fakes()
+    await expect(f.open().draft(request({ public: false }))).rejects.toThrow('me/cc is public now; discard this request and ask again')
+    expect(f.calls().some(isClaude)).toBe(false)
   })
 
   test('kills a tool that prints more than the cap', async () => {
@@ -398,11 +413,17 @@ describe('filing', () => {
     expect(await filing.find(request({ state: 'unsure' }))).toBe('https://github.com/me/cc/issues/5')
   })
 
-  test('finds nothing when no issue ends with the marker', async () => {
+  test('finds the marker on a line of its own, also with text added below it since', async () => {
+    const f = fakes()
+    f.issues([['https://github.com/me/cc/issues/6', `The retry drops it.\n\nostrakon: ${ID}\n\nSteps added later.`]])
+    expect(await f.open().find(request())).toBe('https://github.com/me/cc/issues/6')
+  })
+
+  test('finds nothing when no line is the marker', async () => {
     const f = fakes()
     f.issues([['https://github.com/me/cc/issues/3', `ostrakon: ${ID}x`]])
     expect(await f.open().find(request())).toBeNull()
-    expect(hasMarker(`a\nostrakon: ${ID}\nmore`, ID)).toBe(false)
+    expect(hasMarker(`a ostrakon: ${ID}\nmore`, ID)).toBe(false)
     await expect(f.open().find(request({ id: 'x") | .body' }))).rejects.toThrow('not a request id')
   })
 

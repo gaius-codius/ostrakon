@@ -36,8 +36,10 @@ const PASSED = ['HOME', 'PATH', 'LANG', 'LC_ALL', 'TZ', 'TMPDIR']
 export class Overdue extends Error {}
 
 export const marker = (id: string) => `ostrakon: ${id}`
-// Whether a body's last line is request `id`'s marker, exactly.
-export const hasMarker = (body: string, id: string) => body.trimEnd().split(/\r?\n/).at(-1)?.trim() === marker(id)
+// Whether a body's last line is request `id`'s marker, exactly: how the hub writes it.
+export const endsWithMarker = (body: string, id: string) => body.trimEnd().split(/\r?\n/).at(-1)?.trim() === marker(id)
+// Whether any line of a filed issue's body is the marker: someone may have added to it since.
+export const hasMarker = (body: string, id: string) => body.split(/\r?\n/).some(line => line.trim() === marker(id))
 
 // Why GH_TOKEN can't be used, or null: only a fine-grained token, whose repos are the allowlist.
 export const ghTokenProblem = (token: string) =>
@@ -60,7 +62,14 @@ const run = async (cmd: string[], { env, cwd, stdin, ms, name }: { env: Record<s
     stdin: stdin === undefined ? 'ignore' : new Blob([stdin]),
     stdout: 'pipe',
     stderr: 'pipe',
+    // Its own process group, so a kill reaches whatever it started (a launcher's tool).
+    detached: true,
   })
+  const killGroup = () => {
+    try {
+      process.kill(-child.pid, 'SIGKILL')
+    } catch {}
+  }
   let why: string | null = null
   let stopped = () => {}
   const killed = new Promise<void>(resolve => {
@@ -68,7 +77,7 @@ const run = async (cmd: string[], { env, cwd, stdin, ms, name }: { env: Record<s
   })
   const stop = (reason: string) => {
     why ??= reason
-    child.kill('SIGKILL')
+    killGroup()
     stopped()
   }
   const timer = setTimeout(() => stop(`${name} took longer than ${ms / 1000} s`), ms)
@@ -95,6 +104,8 @@ const run = async (cmd: string[], { env, cwd, stdin, ms, name }: { env: Record<s
     return { code, stdout, stderr } satisfies Ran
   } finally {
     clearTimeout(timer)
+    // Nothing it left running outlives the call.
+    killGroup()
   }
 }
 
@@ -268,6 +279,8 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
       const labels = await labelsOf(request.repo)
       const known = labels.map(label => label.name)
       const visible = await isPublic(request.repo)
+      // The phone shows the person whether the repo is public from the request: it must still hold.
+      if (visible !== request.public) throw new Error(`${request.repo} is ${visible ? 'public' : 'private'} now; discard this request and ask again`)
       const room = mkdtempSync(join(tmpdir(), 'ostrakon-draft-'))
       try {
         const ran = await run(['claude', ...CLAUDE_ISOLATION, '--output-format', 'json', '--system-prompt', SYSTEM], {
@@ -295,7 +308,7 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
     // that went unanswered, or brought back by a restored backup, is recorded, not filed again.
     file: async request => {
       const { draft } = request
-      if (!hasMarker(draft.body, request.id)) throw new NotCreated("the draft doesn't end with its request's marker")
+      if (!endsWithMarker(draft.body, request.id)) throw new NotCreated("the draft doesn't end with its request's marker")
       let found: string | null
       let labels: string[]
       try {
