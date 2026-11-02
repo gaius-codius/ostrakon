@@ -126,6 +126,8 @@ export const checkDraft = (value: unknown, known: string[], id: string): Draft =
   if (/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(title.trim())) throw new Error("the draft's title isn't one line")
   if (typeof body !== 'string') throw new Error('the draft has no body')
   if ([...body].length > MAX_BODY) throw new Error(`the draft's body is over ${MAX_BODY} characters`)
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what it looks for
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(body)) throw new Error("the draft's body has control characters")
   if (!Array.isArray(labels) || !labels.every(label => typeof label === 'string')) throw new Error("the draft's labels aren't a list of names")
   if (labels.length > MAX_LABELS) throw new Error(`the draft has more than ${MAX_LABELS} labels`)
   if (new Set(labels).size !== labels.length) throw new Error('the draft names a label twice')

@@ -290,6 +290,9 @@ describe('drafting', () => {
     expect(check({ ...ok, title: ' ' })).toThrow('the draft has no title')
     expect(check({ ...ok, title: 'a\nb' })).toThrow("the draft's title isn't one line")
     expect(check({ ...ok, body: 3 })).toThrow('the draft has no body')
+    // A NUL can't go to gh as an argument: it fails the draft, not the filing.
+    expect(check({ ...ok, body: 'hello\u0000world' })).toThrow("the draft's body has control characters")
+    expect(checkDraft({ ...ok, body: 'a\tb\r\nc' }, ['bug'], ID).body).toStartWith('a\tb\r\nc')
     expect(check({ ...ok, body: 'x'.repeat(MAX_BODY + 1) })).toThrow(`the draft's body is over ${MAX_BODY} characters`)
     expect(check({ ...ok, labels: 'bug' })).toThrow("the draft's labels aren't a list of names")
     expect(check({ ...ok, labels: ['bug', 'bug'] })).toThrow('the draft names a label twice')
