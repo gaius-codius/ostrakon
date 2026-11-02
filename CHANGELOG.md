@@ -8,7 +8,8 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ### Added
 
-- The phone and web app can ask for a note to be filed as a GitHub issue (**File as issue** in a note's actions). The hub drafts it, the draft shows under **Drafts** with the target repo and whether it's public, and nothing is filed until you choose **File**. Once filed, the note is marked sent with an `issue:` line. Off until the hub has filing set up (coming in a later release).
+- The phone and web app can ask for a note to be filed as a GitHub issue (**File as issue** in a note's actions). The hub drafts it, the draft shows under **Drafts** with the target repo and whether it's public, and nothing is filed until you choose **File**. Once filed, the note is marked sent with an `issue:` line. Off until the hub has its own tokens for it (below).
+- The hub drafts and files the issues itself, with two tokens of its own in its env file: a fine-grained GitHub token for the repos you choose, and a `claude setup-token` token. Without both, filing is off. It never uses your own `gh` or Claude login. `ostrakon doctor` says whether filing is on, which repos the token covers and when each token expires (docs/phone.md, Filing notes as issues).
 - `ostrakon doctor` checks your keybindings and names any of ostrakon's keys that aren't bound. Without its binding, `ctrl+x tab` from the prompt focuses the band instead of the pane.
 
 ### Changed

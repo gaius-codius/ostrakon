@@ -50,7 +50,7 @@ export const ghTokenProblem = (token: string) =>
 type Ran = { code: number; stdout: string; stderr: string }
 
 // Runs `cmd` with exactly `env`, killed past `ms` or once it prints more than the caps. A child it
-// left holding the pipes doesn't hold up the answer: the wait ends with the kill.
+// left holding the pipes doesn't hold up the answer: the kill stops the reading too.
 const run = async (cmd: string[], { env, cwd, stdin, ms, name }: { env: Record<string, string>; cwd: string; stdin?: string; ms: number; name: string }) => {
   const path = Bun.which(cmd[0] ?? '', { PATH: env.PATH ?? '' })
   if (!path) throw new Error(`${name} isn't on the hub's PATH`)
@@ -90,10 +90,8 @@ const run = async (cmd: string[], { env, cwd, stdin, ms, name }: { env: Record<s
     return Buffer.concat(chunks).toString('utf8')
   }
   try {
-    const finished = Promise.all([read(child.stdout, MAX_OUT), read(child.stderr, MAX_ERR), child.exited])
-    const result = await Promise.race([finished, killed.then(() => null)])
-    if (why || !result) throw new Overdue(why ?? `${name} was stopped`)
-    const [stdout, stderr, code] = result
+    const [stdout, stderr, code] = await Promise.all([read(child.stdout, MAX_OUT), read(child.stderr, MAX_ERR), child.exited])
+    if (why) throw new Overdue(why)
     return { code, stdout, stderr } satisfies Ran
   } finally {
     clearTimeout(timer)

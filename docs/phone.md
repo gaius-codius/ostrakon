@@ -23,7 +23,8 @@ note from Claude, `▪` one from the phone. Notes Claude proposed (harvest) come
 
 Moving, archiving and marking sent can all be undone from the message that pops up afterwards.
 
-**File a note as a GitHub issue** (once the hub has filing set up; that comes in a later release):
+**File a note as a GitHub issue** (once the hub has its own tokens for it: see
+[Filing notes as issues](#filing-notes-as-issues)):
 
 - **File as issue** in a note's actions asks the hub for a draft. It shows only for a note under
   a GitHub repo the hub can file to.
@@ -119,6 +120,60 @@ won't start, and `ostrakon doctor` says so.
 **On a kernel without unprivileged user namespaces**, systemd can't apply the folder limits in a
 user unit. It starts the hub without them, and `ostrakon doctor` says which are missing. (Not tested
 on such a machine yet.)
+
+## Filing notes as issues
+
+The hub drafts and files issues with two tokens of its own, never your logins. Without both,
+filing is off and the phone doesn't offer it.
+
+1. **A GitHub token for the repos to file to.** On GitHub: Settings → Developer settings →
+   Personal access tokens → **Fine-grained tokens** → Generate new token.
+   - **Repository access:** Only select repositories, and pick them. The hub files only to these;
+     GitHub holds it to them.
+   - **Permissions:** Issues, Read and write. GitHub adds Metadata (read-only) itself.
+   - A classic token (`ghp_…`) is refused: it reaches every repo you can.
+2. **A Claude token** for drafting, from your subscription:
+
+   ```
+   claude setup-token
+   ```
+
+   It lasts a year.
+3. **Add both to the hub's env file**, then restart the hub:
+
+   ```
+   $EDITOR ~/.config/ostrakon-hub/env
+   systemctl --user restart ostrakon-hub
+   ostrakon doctor
+   ```
+
+   The lines to add (`CLAUDE_TOKEN_EXPIRES` is optional: a year from the day you made the Claude
+   token, so doctor can warn you a month before it ends):
+
+   ```
+   GH_TOKEN=github_pat_…
+   CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-…
+   CLAUDE_TOKEN_EXPIRES=2027-11-03
+   ```
+
+`ostrakon doctor`, under `== filing notes as issues`, says whether filing is on, which repos the
+GitHub token covers, and when each token expires (`!!` from a month before).
+
+What the hub does with them:
+
+- **Drafting** runs `claude -p` in an empty folder, with no tools, MCP servers, settings, plugins
+  or slash commands, and its own config folder (`claude/` in the hub's data). The note goes in as
+  data, and the hub checks the answer: a title of at most 256 characters, a body of at most
+  10,000, labels only from the repo's. Each draft uses some of your subscription.
+- **Filing** runs `gh issue create`, with its own config folder (`gh/` in the hub's data), only
+  after you choose **File**. The issue's body ends with `ostrakon: <request id>`, and the hub
+  looks for an issue with that line before every create, so it never files one twice.
+- **Each call has a deadline**: 2 minutes for a draft, 30 seconds for each `gh` call.
+- **The hub finds `claude` and `gh` on its unit's `PATH`** (mise's shims, `~/.bun/bin` and the
+  system folders). `ostrakon doctor` says if either is missing there.
+
+Anyone with the hub token can file issues to those repos and use your Claude subscription. They
+can't reach your GitHub account or your Claude login.
 
 ## Pair your phone
 
