@@ -476,7 +476,7 @@ const focusOf = (state: PaneState, lines: Line[], problemCount: number): Focus =
     // the ones it doesn't offer.
     const row = state.focus === 'line' ? lines.find(candidate => candidate.key === state.cursor) : undefined
     const lead = row ? ownKeys(keysFor({ kind: 'line', line: row, picks: state.picks.length })) : []
-    const omit = sheetOmits(row)
+    const omit = sheetOmits(row, state.picks.length)
     const pages = sheetPages(geometry.bodyRows, geometry.isInline, problemCount, omit)
     return { kind: 'sheet', page: Math.min(Math.max(0, state.sheetPage ?? 0), pages - 1), pages, lead, omit }
   }

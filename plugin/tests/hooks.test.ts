@@ -495,9 +495,9 @@ test("o fills the prompt to file another project's note as an issue in that note
   await ui.press({ key: 'key-o' })
   const filled = world.box.text
   expect(filled.startsWith('my draft\n\nFile the note below as a GitHub issue in me/infra.')).toBe(true)
-  expect(filled).toContain('--repo me/infra')
+  expect(filled).toContain('--repo github.com/me/infra')
   expect(filled).not.toContain('me/cc')
-  expect(filled.endsWith('Note 01JA7K2M3Q9X4ZB6C8D0EFGH03:\nadd a cache invalidation metric')).toBe(true)
+  expect(filled).toContain('--- note 01JA7K2M3Q9X4ZB6C8D0EFGH03 ---\nadd a cache invalidation metric\n--- end of note')
   expect(world.closed).toBe(1)
   await composer($, filled)
   expect(noteIn(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH03').status).toBe('sent')

@@ -351,6 +351,7 @@ const ROW_KEYS: Key[] = [
   ['d', 'archive'],
   ['m', 'move'],
   ['y', 'copy'],
+  ['o', 'file issue'],
   ['v', 'pick'],
   ['z', 'fold'],
   ['h', 'history'],
