@@ -33,6 +33,8 @@ case $url in
 esac`,
   // The hub's user lingers, so doctor has no note about it to make.
   loginctl: 'echo yes',
+  // There, so the hub section says nothing about it on a machine without one.
+  qrencode: 'true',
   // With HUB_SHOW set, an ostrakon-hub (MainPID 4242) whose settings are in that file, running unless
   // HUB_ACTIVE=0. Its Environment is HUB_ENVIRONMENT when that's set.
   systemctl: `[ -n "\${HUB_SHOW:-}" ] || exit 1

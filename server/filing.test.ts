@@ -361,6 +361,8 @@ describe('drafting', () => {
   test("says when claude or gh isn't on the hub's PATH", async () => {
     const f = fakes()
     rmSync(join(f.bin, 'gh'))
+    // Only the fakes' folder, so a gh installed on the machine isn't found instead.
+    f.hub.PATH = f.bin
     await expect(f.open().draft(request())).rejects.toThrow("gh isn't on the hub's PATH")
   })
 })
