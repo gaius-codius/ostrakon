@@ -8,7 +8,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ### Added
 
-- The phone and web app can ask for a note to be filed as a GitHub issue (**File as issue** in a note's actions). The hub drafts it, the draft shows under **Drafts** with the target repo and whether it's public, and nothing is filed until you choose **File**. Once filed, the note is marked sent with an `issue:` line. Off until the hub has its own tokens for it (below). A request waiting to be filed, or one the hub couldn't tell was filed, can be discarded too; for the second, the issue may still be on GitHub. When the hub couldn't check a repo with GitHub, a note under it shows **File as issue** off with `hub couldn't check this repo`. A note is filed once: the hub records an issue already filed from it with `o` instead of filing another, and refuses to file a note it filed before.
+- The phone and web app can ask for a note to be filed as a GitHub issue (**File as issue** in a note's actions). The hub drafts it, the draft shows under **Drafts** with the target repo and whether it's public, and nothing is filed until you choose **File**. Once filed, the note is marked sent with an `issue:` line. Off until the hub has its own tokens for it (below). A request waiting to be filed, or one the hub couldn't tell was filed, can be discarded too; for the second, the issue may still be on GitHub. When the hub couldn't check a repo with GitHub, a note under it shows **File as issue** off with `hub couldn't check this repo`. A note is filed once: the hub records an issue already filed from it with `o` instead of filing another, and refuses to file a note it filed before. Just before filing, the hub checks the repo is still as public or private as the draft says; if it changed, nothing is filed and the request says `<repo> is public now`.
 - The hub drafts and files the issues itself, with two tokens of its own in its env file: a fine-grained GitHub token for the repos you choose, and a `claude setup-token` token. Without both, filing is off. It never uses your own `gh` or Claude login. `ostrakon doctor` says whether filing is on, which repos the token can file to and when each token expires (docs/phone.md, Filing notes as issues).
 - `o` on a note in the pane fills the prompt to file it as a GitHub issue in the note's own repo, even from another project's session. Claude reads the repo's labels, checks for an issue already filed from the note, says whether the repo is public, and shows you the draft before creating it. Offered only on notes whose project is a github.com repo.
 - `ostrakon doctor` checks your keybindings and names any of ostrakon's keys that aren't bound. Without its binding, `ctrl+x tab` from the prompt focuses the band instead of the pane.
@@ -17,6 +17,13 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 - New notes and the edit card take several lines: the field wraps, grows to 4 rows (2 when the pane sits above the prompt) and scrolls. Shift+Enter, or `\` then Enter, starts a new line, and a pasted note keeps its lines. Notes that contain `↵` can now be edited in the pane too, and the preview no longer repeats the note while you edit it.
 - Capture and the edit card sit between accent rules instead of a frame, and the draft is no longer repeated under the field. Needs Claude Code 2.1.301 or later.
+
+### Fixed
+
+- The hub reads its env file as systemd does: when a key is on more than one line, the last line wins, and spaces around the value, then its quotes, are dropped. Before, the hub took the first line, so after you added a new token under an old one, `ostrakon doctor` checked the new token while the hub used the old one.
+- An empty `HUB_DATA=` in the env file means the default data folder. A `HUB_DATA` with a `$`, a quote or a backslash in it isn't added to the hub's sandbox, and setup says why.
+- The hub's unit has `~/.local/bin` on its `PATH`, where Claude Code's installer puts `claude`. For a `claude` or `gh` in another folder, `ostrakon doctor` points you at a drop-in (`systemctl --user edit ostrakon-hub`).
+- `./install.sh --hub` makes the env file mode 600 even when an empty one is already there.
 
 ### Security
 

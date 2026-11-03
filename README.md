@@ -25,7 +25,7 @@ Notes are kept per project, and the pane shows all of them. Syncing between mach
 - **Harvest** (opt-in): after each turn, an extra review looks for side issues that came up and offers them as notes, which you keep or dismiss. It doesn't change what Claude is doing.
 - **Sync**: two-way sync enabled by multiple methods. Through a small hub, a plain folder, Obsidian or a combination of methods ([Sync](#sync)).
 - **Desktop**: save a note from a key on your desktop, or from a script, without opening Claude Code: `ostrakon jot` ([Notes from the desktop](#notes-from-the-desktop)).
-- **Phone**: capture and triage from your phone with the hub's web app, installed to the Home Screen, or send a note from the share sheet or Siri with an iOS Shortcut.
+- **Phone**: capture and triage from your phone with the hub's web app, installed to the Home Screen, or send a note from the share sheet or Siri with an iOS Shortcut. The app can also file a note as a GitHub issue: the hub drafts it and files it once you choose **File** ([Filing notes as issues](docs/phone.md#filing-notes-as-issues)).
 
 Notes are plain Markdown files with some YAML. One per note, in `~/.local/share/ostrakon/` by default, so they are yours to read, grep and back up.
 
@@ -54,7 +54,7 @@ Use one or the other. The install script offers to add the [keybindings](#keybin
 
 ### Requirements
 
-- **Claude Code** with mods support (see the [mods docs](https://code.claude.com/docs/en/plugins/mods/overview)). Needs 2.1.301 or later, tested with 2.1.310; mods are still changing, so a much older or newer version may not work.
+- **Claude Code** with mods support (see the [mods docs](https://code.claude.com/docs/en/plugins/mods/overview)). Needs 2.1.301 or later, tested with 2.1.317; mods are still changing, so a much older or newer version may not work.
 - **git**, and **python3** for the install script (without it, the script tells you the one line to add yourself).
 - **For the hub:** [Bun](https://bun.sh) (tested with 1.4.4) to run the hub and to use `ostrakon pair` and `ostrakon jot`, and `qrencode` for the pairing QR code. `install.sh --hub` sets the hub up as a systemd service, so that part is Linux-only for now; elsewhere, run `ostrakon hub` however you like to keep things running.
 
