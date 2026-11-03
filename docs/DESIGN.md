@@ -1,6 +1,6 @@
 # Ostrakon design system
 
-Version: 6.2.0
+Version: 6.3.0
 
 What the terminal mod (the pane, the band and the prompt hint, in `plugin/`) and the phone (`server/public/`) must agree on: colour roles, the project palette, the phone's tokens, symbols, fixed copy, motion and the accessibility bar. [`SPEC.md`](SPEC.md) describes behaviour and points here for these values instead of repeating them. The code holds the values: `plugin/src/ui/look.ts` for the terminal, `style.css`, `app.js` and `index.html` for the phone.
 
@@ -222,6 +222,7 @@ Strings the surfaces or the docs depend on, each checked word for word in every 
 | `File under` | server/public/index.html, docs/SPEC.md | the project picker's title |
 | `File as issue` | server/public/app.js, docs/SPEC.md | the sheet action that asks the hub to draft an issue |
 | `in Drafts` | server/public/app.js, docs/SPEC.md | its subtitle once the note has an open request |
+| `hub couldn't check this repo` | server/public/app.js, docs/SPEC.md | its subtitle under a repo the hub left out for want of GitHub's answer |
 | `Asked for a draft` | server/public/app.js, docs/SPEC.md | the toast after it |
 | `Drafts` | server/public/index.html, docs/SPEC.md | the heading over open requests |
 | `waiting to draft` | server/public/app.js, docs/SPEC.md | a request the hub hasn't drafted yet |
@@ -306,6 +307,11 @@ Keys, layout and behaviour are in [`SPEC.md`](SPEC.md). The terminal's spacing i
 ## 11. Changelog
 
 Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one or more `- Change:` lines and one or more `- Why:` lines. The newest entry ends with `Fingerprint: <hash>` of the design values in the code (`bun tools/check-design.ts --fingerprint` prints it). Versions: major when a meaning changes or something goes (a glyph means something else, a colour role moves); minor when something is added; patch for a value tweak or a doc fix. Entries are never removed.
+
+### 6.3.0 — 2026-11-03
+- Change: **File as issue** shows off with `hub couldn't check this repo` on a note under a GitHub repo the hub's list left out while it says it couldn't check some repos. New copy in §6.
+- Why: The action just went missing when GitHub didn't answer the hub's check (#125), and nothing said why.
+Fingerprint: 1aaa4e5da5d3
 
 ### 6.2.0 — 2026-11-03
 - Change: Drafts offers **Discard** on a request waiting to file and on one the hub couldn't tell was filed; the second shows `Discard stops the hub checking. The issue may still exist.` above its buttons. New copy in §6.

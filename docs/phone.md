@@ -171,7 +171,8 @@ What the hub does with them:
   nothing. A repo where it's refused as invalid (422) is one the token can file to; one where
   it's refused as not allowed (403) isn't, and is left out. If GitHub doesn't answer clearly (a
   timeout, an error on its side), that repo is left out and the reason shows in `error` in
-  `/api/filing`. The list is kept for 5 minutes, or 1 minute when a repo was left out. `ostrakon doctor` does the same check.
+  `/api/filing`. The phone then shows **File as issue** off on notes under repos not on the list,
+  with `hub couldn't check this repo`, and asks again each time you open a note's actions. The list is kept for 5 minutes, or 1 minute when a repo was left out. `ostrakon doctor` does the same check.
 - **Drafting** runs `claude -p` in an empty folder, with no tools, MCP servers, settings, plugins
   or slash commands, and its own config folder (`claude/` in the hub's data). The note goes in as
   data, and the hub checks the answer: a title of at most 256 characters, a body of at most

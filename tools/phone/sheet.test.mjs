@@ -664,6 +664,30 @@ test('a draft that fails shows why, with Retry and Discard', async () => {
   await draftOf(id).waitFor({ state: 'detached' })
 })
 
+test("under a repo the hub couldn't check, File as issue is off and says so, until the hub can", async t => {
+  const [unchecked, covered] = ['01JA7K2M3Q9X4ZB6C8D0EFGK0N', '01JA7K2M3Q9X4ZB6C8D0EFGK0P']
+  await push(note(unchecked, 'Check the probe deadline', 'down'), note(covered, 'Probe four at a time', 'ostrakon'))
+  const short = await pageWith(devices['iPhone 15'])
+  t.after(() => short.context().close())
+  // GitHub didn't answer the hub's check of me/down.
+  const error = "couldn't tell whether the GitHub token can file to me/down (HTTP 502), so the list leaves them out"
+  await short.route('**/api/filing', route => route.fulfill({ json: { on: true, repos: [{ repo: 'me/ostrakon', public: true }], error } }))
+  await short.goto(HUB)
+  await openMenu(unchecked, short)
+  await short.waitForFunction(() => filing.error !== undefined)
+  assert.equal(await fileAction(short).isDisabled(), true, "File as issue is on under a repo the hub couldn't check")
+  assert.match(await fileAction(short).textContent(), /hub couldn't check this repo/)
+  await closeMenu(short)
+  await openMenu(covered, short)
+  assert.equal(await fileAction(short).isEnabled(), true, 'File as issue is off under a repo the hub files to')
+  await closeMenu(short)
+  // The hub answers in full again: the next menu asks, and the line goes.
+  await short.unroute('**/api/filing')
+  await openMenu(unchecked, short)
+  await short.waitForFunction(() => filing.error === undefined)
+  await fileAction(short).waitFor({ state: 'detached' })
+})
+
 test("while the hub can't be reached, filing's buttons are off and nothing is queued", async t => {
   const [drafted, plain] = ['01JA7K2M3Q9X4ZB6C8D0EFGK0F', '01JA7K2M3Q9X4ZB6C8D0EFGK0G']
   await push(note(drafted, 'Pair codes expire too soon', 'ostrakon'), note(plain, 'Retry the pairing claim once', 'ostrakon'))

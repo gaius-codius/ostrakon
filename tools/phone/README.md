@@ -30,6 +30,8 @@ token, adds a few notes, and runs `sheet.test.mjs` against it:
   checking. The issue may still exist.`, drops the request and keeps the note.
 - a request waiting to file behind a slow filing can be discarded, and the hub never files it.
 - a draft that fails shows the reason, with Retry and Discard.
+- under a repo the hub couldn't check (an `error` from `/api/filing`), File as issue is off with
+  `hub couldn't check this repo`, and goes once the hub answers in full.
 - while the hub can't be reached, File as issue and every Drafts button are off, and nothing is
   queued.
 - screenshots of Drafts and of the menu with File as issue, light and dark, go to `$SCREENS_DIR`

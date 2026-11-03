@@ -347,7 +347,8 @@ const loadProjects = async () => {
 const loadFiling = async () => {
   try {
     const body = await api('/api/filing')
-    filing = { on: body.on === true, repos: Array.isArray(body.repos) ? body.repos : [] }
+    // `error`: the hub left out repos it couldn't check (GitHub didn't answer), so the list may be short.
+    filing = { on: body.on === true, repos: Array.isArray(body.repos) ? body.repos : [], ...(typeof body.error === 'string' ? { error: body.error } : {}) }
     store('sp.filing', filing)
     if (sheetFor !== null) renderSheet()
   } catch {}
@@ -355,10 +356,13 @@ const loadFiling = async () => {
 
 // The repo note `note` would be filed to, when the hub files there: its project key names it
 // exactly (`github.com/owner/repo`), and GitHub's names match whatever their case.
+const repoOf = note => (filing.on && /^github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/.exec(note.project?.key ?? '')?.[1]) || null
 const filingRepo = note => {
-  const repo = filing.on && /^github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/.exec(note.project?.key ?? '')?.[1]
+  const repo = repoOf(note)
   return repo ? (filing.repos.find(known => known.repo.toLowerCase() === repo.toLowerCase()) ?? null) : null
 }
+// A GitHub repo missing from a list the hub says is short: it may be one the hub couldn't check.
+const isUnchecked = note => filing.error !== undefined && repoOf(note) !== null && filingRepo(note) === null
 const openRequestFor = id => Object.values(requests).find(request => request.note === id)
 
 // ---- drawing ----
@@ -1292,6 +1296,8 @@ const openSheet = (id, trigger = moreOf(id)) => {
   isSheetPressed = false
   sheetReturn = trigger ?? document.activeElement
   renderSheet()
+  // The hub keeps a short list for a minute: ask again, so a repo it can check now comes back.
+  if (filing.error !== undefined) loadFiling()
   // Still leaving from last time: gone at once.
   if ($('sheet').open) $('sheet').close()
   showFirstPage()
@@ -1407,9 +1413,20 @@ const renderSheet = () => {
   if (!isActionable(note)) return closeSheet()
   // File as issue, on a note under a repo the hub files to: off while the hub doesn't answer (it's
   // never queued), and while the note has a change the hub hasn't got (the hub drafts its own copy).
+  // Under a repo the hub couldn't check, it shows off and says so.
   const repo = filingRepo(note)
   const request = repo ? openRequestFor(note.id) : undefined
-  const fileSub = !repo ? null : request ? 'in Drafts' : online !== true ? 'hub offline' : outbox.some(queued => queued.id === note.id) ? 'waiting to sync' : ''
+  const fileSub = !repo
+    ? isUnchecked(note)
+      ? "hub couldn't check this repo"
+      : null
+    : request
+      ? 'in Drafts'
+      : online !== true
+        ? 'hub offline'
+        : outbox.some(queued => queued.id === note.id)
+          ? 'waiting to sync'
+          : ''
   const drawn = JSON.stringify([note.text, note.project, note.by, ageOf(note.updated), fileSub])
   if (drawn === sheetDrawn) return
   sheetDrawn = drawn
