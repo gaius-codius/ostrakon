@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { Note } from '../plugin/types'
-import { handler, openHub, startFiling } from './hub'
+import { handler, openHub, serve, startFiling } from './hub'
 import { type Draft, type Filing, type FilingRequest, NotCreated } from './requests'
 
 const dirs: string[] = []
@@ -343,6 +343,23 @@ describe('filing', () => {
     expect(t.hub.requests.get(request.id)?.issue).toBe('https://github.com/me/cc/issues/7')
   })
 
+  test("a note that can't take the issue line leaves the request filed, and the hub says the note wasn't changed", async () => {
+    const t = fresh()
+    const request = await drafted(t)
+    // Stored as it is (the hub keeps what it was given); writing it back with an issue line fails.
+    t.hub.push([note(A, { by: 'you\nme' as Note['by'], updated: '2026-10-10T05:00:00.000Z' })])
+    const errors = spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await t.step(request.id, 'file', { revision: 1 })
+      await t.runner.kick()
+      expect(t.hub.requests.get(request.id)).toMatchObject({ state: 'filed', issue: 'https://github.com/me/cc/issues/7' })
+      expect(errors).toHaveBeenCalledTimes(1)
+      expect(String(errors.mock.calls[0]?.[0])).toContain("wasn't changed")
+    } finally {
+      errors.mockRestore()
+    }
+  })
+
   test('GitHub refusing before it creates anything → failed in the file phase; Retry approves it again', async () => {
     const t = fresh({ run: false })
     const request = await drafted(t)
@@ -555,6 +572,29 @@ describe('repeats', () => {
     expect(again.body.request.state).toBe('discarded')
   })
 
+  test('filing an older revision after a newer one is approved is refused, and the newer stays approved', async () => {
+    const t = fresh({ run: false })
+    const request = await drafted(t)
+    await t.step(request.id, 'redraft', { revision: 1 })
+    await t.runner.kick()
+    expect((await t.step(request.id, 'file', { revision: 2 })).body.request).toMatchObject({ state: 'approved', revision: 2 })
+    const old = await t.step(request.id, 'file', { revision: 1 })
+    expect(old.status).toBe(409)
+    expect(old.body.request).toMatchObject({ state: 'approved', revision: 2 })
+    expect(t.hub.requests.get(request.id)).toMatchObject({ state: 'approved', revision: 2 })
+  })
+
+  test('a different issue URL for a request already filed is refused, and it keeps its issue', async () => {
+    const t = fresh()
+    const request = await drafted(t)
+    await t.step(request.id, 'file', { revision: 1 })
+    await t.runner.kick()
+    expect(t.hub.requests.get(request.id)).toMatchObject({ state: 'filed', issue: 'https://github.com/me/cc/issues/7' })
+    const other = await t.step(request.id, 'found', { url: 'https://github.com/me/cc/issues/8' })
+    expect(other.status).toBe(409)
+    expect(t.hub.requests.get(request.id)?.issue).toBe('https://github.com/me/cc/issues/7')
+  })
+
   test('retrying twice leaves one waiting draft', async () => {
     const t = fresh({ run: false })
     t.hub.push([note(A)])
@@ -607,6 +647,38 @@ describe('restarts', () => {
     expect(again.calls.find.map(found => found.id)).toEqual([request.id])
     expect(again.hub.requests.get(request.id)?.state).toBe('unsure')
     again.hub.close()
+  })
+
+  test('serve picks up a waiting and an unsure request left from the last run, with no step to prompt it', async () => {
+    const before = fresh({ run: false })
+    before.hub.push([note(B)])
+    const unsure = (await before.ask(B)).body.request
+    await before.runner.kick()
+    before.answers.file = async () => {
+      throw new Error('lost')
+    }
+    await before.step(unsure.id, 'file', { revision: 1 })
+    await before.runner.kick()
+    expect(before.hub.requests.get(unsure.id)?.state).toBe('unsure')
+    before.hub.push([note(A)])
+    const waiting = (await before.ask(A)).body.request
+    expect(waiting.state).toBe('waiting')
+    before.hub.close()
+
+    const after = stubFiling()
+    const log = spyOn(console, 'log').mockImplementation(() => {})
+    const started = serve({ port: 0, dataDir: before.dir, auth: { token: 'secret' }, filing: after.filing })
+    try {
+      for (let i = 0; i < 100 && (after.calls.draft.length === 0 || after.calls.find.length === 0); i++) await Bun.sleep(10)
+      expect(after.calls.draft).toHaveLength(1)
+      expect(after.calls.draft[0]?.id).toBe(waiting.id)
+      expect(after.calls.find).toHaveLength(1)
+      expect(after.calls.find[0]?.id).toBe(unsure.id)
+    } finally {
+      await started.server.stop(true)
+      started.hub.close()
+      log.mockRestore()
+    }
   })
 
   test('requests outlive their note: archived, deleted and purged', async () => {

@@ -20,7 +20,7 @@ Notes are kept per project, and the pane shows all of them. Syncing between mach
 
 - **Capture** a note in under two seconds, even while Claude is working. Mid-prompt, `ctrl+x s` opens the pane and `ctrl+n` starts a note; close the pane and your draft is back. In an empty prompt, `/jot text` or `//` saves one without opening anything.
 - **Gives Claude a `jot` tool**: Claude jots notes it thinks are important or wants to pass on to you. You can also ask it to add one: "jot that down". Claude can also list your notes and archive one once it's done.
-- **Triage** open notes across all your projects in a searchable pane: edit, move, archive, bundle several into one prompt, or have Claude file one as a GitHub issue (`o`).
+- **Triage** open notes across all your projects in a searchable pane: edit, move, archive, bundle several into one prompt, or have Claude file one as a GitHub issue (`o`). `o` needs `gh` installed and logged in where Claude runs; it files with your login after showing you the draft, and only for notes in a github.com repo.
 - **Dispatch** a note into the prompt. This project's open notes sit in a row of numbered chips above the prompt (the "pocket"); type `;` and a note's number (`;2`) in an empty prompt to pull it in. A lone number is left alone, so it still answers Claude's numbered questions. Mid-prompt, find the note in the pane and press `t`: it goes in under what you've typed.
 - **Harvest** (opt-in): after each turn, an extra review looks for side issues that came up and offers them as notes, which you keep or dismiss. It doesn't change what Claude is doing.
 - **Sync**: two-way sync enabled by multiple methods. Through a small hub, a plain folder, Obsidian or a combination of methods ([Sync](#sync)).
@@ -179,7 +179,7 @@ To run the hub in the foreground instead: `HUB_TOKEN=$(openssl rand -hex 24) ost
 
 Not using Tailscale? Any HTTPS reverse proxy, tunnel or VPN works too; see [Open it](docs/phone.md#open-it).
 
-The service runs `~/.local/bin/ostrakon hub`, so it doesn't matter where the repo lives. It runs in a sandbox: it can't see `~/.ssh`, `~/.gnupg`, `~/.config/gh` or `~/.claude`, and in your home it writes only its data folder ([What the hub can reach](docs/phone.md#what-the-hub-can-reach)). Phone setup, the Home Screen app and the iOS Shortcut are covered in [`docs/phone.md`](docs/phone.md). Read [`SECURITY.md`](SECURITY.md) before making the hub reachable from other devices.
+The service runs `~/.local/bin/ostrakon hub`, so it doesn't matter where the repo lives. It runs in a sandbox: it can't see `~/.ssh`, `~/.gnupg`, `~/.config/gh` or `~/.claude`, and in your home it writes only its data folder ([What the hub can reach](docs/phone.md#what-the-hub-can-reach)). Phone setup, the Home Screen app and the iOS Shortcut are covered in [`docs/phone.md`](docs/phone.md). To file notes as GitHub issues from the phone, see [Filing notes as issues](docs/phone.md#filing-notes-as-issues). Read [`SECURITY.md`](SECURITY.md) before making the hub reachable from other devices.
 
 ## Notes from the desktop
 

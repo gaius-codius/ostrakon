@@ -33,3 +33,8 @@ test("takes the filing tokens from the env file only, never your shell's", () =>
   // HUB_* settings from the shell still go over the file's.
   expect(hub('HUB_TOKEN=t\n', { HUB_TOKEN: 'mine' })).toEqual(['HUB_TOKEN=mine'])
 })
+
+test('reads the env file as systemd and doctor do: the last line for a key wins, spaces and quotes dropped', () => {
+  const file = 'HUB_TOKEN=t\nGH_TOKEN=ghp_old\nGH_TOKEN=github_pat_new\nCLAUDE_CODE_OAUTH_TOKEN="sk-ant-oat01-hub"  \n'
+  expect(hub(file, {})).toEqual(['CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-hub', 'GH_TOKEN=github_pat_new', 'HUB_TOKEN=t'])
+})

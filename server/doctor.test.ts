@@ -523,6 +523,16 @@ describe('ostrakon doctor on filing notes as issues', () => {
     expect(silent.filing).not.toContain('!!')
   })
 
+  test("doesn't probe a name GitHub lists that isn't owner/repo, and says so", () => {
+    const { filing: text, probeCalls } = filing({
+      reply: answer({ body: [{ full_name: 'me/cc/../x', has_issues: true, visibility: 'public' }, ...repos], headers: [expiring(200)] }),
+    })
+    expect(probeCalls.some(line => line.includes('..'))).toBe(false)
+    expect(probeCalls).toHaveLength(2)
+    expect(text).toContain("GitHub gave a name that isn't owner/repo")
+    expect(text).toContain('ok  GH_TOKEN covers 2 repos: me/cc (public), me/x (private)\n')
+  })
+
   test("flags a GH_TOKEN that expired or ends within a month, and says when there's no date", () => {
     expect(filing({ reply: answer({ headers: [expiring(10)] }) }).filing).toContain(`!!  GH_TOKEN expires in 10 days (${day(10)}): make a new one before then`)
     expect(filing({ reply: answer({ headers: [expiring(30)] }) }).filing).toContain('!!  GH_TOKEN expires in 30 days')

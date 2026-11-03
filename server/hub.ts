@@ -220,9 +220,7 @@ export const openHub = (dataDir: string, { now = Date.now, origin = hostname() }
     // Found by the request's marker after an unsure filing.
     found: (id: string, url: string): Outcome | { kind: 'refused'; reason: string } => {
       const issue = issueUrl(url)
-      return issue
-        ? changing(() => markFiled(id, issue, requests.found))
-        : { kind: 'refused', reason: `not an issue URL in the request's repo: ${shortError(url)}` }
+      return issue ? changing(() => markFiled(id, issue, requests.found)) : { kind: 'refused', reason: `not a GitHub issue URL: ${shortError(url)}` }
     },
     fileFailed: (id: string, error: string) => changing(() => requests.fileFailed(id, error)),
     fileUnsure: (id: string, error: string) => changing(() => requests.fileUnsure(id, error)),
@@ -686,7 +684,7 @@ if (import.meta.main && process.argv[2] === 'pair') {
 } else if (import.meta.main) {
   const auth = { token: process.env.HUB_TOKEN, login: process.env.HUB_LOGIN }
   if (!auth.token && !auth.login) throw new Error('set HUB_TOKEN (and/or HUB_LOGIN)')
-  const dataDir = process.env.HUB_DATA ?? join(process.env.HOME ?? '.', '.local/share/ostrakon-hub')
+  const dataDir = process.env.HUB_DATA || join(process.env.HOME ?? '.', '.local/share/ostrakon-hub')
   // Filing is on only with the hub's own two tokens (filing.ts); it never uses your logins.
   const setup = filingFromEnv(process.env, dataDir)
   if ('off' in setup) console.log(`filing is off: ${setup.off}`)

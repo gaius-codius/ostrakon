@@ -390,7 +390,7 @@ describe('filing', () => {
   test("looks for the request's marker in the repo before every create", async () => {
     const f = fakes()
     await f.open().file(approved())
-    const [list, labels, create] = f.calls()
+    const [list, labels, view, create] = f.calls()
     expect(list?.args).toEqual([
       'api',
       '--method=GET',
@@ -403,7 +403,19 @@ describe('filing', () => {
       '--raw-field=per_page=100',
     ])
     expect(labels?.args.slice(0, 2)).toEqual(['label', 'list'])
+    expect(view?.args).toEqual(['repo', 'view', '--json=visibility', '--', 'me/cc'])
     expect(create?.args.slice(0, 2)).toEqual(['issue', 'create'])
+  })
+
+  test('refuses, creating nothing, when the repo is no longer as public or private as the draft was written for', async () => {
+    const f = fakes()
+    const failed = await f
+      .open()
+      .file({ ...approved(), public: false })
+      .catch(e => e)
+    expect(failed).toBeInstanceOf(NotCreated)
+    expect(failed.message).toBe('me/cc is public now; discard this request and ask again')
+    expect(f.calls().some(call => call.args[1] === 'create')).toBe(false)
   })
 
   test('records an issue that already carries the marker, and creates none', async () => {
@@ -468,7 +480,11 @@ describe('filing', () => {
 
   test("leaves it unknown when gh issue create passes its deadline or fails without GitHub's refusal", async () => {
     const f = fakes()
-    const create = (script: string) => f.answer('gh', `case "$1 $2" in 'issue create') ${script} ;; 'label list') echo '[{"name":"bug"}]' ;; esac`)
+    const create = (script: string) =>
+      f.answer(
+        'gh',
+        `case "$1 $2" in 'issue create') ${script} ;; 'label list') echo '[{"name":"bug"}]' ;; 'repo view') echo '{"visibility":"PUBLIC"}' ;; esac`,
+      )
     create('sleep 30')
     const overdue = await f
       .open({ ghMs: 300 })
@@ -520,6 +536,33 @@ describe('the repos the token covers', () => {
         .sort(),
     ).toEqual(['repos/Me/Secret/issues', 'repos/me/cc/issues'])
     expect(calls).toHaveLength(3)
+    try {
+      setSystemTime(new Date(Date.now() + 4 * 60_000))
+      await filing.repos()
+      expect(f.calls()).toHaveLength(3)
+      setSystemTime(new Date(Date.now() + 2 * 60_000))
+      await filing.repos()
+      expect(f.calls()).toHaveLength(6)
+    } finally {
+      setSystemTime()
+    }
+  })
+
+  test('keeps a slow list from when it came, not from when it was asked for', async () => {
+    const f = fakes()
+    f.answer('gh', `case "$*" in *user/repos*) sleep 0.3 ;; esac`)
+    const filing = f.open()
+    try {
+      const asked = filing.repos()
+      // The listing takes longer than the list is kept for.
+      setSystemTime(new Date(Date.now() + 6 * 60_000))
+      await asked
+      const before = f.calls().length
+      await filing.repos()
+      expect(f.calls()).toHaveLength(before)
+    } finally {
+      setSystemTime()
+    }
   })
 
   // GitHub lists every public repo a fine-grained token can read, with the user's rights; only
@@ -657,7 +700,7 @@ describe('the runner with filing.ts', () => {
     const { hub, runner, id, f } = hubWith({ ghMs: 300 })
     await runner.kick()
     hub.requests.approve(id, 1)
-    f.answer('gh', `case "$1 $2" in 'issue create') sleep 30 ;; 'label list') echo '[{"name":"bug"}]' ;; esac`)
+    f.answer('gh', `case "$1 $2" in 'issue create') sleep 30 ;; 'label list') echo '[{"name":"bug"}]' ;; 'repo view') echo '{"visibility":"PUBLIC"}' ;; esac`)
     await runner.kick()
     expect(hub.requests.get(id)).toMatchObject({ state: 'unsure', error: 'gh took longer than 0.3 s' })
     // The look-up that followed listed the repo's issues, and created nothing more.

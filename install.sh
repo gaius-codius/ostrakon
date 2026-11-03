@@ -167,6 +167,8 @@ else
   mkdir -p "$(dirname "$ENV_FILE")"
   token=$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')
   (umask 077; printf 'HUB_TOKEN=%s\n' "$token" > "$ENV_FILE")
+  # umask covers only a new file; an empty one already there keeps its mode.
+  chmod 600 "$ENV_FILE"
   say "new token in $ENV_FILE"
 fi
 mkdir -p "$UNIT_DIR"

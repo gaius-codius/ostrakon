@@ -14,6 +14,13 @@ time. The steps that actually cut the release are at the end, and in [`CONTRIBUT
   take the queued prompt back and delete it: the note stays open. Fill it again and let the queued
   prompt go in: it's marked sent. Run `ostrakon jot` once with a hub set. The tests can't see
   everything the terminal draws, or how the engine marks a queued prompt taken back.
+- Check filing for real. In the pane, press `o` on a note in a github.com repo and decline the
+  draft. On the phone, use **File as issue**, then **New draft**, **File** and **Discard** against a
+  private scratch repo, and check the issue's body ends with an `ostrakon: <id>` line.
+  `ostrakon doctor` should show `the hub runs in its sandbox` and no `!!` under its filing section.
+- Run the hub's tests on a machine that has `claude`. The drafter's isolation flags (`--tools ''`,
+  `--setting-sources ''`, `--strict-mcp-config`) are checked by a test that runs only where
+  `claude` is installed (`server/filing.test.ts`, `skipIf(!Bun.which('claude'))`).
 - Run `ostrakon doctor` and fix anything it marks. Its "the mod in a session" part should name the
   Claude Code version you just used, with no problems listed.
 

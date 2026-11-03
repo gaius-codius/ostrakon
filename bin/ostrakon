@@ -33,17 +33,24 @@ EOF
 }
 
 # HUB_* from $ENV_FILE when the environment doesn't set them; with `filing`, the hub's two filing
-# tokens too.
+# tokens too. Read as systemd and doctor read it: the last line for a key wins, spaces around the
+# value are dropped, then its quotes.
 load_env() {
   [ -r "$ENV_FILE" ] || return 0
   local line key value keys='HUB_[A-Z_]+'
+  local -A file=()
   [ "${1:-}" = filing ] && keys+='|GH_TOKEN|CLAUDE_CODE_OAUTH_TOKEN'
   while IFS= read -r line || [ -n "$line" ]; do
     [[ $line =~ ^[[:space:]]*($keys)=(.*)$ ]] || continue
     key=${BASH_REMATCH[1]} value=${BASH_REMATCH[2]}
+    value=${value#"${value%%[![:space:]]*}"}
+    value=${value%"${value##*[![:space:]]}"}
     [[ $value =~ ^\"(.*)\"$ || $value =~ ^\'(.*)\'$ ]] && value=${BASH_REMATCH[1]}
-    [ -n "${!key:-}" ] || export "$key=$value"
+    file[$key]=$value
   done < "$ENV_FILE"
+  for key in "${!file[@]}"; do
+    [ -n "${!key:-}" ] || export "$key=${file[$key]}"
+  done
 }
 
 need_bun() { command -v bun >/dev/null || { echo "ostrakon: needs Bun (https://bun.sh)" >&2; exit 1; }; }
