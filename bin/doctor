@@ -557,7 +557,7 @@ hub_filing() {
   if [ -n "$unitpath" ]; then
     for tool in claude gh; do
       if ! (PATH=$unitpath command -v "$tool" >/dev/null 2>&1); then
-        bad "the hub's PATH (its unit's Environment=PATH) has no $tool, so filing fails: install it into one of those folders, or add its folder to the unit's PATH"
+        bad "the hub's PATH (its unit's Environment=PATH) has no $tool, so filing fails: install it into one of those folders, or give the unit a PATH with its folder in a drop-in (systemctl --user edit ostrakon-hub)"
         missing=1
       fi
     done

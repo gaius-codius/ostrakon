@@ -267,7 +267,7 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
       .filter(Boolean)
       .map(line => {
         const [repo = '', visibility = ''] = line.split('\t')
-        return { repo, public: visibility === 'public' }
+        return { repo, public: visibility.toLowerCase() === 'public' }
       })
     const answers: (boolean | string)[] = []
     let next = 0
@@ -328,8 +328,10 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
         const entry = { at: Date.now(), for: REPOS_FOR_MS, list }
         repos = entry
         // A failure isn't kept: the next ask tries again. A list missing a repo is kept for less.
+        // Either is kept from when it came, so a slow list isn't stale as it lands.
         list.then(
           answer => {
+            entry.at = Date.now()
             if (answer.error) entry.for = UNSURE_FOR_MS
           },
           () => {
@@ -376,13 +378,18 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
       if (!endsWithMarker(draft.body, request.id)) throw new NotCreated("the draft doesn't end with its request's marker")
       let found: string | null
       let labels: string[]
+      let visible: boolean
       try {
         found = await find(request)
         labels = found ? [] : (await labelsOf(request.repo)).map(label => label.name)
+        visible = found ? request.public : await isPublic(request.repo)
       } catch (error) {
         throw new NotCreated(`couldn't check the repo before filing: ${error instanceof Error ? error.message : String(error)}`)
       }
       if (found) return found
+      // The draft was written, and approved, for a repo as public or private as the request says;
+      // a retry may come long after.
+      if (visible !== request.public) throw new NotCreated(`${request.repo} is ${visible ? 'public' : 'private'} now; discard this request and ask again`)
       const gone = draft.labels.filter(label => !labels.includes(label))
       if (gone.length > 0) throw new NotCreated(`${request.repo} no longer has the labels ${gone.join(', ')}`)
       const ran = await run(

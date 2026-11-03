@@ -14,8 +14,9 @@ After=network-online.target
 [Service]
 EnvironmentFile=%h/.config/ostrakon-hub/env
 Environment=HUB_PORT=8790
-# Bun from mise, ~/.bun or the system, whichever is installed.
-Environment=PATH=%h/.local/share/mise/shims:%h/.bun/bin:/usr/local/bin:/usr/bin:/bin
+# Bun from mise, ~/.bun or the system, whichever is installed; claude and gh for filing from those
+# or ~/.local/bin, where Claude Code's own installer puts claude.
+Environment=PATH=%h/.local/share/mise/shims:%h/.bun/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 # The ostrakon command finds the checkout through its link, wherever the repo is.
 ExecStart=%h/.local/bin/ostrakon hub
 Restart=on-failure
@@ -29,6 +30,8 @@ RestartSec=5
 ProtectHome=read-only
 # The same for a home folder outside /home, which ProtectHome= doesn't cover.
 ReadOnlyPaths=-%h
+# And everything outside your home you can write: a checkout or a drive under /mnt or /opt.
+ProtectSystem=strict
 # The data folder is the one place in your home it writes. The + runs mkdir outside the sandbox, so
 # a first start has the folder to open up. A HUB_DATA elsewhere in your home gets the same two
 # lines in a drop-in, ostrakon-hub.service.d/hub-data.conf, which install.sh --hub writes.

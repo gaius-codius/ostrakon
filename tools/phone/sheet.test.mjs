@@ -716,6 +716,43 @@ test("under a repo the hub couldn't check, File as issue is off and says so, unt
   assert.equal(await fileAction(short).count(), 0, "File as issue shows under a repo the hub doesn't file to")
 })
 
+test('when the hub answers File as issue with a reason of its own, the phone shows it and stays online', async t => {
+  const id = '01JA7K2M3Q9X4ZB6C8D0EFGK0Q'
+  await push(note(id, 'Say why the hub could not list its repos', 'ostrakon'))
+  const busy = await pageWith(devices['iPhone 15'])
+  t.after(() => busy.context().close())
+  const reason = "couldn't read which repos the hub files to: HTTP 401: Bad credentials"
+  await busy.route('**/api/requests', route =>
+    route.request().method() === 'POST' ? route.fulfill({ status: 503, json: { error: reason } }) : route.fallback(),
+  )
+  await busy.goto(HUB)
+  await openMenu(id, busy)
+  await fileAction(busy).tap()
+  await busy.locator('#toast-text', { hasText: reason }).waitFor()
+  assert.doesNotMatch(await busy.locator('#status').textContent(), /hub offline/)
+  assert.equal(await busy.evaluate(() => online), true, 'the phone took the hub for offline')
+})
+
+test('File as issue that is off dims its name, not the reason under it', async t => {
+  const id = '01JA7K2M3Q9X4ZB6C8D0EFGK0R'
+  await push(note(id, 'Dim the action, not its reason', 'ostrakon'))
+  const dim = await pageWith(devices['iPhone 15'])
+  t.after(() => dim.context().close())
+  await dim.goto(HUB)
+  await dim.waitForFunction(() => filing.on)
+  // Off because the hub stopped answering.
+  await dim.route('**/api/**', route => route.abort())
+  await dim.evaluate(() => startPoll())
+  await dim.locator('#status', { hasText: 'hub offline' }).waitFor()
+  await openMenu(id, dim)
+  const opacity = selector =>
+    fileAction(dim)
+      .locator(selector)
+      .evaluate(element => getComputedStyle(element).opacity)
+  assert.equal(await opacity('.what'), '0.45')
+  assert.equal(await opacity('.sub'), '1')
+})
+
 test("while the hub can't be reached, filing's buttons are off and nothing is queued", async t => {
   const [drafted, plain] = ['01JA7K2M3Q9X4ZB6C8D0EFGK0F', '01JA7K2M3Q9X4ZB6C8D0EFGK0G']
   await push(note(drafted, 'Pair codes expire too soon', 'ostrakon'), note(plain, 'Retry the pairing claim once', 'ostrakon'))

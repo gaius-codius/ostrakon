@@ -28,9 +28,14 @@ Moving, archiving and marking sent can all be undone from the message that pops 
 
 - **File as issue** in a note's actions asks the hub for a draft. It shows only for a note under
   a GitHub repo the hub can file to.
+- It shows but is off, with a line under it, when the hub can't be asked: `hub offline`,
+  `waiting to sync` (the note isn't on the hub yet), `in Drafts` (it already has an open request)
+  or `hub couldn't check this repo`.
 - The draft shows under **Drafts**, above the inbox: the repo and whether it's public, then the
   title, labels and body. **File** files it, **New draft** asks again, **Discard** drops it.
-  Nothing is filed until you choose **File**.
+  Nothing is filed until you choose **File**. A request shows its state as it goes: `waiting to
+  draft`, `drafting…`, then the draft; after **File**, `waiting to file` and `filing…`.
+- If drafting or filing failed, the reason shows with **Retry** and **Discard**.
 - Once filed, the note is marked sent with an `issue:` line pointing at the issue.
 - If the hub couldn't tell whether GitHub took it, check the repo's issues, then choose
   **It's there** (paste the issue's link) or **Not filed** (file it again). **Discard** gives
@@ -88,6 +93,8 @@ hub runs without.
 
 - **Your home folder is read-only** to it, except its data folder (`~/.local/share/ostrakon-hub`,
   backups included).
+- **Everything outside your home is read-only** to it too (`ProtectSystem=strict`), so a checkout
+  or drive under `/mnt` or `/opt` is covered. The data folder is the one exception.
 - **It can't see** `~/.ssh`, `~/.gnupg`, `~/.config/gh` and `~/.claude`.
 - **It can't reach your session's sockets**: the runtime folder (`/run/user/<uid>`) is hidden, with
   the D-Bus and systemd sockets and the ssh and gpg agents. So are the system bus and Docker's and
@@ -96,9 +103,11 @@ hub runs without.
 
 It still runs as you, so this limits the damage from a bug in the hub or in Bun; it isn't a wall:
 
-- It can read the rest of your home folder and see your other processes. That includes other
-  logins in `~/.config`, and `~/.claude.json` (Claude Code replaces it on every save, which undoes
-  hiding it).
+- It can read the rest of your home folder and see your other processes. That includes the env
+  file with its own tokens, other logins in `~/.config`, and `~/.claude.json` (Claude Code
+  replaces it on every save, which undoes hiding it).
+- It can read other credential files outside the hidden folders: a `CLAUDE_CONFIG_DIR` you moved
+  elsewhere, `~/.git-credentials`, `~/.netrc`.
 - It can still reach sockets elsewhere, and abstract ones (an X11 display, a D-Bus session bus
   started with `dbus-launch`).
 - A drive or network folder mounted in your home after the hub starts is writable to it until it
@@ -133,6 +142,7 @@ filing is off and the phone doesn't offer it.
    - **Repository access:** Only select repositories, and pick them. The hub files only to these;
      GitHub holds it to them.
    - **Permissions:** Issues, Read and write. GitHub adds Metadata (read-only) itself.
+   - **Expiration:** pick one. `ostrakon doctor` warns from 30 days before it.
    - A classic token (`ghp_…`) is refused: it reaches every repo you can.
 2. **A Claude token** for drafting, from your subscription:
 
@@ -159,20 +169,41 @@ filing is off and the phone doesn't offer it.
    ```
 
    `ostrakon hub` takes these two from the env file only, never from your shell, so a `GH_TOKEN`
-   you use with `gh` doesn't turn filing on.
+   you use with `gh` doesn't turn filing on. The hub reads the file only when it starts, so restart
+   it after every change. If a key appears twice, the last line wins; spaces around the value, then
+   its quotes, are dropped.
+
+### Renewing the tokens
+
+1. Make a new token the same way as above.
+2. Replace its line in `~/.config/ostrakon-hub/env`. For a new Claude token, set
+   `CLAUDE_TOKEN_EXPIRES` to its new date too: that's how doctor learns when it ends.
+3. Restart the hub and check:
+
+   ```
+   systemctl --user restart ostrakon-hub
+   ostrakon doctor
+   ```
+
+Until then, with an expired GitHub token, **File as issue** shows off with `hub couldn't check
+this repo`.
 
 `ostrakon doctor`, under `== filing notes as issues`, says whether filing is on, which repos the
 GitHub token can file to, and when each token expires (`!!` from a month before).
 
 What the hub does with them:
 
-- **Finding the repos.** GitHub lists the token's repos and every public repo you have, so the
-  hub tries an empty issue create (no title) in each. GitHub refuses it either way, and creates
-  nothing. A repo where it's refused as invalid (422) is one the token can file to; one where
-  it's refused as not allowed (403) isn't, and is left out. If GitHub doesn't answer clearly (a
-  timeout, an error on its side), that repo is left out and the reason shows in `error` in
-  `/api/filing`. The phone then shows **File as issue** off on notes under repos not on the list,
-  with `hub couldn't check this repo`, and asks again each time you open a note's actions (also after an ask that went unanswered). The list is kept for 5 minutes, or 1 minute when a repo was left out. `ostrakon doctor` does the same check.
+- **Finding the repos.**
+  - GitHub lists the token's repos and every public repo you have, so the hub tries an empty
+    issue create (no title) in each. GitHub refuses it either way, and creates nothing. A repo
+    where it's refused as invalid (422) is one the token can file to; one where it's refused as
+    not allowed (403) isn't, and is left out.
+  - If GitHub doesn't answer clearly (a timeout, an error on its side), that repo is left out.
+    `ostrakon doctor` names the repo and why. The phone shows **File as issue** off on notes under
+    repos not on the list, with `hub couldn't check this repo`, and asks again each time you open
+    a note's actions.
+  - The list is kept for 5 minutes, or 1 minute when a repo was left out. `ostrakon doctor` does
+    the same check.
 - **Drafting** runs `claude -p` in an empty folder, with no tools, MCP servers, settings, plugins
   or slash commands, and its own config folder (`claude/` in the hub's data). The note goes in as
   data, and the hub checks the answer: a title of at most 256 characters, a body of at most
@@ -180,12 +211,31 @@ What the hub does with them:
 - **Filing** runs `gh issue create`, with its own config folder (`gh/` in the hub's data), only
   after you choose **File**. The issue's body ends with `ostrakon: <request id>`, and the hub
   looks for an issue with that line before every create, so it never files one twice.
-- **Each call has a deadline**: 2 minutes for a draft, 30 seconds for each `gh` call.
-- **The hub finds `claude` and `gh` on its unit's `PATH`** (mise's shims, `~/.bun/bin` and the
-  system folders). `ostrakon doctor` says if either is missing there.
+- **Each call has a deadline**: 2 minutes for a draft, 30 seconds for each `gh` call (10 for
+  checking a repo).
+- **Before it files**, the hub checks again that the repo is as public or private as the request
+  says. If not, nothing is created and it says `<repo> is public now; discard this request and ask
+  again` (or private).
+- **The hub finds `claude` and `gh` on its unit's `PATH`** (mise's shims, `~/.bun/bin`,
+  `~/.local/bin` and the system folders). `ostrakon doctor` says if either is missing there. For
+  a tool in another folder, give the unit a `PATH` that includes it:
+
+  ```
+  systemctl --user edit ostrakon-hub
+  ```
+
+  In the drop-in, under `[Service]`, set `Environment=PATH=…` (the whole list, with your folder
+  added), then `systemctl --user restart ostrakon-hub`.
 
 Anyone with the hub token can file issues to those repos and use your Claude subscription. They
 can't reach your GitHub account or your Claude login.
+
+The tokens sit in plain text in the env file (mode 600), readable by the hub and any program
+running as you. A fine-grained token with Issues read/write can also edit, close and comment on
+issues in its repos, and read private repos' issues, until it expires. Give it an expiry and as few
+repos as you need. A Claude setup token is about a year of subscription use.
+
+These tokens are for filing from the phone only. The pane's `o` uses your own `gh` login.
 
 ## Pair your phone
 

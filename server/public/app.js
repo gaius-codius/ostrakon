@@ -122,6 +122,10 @@ class Refused extends Error {
   }
 }
 
+// The hub answered, but couldn't do it for a reason of its own (GitHub didn't answer it, say): it
+// isn't offline, and the reason is worth showing.
+class Failed extends Error {}
+
 // Every call gives up after `timeoutMs`: a hub host that accepts and never answers counts as offline
 // rather than leaving a send in flight forever.
 const api = async (path, init = {}, timeoutMs = 15000) => {
@@ -156,7 +160,10 @@ const request = async (path, init) => {
     const body = await response.json().catch(() => ({}))
     throw new Refused(body.error || `hub answered ${response.status}`, body)
   }
-  if (!response.ok) throw new Error(`hub answered ${response.status}`)
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    throw typeof body.error === 'string' ? new Failed(body.error) : new Error(`hub answered ${response.status}`)
+  }
   return response.json()
 }
 
@@ -545,6 +552,10 @@ const requestStep = async (request, name, body = {}) => {
       else toast(error.message)
       return false
     }
+    if (error instanceof Failed) {
+      toast(error.message)
+      return false
+    }
     setOnline(false)
     toast('hub offline')
     return false
@@ -564,7 +575,7 @@ const askDraft = async id => {
     toast('Asked for a draft', null, current()[id]?.text)
   } catch (error) {
     if (error instanceof Unauthorized) return
-    if (error instanceof Refused) return toast(error.message)
+    if (error instanceof Refused || error instanceof Failed) return toast(error.message)
     setOnline(false)
     toast('hub offline')
   }
@@ -1406,7 +1417,8 @@ const act =
 
 const sheetAction = (iconName, label, run, { sub = '', aside = '', className = '' } = {}) => {
   const item = button('', run, `action ${className}`)
-  const words = sub ? make('span', 'words', label, make('span', 'sub', sub)) : make('span', 'words', label)
+  // The label in its own span, so an action that's off can dim it and not the reason under it.
+  const words = sub ? make('span', 'words', make('span', 'what', label), make('span', 'sub', sub)) : make('span', 'words', label)
   item.append(icon(ICONS[iconName]), words)
   if (aside) item.append(make('span', 'aside', aside))
   item.dataset.key = label
@@ -1421,13 +1433,14 @@ const renderSheet = () => {
   // never queued), and while the note has a change the hub hasn't got (the hub drafts its own copy).
   // Under a repo the hub couldn't check, it shows off and says so.
   const repo = filingRepo(note)
-  const request = repo ? openRequestFor(note.id) : undefined
-  const fileSub = !repo
-    ? isUnchecked(note)
-      ? "hub couldn't check this repo"
-      : null
-    : request
-      ? 'in Drafts'
+  // A request already in Drafts says so first, even when the repo has since left the list.
+  const request = repoOf(note) ? openRequestFor(note.id) : undefined
+  const fileSub = request
+    ? 'in Drafts'
+    : !repo
+      ? isUnchecked(note)
+        ? "hub couldn't check this repo"
+        : null
       : online !== true
         ? 'hub offline'
         : outbox.some(queued => queued.id === note.id)

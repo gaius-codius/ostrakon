@@ -19,7 +19,8 @@ DATA=$(mktemp -d)
 PORT=$(bun -e 'const s = Bun.serve({ port: 0, fetch: () => new Response() }); console.log(s.port); s.stop()')
 TOKEN=phone-test
 SCREENS=${SCREENS_DIR:-/tmp/ostrakon-phone-screens}
-mkdir -p "$SCREENS"
+# Absolute, so docker mounts the folder rather than a volume of that name.
+SCREENS=$(mkdir -p "$SCREENS" && cd "$SCREENS" && pwd)
 HUB_PORT=$PORT HUB_DATA=$DATA HUB_TOKEN=$TOKEN bun "$HERE/hub.ts" >"$DATA/hub.log" 2>&1 &
 HUB_PID=$!
 trap 'kill $HUB_PID 2>/dev/null || true; rm -rf "$DATA"' EXIT

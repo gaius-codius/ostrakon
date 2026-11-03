@@ -9,12 +9,15 @@ set -uo pipefail
 ENV_FILE=${OSTRAKON_HUB_ENV:-$HOME/.config/ostrakon-hub/env}
 DROPIN=$HOME/.config/systemd/user/ostrakon-hub.service.d/hub-data.conf
 
-# HUB_DATA as systemd reads the env file (KEY=VALUE lines, quotes stripped), as bin/ostrakon does.
+# HUB_DATA as systemd reads the env file (KEY=VALUE lines, the last one winning, spaces around the
+# value and then its quotes dropped), as bin/ostrakon does.
 data=''
 if [ -r "$ENV_FILE" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
     [[ $line =~ ^[[:space:]]*HUB_DATA=(.*)$ ]] || continue
     data=${BASH_REMATCH[1]}
+    data=${data#"${data%%[![:space:]]*}"}
+    data=${data%"${data##*[![:space:]]}"}
     [[ $data =~ ^\"(.*)\"$ || $data =~ ^\'(.*)\'$ ]] && data=${BASH_REMATCH[1]}
   done <"$ENV_FILE"
 fi
@@ -28,9 +31,10 @@ case $data in
   /*) ;;
   *) echo "ostrakon: ! HUB_DATA=$data isn't an absolute path, so the hub's sandbox can't open it up; set a full path in $ENV_FILE" >&2; exit 0 ;;
 esac
-# Kept to what a unit file can quote: no ", \ or line breaks. A % is written as %%.
+# Kept to what a unit file can quote: no ", \, $ (ExecStartPre= expands it) or line breaks. A % is
+# written as %%.
 case $data in
-  *[\"\\]* | *$'\n'*) echo "ostrakon: ! HUB_DATA=$data has a quote or a backslash, so the hub's sandbox can't open it up" >&2; exit 0 ;;
+  *[\"\\\$]* | *$'\n'*) echo "ostrakon: ! HUB_DATA=$data has a quote, a backslash or a \$, so the hub's sandbox can't open it up" >&2; exit 0 ;;
 esac
 path=${data//%/%%}
 want=$(printf '%s\n' \

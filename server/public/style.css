@@ -1538,7 +1538,7 @@ dialog.drawer .panel {
 .sheet .action:disabled {
   cursor: default;
 }
-.sheet .action:disabled > .words > :first-child,
+.sheet .action:disabled > .words > .what,
 .sheet .action:disabled svg {
   opacity: 0.45;
 }

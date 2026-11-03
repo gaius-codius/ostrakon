@@ -1039,8 +1039,10 @@ const act = async ($: EngineInterface, action: Action) => {
       return
     }
     case 'issue': {
-      const text = note ? issueText(note) : undefined
-      if (note && text !== undefined) return fillPrompt($, text, [note.id])
+      // Offered only on an open note; one filed or sent since the keys were drawn isn't filed again.
+      if (note?.status !== 'open') return
+      const text = issueText(note)
+      if (text !== undefined) return fillPrompt($, text, [note.id])
       return
     }
     case 'send': {
