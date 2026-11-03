@@ -523,7 +523,7 @@ hub_filing() {
       for a in ${listed[@]+"${listed[@]}"}; do
         b=${a% (*}
         if [[ ! $b =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then can="GitHub gave a name that isn't owner/repo"
-        else can=$(printf 'Authorization: Bearer %s\n' "$gh" | curl -s -m 10 -i -X POST -H @- -d '{}' "$api/repos/$b/issues" | probe_answer); fi
+        else can=$(printf 'Authorization: Bearer %s\n' "$gh" | curl -s -m 10 -i -X POST -H @- -H 'Content-Type: application/json' -d '{}' "$api/repos/$b/issues" | probe_answer); fi
         case $can in
           yes) list+="${list:+, }$a" count=$((count + 1)) ;;
           no) ;;
