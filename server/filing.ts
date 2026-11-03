@@ -300,7 +300,7 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
   // The issue in the request's repo that carries its marker, open or closed: the request's own
   // (`ostrakon: <request id>`, the hub's), else the note's (`ostrakon: <note id>`, the pane's `o`),
   // so a note filed from the pane isn't filed again. Listed from the repo, not searched: search
-  // lags behind an issue just created, the case this is for.
+  // lags behind an issue just created, the case this is for. The list lags too, by seconds.
   const find = async (request: FilingRequest) => {
     if (!/^[0-9A-Z]{26}$/.test(request.id)) throw new Error(`not a request id: ${request.id}`)
     if (!NOTE_ID.test(request.note)) throw new Error(`not a note id: ${request.note}`)
