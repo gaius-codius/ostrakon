@@ -6,6 +6,8 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-03
+
 ### Added
 
 - The phone and web app can ask for a note to be filed as a GitHub issue (**File as issue** in a note's actions). The hub drafts it, the draft shows under **Drafts** with the target repo and whether it's public, and nothing is filed until you choose **File**. Once filed, the note is marked sent with an `issue:` line. Off until the hub has its own tokens for it (below). A request waiting to be filed, or one the hub couldn't tell was filed, can be discarded too; for the second, the issue may still be on GitHub. When the hub couldn't check a repo with GitHub, a note under it shows **File as issue** off with `hub couldn't check this repo`. A note is filed once: the hub records an issue already filed from it with `o` instead of filing another, and refuses to file a note it filed before. Just before filing, the hub checks the repo is still as public or private as the draft says; if it changed, nothing is filed and the request says `<repo> is public now`.
@@ -175,7 +177,8 @@ The first public release.
 - `ostrakon pair`: a QR code with a one-time code (5 minutes, works once) pairs a phone with the hub; `--token` prints the long-lived link instead.
 - The `ostrakon` command (`pair`, `hub`, `update`, `version`), `install.sh` and `update.sh`.
 
-[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/gaius-codius/ostrakon/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/gaius-codius/ostrakon/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/gaius-codius/ostrakon/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/gaius-codius/ostrakon/compare/v0.6.0...v0.7.0
