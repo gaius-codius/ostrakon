@@ -138,6 +138,7 @@ export const TEXT = {
     ['ctrl+x s', 'open / close'],
     ['ctrl+x i', 'keys, from a text field too'],
     ['ctrl+x tab', 'to the prompt and back'],
+    ['ctrl+x ← / →', 'pane bigger / smaller'],
     ['//', 'jot from the prompt'],
   ] as [string, string][],
   // After the keys in the sheet, under `symbolsTitle`: what a row's marker means (DESIGN.md §5).

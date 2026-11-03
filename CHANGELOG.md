@@ -6,6 +6,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Added
+
+- The key sheet lists `ctrl+x ← / →`, Claude Code's keys that make the pane bigger or smaller.
+
 ## [0.9.0] - 2026-11-03
 
 ### Added
