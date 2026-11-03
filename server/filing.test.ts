@@ -25,6 +25,7 @@ const temp = (name: string) => {
 const GH_TOKEN = 'github_pat_11AAAAAAA0abcdefghijklmnopqrstuvwxyz0123456789'
 const CLAUDE_TOKEN = 'sk-ant-oat01-abcdefghijklmnopqrstuvwxyz0123456789'
 const ID = '01JA7K2M3Q9X4ZB6C8D0EFGH0A'
+const NOTE = '01JA7K2M3Q9X4ZB6C8D0EFGH0B'
 
 // Each fake logs its call to calls/<time>/ and runs <name>.sh next to it when there is one, else
 // its default answer.
@@ -120,7 +121,7 @@ const isClaude = (call: Call) => call.name === 'claude'
 
 const request = (fields: Partial<FilingRequest> = {}): FilingRequest => ({
   id: ID,
-  note: '01JA7K2M3Q9X4ZB6C8D0EFGH0B',
+  note: NOTE,
   text: 'the retry loses the last line',
   project: { key: 'github.com/me/cc', name: 'cc', path: '/home/me/cc' },
   repo: 'me/cc',
@@ -395,11 +396,11 @@ describe('filing', () => {
       'api',
       '--method=GET',
       '--paginate',
-      `--jq=.[] | select(.pull_request == null and ((.body // "") | contains("ostrakon: ${ID}"))) | [.html_url, .body] | @json`,
+      `--jq=.[] | select(.pull_request == null and ((.body // "") as $b | ($b | contains("ostrakon: ${ID}")) or ($b | contains("ostrakon: ${NOTE}")))) | [.html_url, .body] | @json`,
       'repos/me/cc/issues',
       '--raw-field=state=all',
-      // A day before the request, for a clock that differs from GitHub's.
-      '--raw-field=since=2026-10-09T01:00:00.000Z',
+      // A day before the note was made (its id's time), for a clock that differs from GitHub's.
+      '--raw-field=since=2024-10-14T08:00:26.743Z',
       '--raw-field=per_page=100',
     ])
     expect(labels?.args.slice(0, 2)).toEqual(['label', 'list'])
@@ -429,6 +430,38 @@ describe('filing', () => {
     expect(await filing.file(approved())).toBe('https://github.com/me/cc/issues/5')
     expect(f.calls().map(call => call.args[0])).toEqual(['api'])
     expect(await filing.find(request({ state: 'unsure' }))).toBe('https://github.com/me/cc/issues/5')
+  })
+
+  test("records an issue filed from the pane with the note's marker, and creates none", async () => {
+    const f = fakes()
+    f.issues([
+      ['https://github.com/me/cc/issues/8', `quotes it: ostrakon: ${NOTE} in the middle`],
+      ['https://github.com/me/cc/issues/7', `Filed at the desk.\n\n\`ostrakon: ${NOTE}\``],
+    ])
+    const filing = f.open()
+    expect(await filing.file(approved())).toBe('https://github.com/me/cc/issues/7')
+    expect(f.calls().map(call => call.args[0])).toEqual(['api'])
+    expect(await filing.find(request({ state: 'unsure' }))).toBe('https://github.com/me/cc/issues/7')
+  })
+
+  test("prefers the request's own marker to the note's", async () => {
+    const f = fakes()
+    f.issues([
+      ['https://github.com/me/cc/issues/11', `From the phone.\n\nostrakon: ${ID}`],
+      ['https://github.com/me/cc/issues/10', `From the desk.\n\nostrakon: ${NOTE}`],
+    ])
+    expect(await f.open().find(request())).toBe('https://github.com/me/cc/issues/11')
+  })
+
+  test("looks from the request's time for a note id without one, and refuses an id unsafe in the filter", async () => {
+    const f = fakes()
+    f.issues([['https://github.com/me/cc/issues/2', 'Old.\n\nostrakon: hand-made_1']])
+    expect(await f.open().find(request({ note: 'hand-made_1' }))).toBe('https://github.com/me/cc/issues/2')
+    expect(f.calls().at(-1)?.args).not.toContainEqual(expect.stringMatching(/^--raw-field=since=/))
+    // A note id from the future still looks back from the request.
+    await f.open().find(request({ note: '7ZZZZZZZZZZZZZZZZZZZZZZZZZ' }))
+    expect(f.calls().at(-1)?.args).toContain('--raw-field=since=2026-10-09T01:00:00.000Z')
+    await expect(f.open().find(request({ note: 'x") | .body' }))).rejects.toThrow('not a note id')
   })
 
   test('finds the marker on a line of its own, also with text added below it since', async () => {
@@ -687,6 +720,17 @@ describe('the runner with filing.ts', () => {
     await runner.kick()
     expect(hub.requests.get(id)).toMatchObject({ state: 'filed', issue: 'https://github.com/me/cc/issues/9' })
     expect(f.calls().filter(call => call.args[1] === 'create')).toHaveLength(1)
+  })
+
+  test('records the issue the pane filed meanwhile on the note, and creates none', async () => {
+    const { hub, runner, id, f } = hubWith()
+    await runner.kick()
+    f.issues([['https://github.com/me/cc/issues/4', `Filed at the desk.\n\nostrakon: ${note.id}`]])
+    hub.requests.approve(id, 1)
+    await runner.kick()
+    expect(hub.requests.get(id)).toMatchObject({ state: 'filed', issue: 'https://github.com/me/cc/issues/4' })
+    expect(hub.note(note.id)?.extra).toEqual(['issue: https://github.com/me/cc/issues/4'])
+    expect(f.calls().some(call => call.args[1] === 'create')).toBe(false)
   })
 
   test('moves a request whose claude call passes its deadline to failed', async () => {

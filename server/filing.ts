@@ -8,6 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { isUlid, ulidTime } from '../plugin/src/ulid'
 import { type Draft, type Filing, type FilingRequest, NotCreated } from './requests'
 
 export const DRAFT_MS = 2 * 60_000
@@ -26,6 +27,8 @@ const UNSURE_FOR_MS = 60_000
 // 15 s wait for the list.
 const PROBES = 4
 const PROBE_MS = 10_000
+// A note id as the mod allows them (SPEC §6.2): safe in a jq string.
+const NOTE_ID = /^[0-9A-Za-z][0-9A-Za-z_-]{0,63}$/
 const REPO_NAME = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
 // GitHub's clock and the hub's may differ; the marker check looks this far before the request.
 const SKEW_MS = 24 * 60 * 60_000
@@ -48,6 +51,8 @@ export const marker = (id: string) => `ostrakon: ${id}`
 export const endsWithMarker = (body: string, id: string) => body.trimEnd().split(/\r?\n/).at(-1)?.trim() === marker(id)
 // Whether any line of a filed issue's body is the marker: someone may have added to it since.
 export const hasMarker = (body: string, id: string) => body.split(/\r?\n/).some(line => line.trim() === marker(id))
+// The pane's `o` has Claude write the note's marker, which may come back in backticks.
+const hasNoteMarker = (body: string, id: string) => body.split(/\r?\n/).some(line => line.trim().replace(/^`(.*)`$/, '$1') === marker(id))
 
 // Why GH_TOKEN can't be used, or null: only a fine-grained token, whose repos are the allowlist.
 export const ghTokenProblem = (token: string) =>
@@ -292,33 +297,43 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
   }
   let repos: { at: number; for: number; list: ReturnType<typeof listRepos> } | null = null
 
-  // The issue in the request's repo whose body ends with its marker, open or closed. Listed from
-  // the repo, not searched: search lags behind an issue just created, the case this is for.
+  // The issue in the request's repo that carries its marker, open or closed: the request's own
+  // (`ostrakon: <request id>`, the hub's), else the note's (`ostrakon: <note id>`, the pane's `o`),
+  // so a note filed from the pane isn't filed again. Listed from the repo, not searched: search
+  // lags behind an issue just created, the case this is for.
   const find = async (request: FilingRequest) => {
     if (!/^[0-9A-Z]{26}$/.test(request.id)) throw new Error(`not a request id: ${request.id}`)
-    const since = new Date(Date.parse(request.created) - SKEW_MS).toISOString()
+    if (!NOTE_ID.test(request.note)) throw new Error(`not a note id: ${request.note}`)
+    // From a day before the note was made, when its id says (the pane may have filed it any time
+    // since); without a time in the id, every issue.
+    const from = isUlid(request.note) ? Math.min(ulidTime(request.note), Date.parse(request.created)) : null
+    const since = from === null ? [] : [`--raw-field=since=${new Date(from - SKEW_MS).toISOString()}`]
+    const markers = [marker(request.id), marker(request.note)]
     const out = await gh(
       [
         'api',
         '--method=GET',
         '--paginate',
-        // Only issues that mention the marker come back, so a busy repo stays under the cap; the
-        // exact check (a line that is the marker) is below. The id is a ULID, safe in the filter.
-        `--jq=.[] | select(.pull_request == null and ((.body // "") | contains("${marker(request.id)}"))) | [.html_url, .body] | @json`,
+        // Only issues that mention a marker come back, so a busy repo stays under the cap; the
+        // exact check (a line that is the marker) is below. Both ids are safe in the filter.
+        `--jq=.[] | select(.pull_request == null and ((.body // "") as $b | ${markers.map(m => `($b | contains("${m}"))`).join(' or ')})) | [.html_url, .body] | @json`,
         `repos/${request.repo}/issues`,
         '--raw-field=state=all',
-        `--raw-field=since=${since}`,
+        ...since,
         '--raw-field=per_page=100',
       ],
       `couldn't list ${request.repo}'s issues`,
     )
     // GitHub lists the newest first: the last match is the one filed, not a later one quoting it.
-    let found: string | null = null
+    let byRequest: string | null = null
+    let byNote: string | null = null
     for (const line of out.split('\n').filter(Boolean)) {
       const [url, body] = JSON.parse(line) as [unknown, unknown]
-      if (typeof url === 'string' && typeof body === 'string' && hasMarker(body, request.id)) found = url
+      if (typeof url !== 'string' || typeof body !== 'string') continue
+      if (hasMarker(body, request.id)) byRequest = url
+      else if (hasNoteMarker(body, request.note)) byNote = url
     }
-    return found
+    return byRequest ?? byNote
   }
 
   return {

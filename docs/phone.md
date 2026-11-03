@@ -37,6 +37,8 @@ Moving, archiving and marking sent can all be undone from the message that pops 
   draft`, `drafting…`, then the draft; after **File**, `waiting to file` and `filing…`.
 - If drafting or filing failed, the reason shows with **Retry** and **Discard**.
 - Once filed, the note is marked sent with an `issue:` line pointing at the issue.
+- A note is filed once. Asking again for a note filed before shows `filed before, as <link>`.
+  To file it again, use `o` in the pane, which asks you first.
 - If the hub couldn't tell whether GitHub took it, check the repo's issues, then choose
   **It's there** (paste the issue's link) or **Not filed** (file it again). **Discard** gives
   up on it: the hub stops checking, and the issue may still be on GitHub.
@@ -210,7 +212,9 @@ What the hub does with them:
   10,000, labels only from the repo's. Each draft uses some of your subscription.
 - **Filing** runs `gh issue create`, with its own config folder (`gh/` in the hub's data), only
   after you choose **File**. The issue's body ends with `ostrakon: <request id>`, and the hub
-  looks for an issue with that line before every create, so it never files one twice.
+  looks for an issue with that line before every create, so it never files one twice. It also
+  looks for `ostrakon: <note id>`, the line `o` in the pane writes: a note filed from the pane is
+  recorded as filed with that issue, not filed again.
 - **Each call has a deadline**: 2 minutes for a draft, 30 seconds for each `gh` call (10 for
   checking a repo).
 - **Before it files**, the hub checks again that the repo is as public or private as the request

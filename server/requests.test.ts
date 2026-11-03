@@ -171,6 +171,35 @@ describe('requesting', () => {
     expect((await t.call('/api/requests', { note: 7 })).status).toBe(400)
   })
 
+  test('a note filed before is refused, whether its issue line or its filed request says so', async () => {
+    const t = fresh()
+    // Restored after the hub filed it: open again, with its issue line.
+    t.hub.push([note(A, { extra: ['issue: https://github.com/me/cc/issues/3'] })])
+    expect((await t.ask(A)).body).toEqual({ error: 'filed before, as https://github.com/me/cc/issues/3' } as never)
+    // Filed by the hub, then a newer copy without the line won the merge.
+    const filed = await drafted(t, B)
+    await t.step(filed.id, 'file', { revision: 1 })
+    await t.runner.kick()
+    t.hub.push([note(B, { updated: '2026-10-11T00:00:00.000Z' })])
+    expect(t.hub.note(B)?.extra).toEqual([])
+    const again = await t.ask(B)
+    expect(again).toEqual({ status: 400, body: { error: 'filed before, as https://github.com/me/cc/issues/7' } } as never)
+    expect(t.hub.requests.open()).toEqual([])
+    // A line that names no issue doesn't count.
+    t.hub.push([note(A, { extra: ['issue: TODO'], updated: '2026-10-11T00:00:00.000Z' })])
+    expect((await t.ask(A)).status).toBe(200)
+  })
+
+  test('a note whose only request was discarded can be asked for again', async () => {
+    const t = fresh({ run: false })
+    t.hub.push([note(A)])
+    const first = await t.ask()
+    await t.step(first.body.request.id, 'discard')
+    const second = await t.ask()
+    expect(second.status).toBe(200)
+    expect(second.body.request.id).not.toBe(first.body.request.id)
+  })
+
   test('with filing off, a request is refused and the hub says it is off', async () => {
     const t = fresh({ filingOn: false })
     t.hub.push([note(A)])

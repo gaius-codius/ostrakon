@@ -190,6 +190,11 @@ export const openHub = (dataDir: string, { now = Date.now, origin = hostname() }
     // Asking again returns the open request, whatever happened to the note since.
     const open = requests.openFor(id)
     if (open) return { kind: 'ok', request: open }
+    // Filed before, by the hub or from the note's `issue:` line (§6.2): asking again would file it
+    // twice. The pane's `o` leaves no line; the hub's marker check before filing covers that.
+    const filed =
+      requests.filedFor(id)?.issue ?? note.extra.map(line => /^issue:\s*(https:\/\/github\.com\/\S+)\s*$/.exec(line)?.[1]).find(url => url !== undefined)
+    if (filed) return { kind: 'refused', reason: `filed before, as ${filed}` }
     if (note.status !== 'open') return { kind: 'refused', reason: 'only an open note can be filed as an issue' }
     const repo = repoOf(note.project)
     if (!repo) return { kind: 'refused', reason: "the note's project isn't a GitHub repo" }

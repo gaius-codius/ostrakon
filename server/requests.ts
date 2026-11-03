@@ -143,6 +143,7 @@ export const openRequests = (db: Database, { nextSeq, newId, now }: { nextSeq: (
   const byId = db.query<Row, [string]>('SELECT * FROM requests WHERE id = ?')
   const openFor = db.query<Row, [string]>(`SELECT * FROM requests WHERE note = ? AND state NOT IN ('filed', 'discarded')`)
   const inState = db.query<Row, [string]>('SELECT * FROM requests WHERE state = ? ORDER BY created, id')
+  const filedFor = db.query<Row, [string]>(`SELECT * FROM requests WHERE note = ? AND state = 'filed' ORDER BY seq DESC LIMIT 1`)
   const openAll = db.query<Row, []>(`SELECT * FROM requests WHERE state NOT IN ('filed', 'discarded') ORDER BY created, id`)
   const sinceSeq = db.query<Row, [number, number]>('SELECT * FROM requests WHERE seq > ? AND seq <= ? ORDER BY seq')
   const maxSeq = db.query<{ seq: number | null }, []>('SELECT max(seq) AS seq FROM requests')
@@ -196,6 +197,11 @@ export const openRequests = (db: Database, { nextSeq, newId, now }: { nextSeq: (
     create,
     openFor: (note: string) => {
       const row = openFor.get(note)
+      return row ? fromRow(row) : undefined
+    },
+    // The note's latest filed request, if it has one.
+    filedFor: (note: string) => {
+      const row = filedFor.get(note)
       return row ? fromRow(row) : undefined
     },
     open: () => openAll.all().map(fromRow),
