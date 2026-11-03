@@ -7,10 +7,12 @@ import { type Filing, NotCreated } from '../../server/requests'
 
 let issues = 0
 const filing: Filing = {
-  repos: async () => [
-    { repo: 'me/ostrakon', public: true },
-    { repo: 'me/pane', public: false },
-  ],
+  repos: async () => ({
+    repos: [
+      { repo: 'me/ostrakon', public: true },
+      { repo: 'me/pane', public: false },
+    ],
+  }),
   draft: async request => {
     if (request.text.includes('[nodraft]')) throw new Error('drafting timed out')
     return { title: request.text.split('\n')[0] ?? '', body: request.text, labels: ['bug'] }

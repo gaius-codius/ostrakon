@@ -162,10 +162,16 @@ filing is off and the phone doesn't offer it.
    you use with `gh` doesn't turn filing on.
 
 `ostrakon doctor`, under `== filing notes as issues`, says whether filing is on, which repos the
-GitHub token covers, and when each token expires (`!!` from a month before).
+GitHub token can file to, and when each token expires (`!!` from a month before).
 
 What the hub does with them:
 
+- **Finding the repos.** GitHub lists the token's repos and every public repo you have, so the
+  hub tries an empty issue create (no title) in each. GitHub refuses it either way, and creates
+  nothing. A repo where it's refused as invalid (422) is one the token can file to; one where
+  it's refused as not allowed (403) isn't, and is left out. If GitHub doesn't answer clearly (a
+  timeout, an error on its side), that repo is left out and the reason shows in `error` in
+  `/api/filing`. The list is kept for 5 minutes, or 1 minute when a repo was left out. `ostrakon doctor` does the same check.
 - **Drafting** runs `claude -p` in an empty folder, with no tools, MCP servers, settings, plugins
   or slash commands, and its own config folder (`claude/` in the hub's data). The note goes in as
   data, and the hub checks the answer: a title of at most 256 characters, a body of at most
