@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2088,SC2012  # the ~ in messages is meant literally; ls -l only reads one known file
 # `ostrakon doctor`: checks that ostrakon is set up and working, and says what to fix. It only
-# reads: it changes nothing, and never prints the hub token. Exits 1 if anything needs fixing.
+# reads: it changes nothing, and never prints the hub token. (Its GitHub probes are issue creates
+# with no title, which GitHub refuses, so they create nothing.) Exits 1 if anything needs fixing.
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
@@ -397,8 +398,8 @@ token_expiry() {
 }
 
 # GH_TOKEN's repos with issues and its expiry, from GitHub's answer on stdin (curl -i), as
-# tab-separated lines: status, repo (full name, then public or private), more, expires (date and
-# days left).
+# tab-separated lines: status, repo (full name, then public or private), next (the next page's
+# URL), expires (date and days left).
 github_answer() {
   python3 -I -c '
 import datetime, json, re, sys
@@ -423,8 +424,9 @@ except ValueError:
 for repo in repos if isinstance(repos, list) else []:
     if isinstance(repo, dict) and repo.get("has_issues") is True and isinstance(repo.get("full_name"), str):
         print("repo\t%s\t%s" % (repo["full_name"], "public" if repo.get("visibility") == "public" else "private"))
-if re.search(r"<[^>]*>\s*;\s*rel=\"next\"", headers.get("link", "")):
-    print("more\t1")
+found = re.search(r"<([^>]*)>\s*;\s*rel=\"next\"", headers.get("link", ""))
+if found:
+    print("next\t" + found.group(1))
 found = re.match(r"(\d{4}-\d{2}-\d{2}) ", headers.get("github-authentication-token-expiration", ""))
 if found:
     try:
@@ -474,7 +476,7 @@ if day:
 # GH_TOKEN that isn't fine-grained (server/filing.ts), so this says why filing is off before it
 # asks GitHub which repos the token covers and when it ends. Neither token's value is ever printed.
 hub_filing() {
-  local gh claude expires reply kind a b days list='' count=0 more='' expiry='' status='' word words=() unitpath='' tool missing=0 listed=() can unsure=''
+  local gh claude expires reply kind a b days list='' count=0 more='' expiry='' status='' word words=() unitpath='' tool missing=0 listed=() can unsure='' next pages
   local api=${OSTRAKON_GITHUB_API:-https://api.github.com}
   gh=$(env_value GH_TOKEN) claude=$(env_value CLAUDE_CODE_OAUTH_TOKEN) expires=$(env_value CLAUDE_TOKEN_EXPIRES)
   echo "== filing notes as issues"
@@ -498,20 +500,27 @@ hub_filing() {
   if ! has curl || ! has python3; then
     note "couldn't check which repos GH_TOKEN covers or when it ends: curl and python3 are needed"
   else
-    reply=$(printf 'Authorization: Bearer %s\n' "$gh" | curl -s -m 10 -i -H @- "$api/user/repos?per_page=100" | github_answer)
-    while IFS=$'\t' read -r kind a b; do
-      case $kind in
-        status) status=$a ;;
-        repo) listed+=("$a ($b)") ;;
-        more) more=1 ;;
-        expires) expiry=$a days=$b ;;
-      esac
-    done <<<"$reply"
+    # Every page, as the hub reads them, up to 10 (1000 repos); the token goes only to GitHub's API.
+    next="$api/user/repos?per_page=100" pages=0
+    while [ -n "$next" ] && [ "$pages" -lt 10 ]; do
+      reply=$(printf 'Authorization: Bearer %s\n' "$gh" | curl -s -m 10 -i -H @- "$next" | github_answer)
+      next='' pages=$((pages + 1))
+      while IFS=$'\t' read -r kind a b; do
+        case $kind in
+          status) status=$a ;;
+          repo) listed+=("$a ($b)") ;;
+          next) [[ $a == "$api/"* ]] && next=$a ;;
+          expires) expiry=$a days=$b ;;
+        esac
+      done <<<"$reply"
+      [ "$status" = 200 ] || break
+    done
+    [ -z "$next" ] || more=1
     if [ "$status" = 401 ]; then bad "GitHub refuses GH_TOKEN (expired or revoked): make a new one (docs/phone.md)"
     elif [ "$status" != 200 ]; then bad "couldn't ask GitHub which repos GH_TOKEN covers (HTTP ${status:-none}, or no answer)"
     else
       # GitHub lists every public repo the token can read too, so each is probed as the hub does.
-      for a in "${listed[@]}"; do
+      for a in ${listed[@]+"${listed[@]}"}; do
         b=${a% (*}
         if [[ ! $b =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then can="GitHub gave a name that isn't owner/repo"
         else can=$(printf 'Authorization: Bearer %s\n' "$gh" | curl -s -m 10 -i -X POST -H @- -d '{}' "$api/repos/$b/issues" | probe_answer); fi
@@ -521,8 +530,9 @@ hub_filing() {
           *) unsure+="${unsure:+, }$b ($can)" ;;
         esac
       done
-      if [ "$count" -eq 0 ]; then bad "GH_TOKEN covers no repos with issues, so there's nowhere to file"
-      elif [ -n "$more" ]; then ok "GH_TOKEN covers more than 100 repos, the first: $list"
+      if [ "$count" -eq 0 ] && [ -n "$more" ]; then note "GH_TOKEN covers none of the first 1000 repos GitHub lists"
+      elif [ "$count" -eq 0 ]; then [ -n "$unsure" ] || bad "GH_TOKEN covers no repos with issues, so there's nowhere to file"
+      elif [ -n "$more" ]; then ok "GH_TOKEN covers $count of the first 1000 repos GitHub lists: $list"
       else ok "GH_TOKEN covers $count repos: $list"; fi
       [ -z "$unsure" ] || note "couldn't tell whether GH_TOKEN can file to $unsure, so the hub leaves them out for now"
       if [ -n "$expiry" ]; then token_expiry GH_TOKEN "$expiry" "$days"; else note "GH_TOKEN has no expiry date"; fi

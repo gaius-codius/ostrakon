@@ -19,8 +19,13 @@ export const MAX_BODY = 10_000
 export const MAX_LABELS = 10
 // What the token covers changes rarely; the phone asks on every start.
 const REPOS_FOR_MS = 5 * 60_000
-// How many repos are probed at once (listRepos).
+// A list missing a repo it couldn't tell about is kept this long: a GitHub that hangs on one
+// repo then costs the phone one slow answer a minute, not one on every start.
+const UNSURE_FOR_MS = 60_000
+// How many repos are probed at once (listRepos), and each probe's deadline: under the phone's
+// 15 s wait for the list.
 const PROBES = 4
+const PROBE_MS = 10_000
 const REPO_NAME = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
 // GitHub's clock and the hub's may differ; the marker check looks this far before the request.
 const SKEW_MS = 24 * 60 * 60_000
@@ -233,7 +238,7 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
         env: ghEnv,
         cwd: ghDir,
         stdin: '{}',
-        ms: ghMs,
+        ms: Math.min(ghMs, PROBE_MS),
         name: 'gh',
       })
     } catch (error) {
@@ -273,13 +278,19 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
       }
     }
     await Promise.all(Array.from({ length: PROBES }, probe))
-    const unsure = listed.flatMap((entry, at) => (typeof answers[at] === 'string' ? [`${entry.repo} (${answers[at]})`] : []))
+    // Grouped by why, so an outage that fails them all for one reason stays short.
+    const unsure = new Map<string, string[]>()
+    listed.forEach((entry, at) => {
+      const why = answers[at]
+      if (typeof why === 'string') unsure.set(why, [...(unsure.get(why) ?? []), entry.repo])
+    })
+    const reasons = [...unsure].map(([why, names]) => `${names.join(', ')} (${why})`)
     return {
       repos: listed.filter((_, at) => answers[at] === true),
-      ...(unsure.length > 0 ? { error: `couldn't tell whether the GitHub token can file to ${unsure.join(', ')}, so the list leaves them out` } : {}),
+      ...(reasons.length > 0 ? { error: `couldn't tell whether the GitHub token can file to ${reasons.join('; ')}, so the list leaves them out` } : {}),
     }
   }
-  let repos: { at: number; list: ReturnType<typeof listRepos> } | null = null
+  let repos: { at: number; for: number; list: ReturnType<typeof listRepos> } | null = null
 
   // The issue in the request's repo whose body ends with its marker, open or closed. Listed from
   // the repo, not searched: search lags behind an issue just created, the case this is for.
@@ -312,14 +323,19 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
 
   return {
     repos: () => {
-      if (!repos || Date.now() - repos.at > REPOS_FOR_MS) {
+      if (!repos || Date.now() - repos.at > repos.for) {
         const list = listRepos()
-        repos = { at: Date.now(), list }
-        // A failure, or a list missing a repo it couldn't tell about, isn't kept: the next ask tries again.
-        const drop = () => {
-          if (repos?.list === list) repos = null
-        }
-        list.then(answer => answer.error && drop(), drop)
+        const entry = { at: Date.now(), for: REPOS_FOR_MS, list }
+        repos = entry
+        // A failure isn't kept: the next ask tries again. A list missing a repo is kept for less.
+        list.then(
+          answer => {
+            if (answer.error) entry.for = UNSURE_FOR_MS
+          },
+          () => {
+            if (repos === entry) repos = null
+          },
+        )
       }
       return repos.list
     },

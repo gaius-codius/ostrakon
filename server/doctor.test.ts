@@ -34,6 +34,7 @@ done
 echo "$url \${token#Authorization: Bearer }$sent" >> "$CURL_LOG"
 case $url in
   */healthz) printf 'ok 0' ;;
+  */user/repos*'&page='*) [ -z "\${GH_PAGES:-}" ] || cat "$GH_PAGES" ;;
   */user/repos*) [ -z "\${GH_REPLY:-}" ] || cat "$GH_REPLY" ;;
   */repos/*/issues) probe=\${url%/issues} probe=\${probe#*/repos/} probe=\${probe%%/*}_\${probe#*/}
     if [ -f "\${GH_PROBES:-}/$probe" ]; then cat "$GH_PROBES/$probe"; else printf 'HTTP/2 422 Unprocessable Entity\r\n\r\n{}'; fi ;;
@@ -408,9 +409,11 @@ describe('ostrakon doctor on filing notes as issues', () => {
     environment,
     tools = false,
     probes = {},
+    pages,
   }: {
     env?: string
     reply?: string
+    pages?: string // GitHub's answer for every later page of /user/repos
     probes?: Record<string, string> // GitHub's answer to an empty create in owner/repo, when not 422
     environment?: string // the unit's Environment, with <bin> for a folder holding claude and gh stubs
     tools?: boolean
@@ -420,6 +423,7 @@ describe('ostrakon doctor on filing notes as issues', () => {
       setup: home => {
         mkdirSync(join(home, 'bin'), { recursive: true })
         writeFileSync(join(home, 'reply'), reply)
+        if (pages !== undefined) writeFileSync(join(home, 'pages'), pages)
         mkdirSync(join(home, 'probes'))
         for (const [repo, probe] of Object.entries(probes)) writeFileSync(join(home, 'probes', repo.replace('/', '_')), probe)
         for (const name of tools ? ['claude', 'gh'] : []) {
@@ -430,6 +434,7 @@ describe('ostrakon doctor on filing notes as issues', () => {
       vars: home => ({
         GH_REPLY: join(home, 'reply'),
         GH_PROBES: join(home, 'probes'),
+        ...(pages !== undefined ? { GH_PAGES: join(home, 'pages') } : {}),
         ...(environment ? { HUB_ENVIRONMENT: environment.replaceAll('<bin>', join(home, 'bin')) } : {}),
       }),
     })
@@ -510,8 +515,12 @@ describe('ostrakon doctor on filing notes as issues', () => {
       "--  couldn't tell whether GH_TOKEN can file to me/down (HTTP 502), me/busy (HTTP 403, rate limited), so the hub leaves them out for now",
     )
     expect(text).not.toContain('!!')
-    const none = filing({ probes: { 'me/cc': github('403 Forbidden', 'Resource not accessible'), 'me/x': github('404 Not Found', 'Not Found') } })
+    const none = filing({ probes: { 'me/cc': github('403 Forbidden', 'Resource not accessible'), 'me/x': github('410 Gone', 'Issues are disabled') } })
     expect(none.filing).toContain("!!  GH_TOKEN covers no repos with issues, so there's nowhere to file")
+    // With GitHub not answering at all, it says only that it couldn't tell.
+    const silent = filing({ probes: { 'me/cc': '', 'me/x': github('504 Gateway Timeout', '') } })
+    expect(silent.filing).toContain("--  couldn't tell whether GH_TOKEN can file to me/cc (no answer), me/x (HTTP 504), so the hub leaves them out for now")
+    expect(silent.filing).not.toContain('!!')
   })
 
   test("flags a GH_TOKEN that expired or ends within a month, and says when there's no date", () => {
@@ -524,11 +533,21 @@ describe('ostrakon doctor on filing notes as issues', () => {
     expect(filing({ reply: answer({ headers: [plus] }) }).filing).toContain('!!  GH_TOKEN expires in 5 days')
   })
 
-  test('says when the token covers more than 100 repos, and when it covers none with issues', () => {
-    const more = filing({
-      reply: answer({ headers: ['link: <https://api.github.com/user/repos?page=2>; rel="next", <https://api.github.com/user/repos?page=3>; rel="last"'] }),
+  test('reads every page of repos as the hub does, up to 10, and says when it covers none with issues', () => {
+    const next = (page: number, host = 'https://api.github.com') => `link: <${host}/user/repos?per_page=100&page=${page}>; rel="next"`
+    const two = filing({
+      reply: answer({ headers: [next(2)] }),
+      pages: answer({ body: [{ full_name: 'me/two', has_issues: true, visibility: 'private' }] }),
     })
-    expect(more.filing).toContain('ok  GH_TOKEN covers more than 100 repos, the first: me/cc (public), me/x (private)')
+    expect(two.filing).toContain('ok  GH_TOKEN covers 3 repos: me/cc (public), me/x (private), me/two (private)\n')
+    expect(two.repoCalls).toEqual([`https://api.github.com/user/repos?per_page=100 ${GH}`, `https://api.github.com/user/repos?per_page=100&page=2 ${GH}`])
+    const endless = filing({ reply: answer({ headers: [next(2)] }), pages: answer({ body: [], headers: [next(3)] }) })
+    expect(endless.repoCalls).toHaveLength(10)
+    expect(endless.filing).toContain('ok  GH_TOKEN covers 2 of the first 1000 repos GitHub lists: me/cc (public), me/x (private)')
+    // The token goes to GitHub's API only, whatever the answer links to.
+    const elsewhere = filing({ reply: answer({ headers: [next(2, 'https://evil.example')] }), pages: answer() })
+    expect(elsewhere.repoCalls).toHaveLength(1)
+    expect(elsewhere.filing).toContain('ok  GH_TOKEN covers 2 repos')
     const none = filing({ reply: answer({ body: [repos[1]] }) })
     expect(none.filing).toContain("!!  GH_TOKEN covers no repos with issues, so there's nowhere to file")
   })

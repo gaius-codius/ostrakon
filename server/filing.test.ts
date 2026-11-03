@@ -2,7 +2,7 @@
 // write down how they were run (arguments, environment, working folder, stdin) and answer as each
 // test sets them. The fakes see only the environment filing.ts hands them, so they find their
 // answers next to themselves.
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, setSystemTime, test } from 'bun:test'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -547,14 +547,14 @@ exit 1`,
     }
   })
 
-  test("leaves out a repo it can't tell about, says why in error, and asks again next time", async () => {
+  test("leaves out a repo it can't tell about, says why in error, and asks again after a minute", async () => {
     const f = fakes()
     f.answer(
       'gh',
       `case "$*" in
-  *user/repos*) printf 'me/cc\\tpublic\\nme/down\\tpublic\\nme/slow\\tprivate\\nme/busy\\tpublic\\nme/quiet\\tpublic\\n'; exit 0 ;;
+  *user/repos*) printf 'me/cc\\tpublic\\nme/down\\tpublic\\nme/slow\\tprivate\\nme/busy\\tpublic\\nme/quiet\\tpublic\\nme/also-down\\tpublic\\n'; exit 0 ;;
   *repos/me/cc/issues) printf 'HTTP/2.0 422 Unprocessable Entity\\r\\n\\r\\n{}' ;;
-  *repos/me/down/issues) printf 'HTTP/2.0 502 Bad Gateway\\r\\n\\r\\n{}' ;;
+  *repos/me/down/issues|*repos/me/also-down/issues) printf 'HTTP/2.0 502 Bad Gateway\\r\\n\\r\\n{}' ;;
   *repos/me/slow/issues) sleep 5 ;;
   *repos/me/busy/issues) printf 'HTTP/2.0 403 Forbidden\\r\\n\\r\\n{"message":"You have exceeded a secondary rate limit."}' ;;
   *repos/me/quiet/issues) echo 'error connecting to api.github.com' >&2 ;;
@@ -565,11 +565,19 @@ exit 1`,
     const answer = await filing.repos()
     expect(answer.repos).toEqual([{ repo: 'me/cc', public: true }])
     expect(answer.error).toBe(
-      "couldn't tell whether the GitHub token can file to me/down (HTTP 502), me/slow (gh took longer than 1 s), me/busy (HTTP 403, rate limited), me/quiet (error connecting to api.github.com), so the list leaves them out",
+      "couldn't tell whether the GitHub token can file to me/down, me/also-down (HTTP 502); me/slow (gh took longer than 1 s); me/busy (HTTP 403, rate limited); me/quiet (error connecting to api.github.com), so the list leaves them out",
     )
     const before = f.calls().length
-    await filing.repos()
-    expect(f.calls().length).toBeGreaterThan(before)
+    try {
+      setSystemTime(new Date(Date.now() + 30_000))
+      await filing.repos()
+      expect(f.calls()).toHaveLength(before)
+      setSystemTime(new Date(Date.now() + 31_000))
+      await filing.repos()
+      expect(f.calls().length).toBeGreaterThan(before)
+    } finally {
+      setSystemTime()
+    }
   })
 
   test("never probes a name that isn't owner/repo", async () => {
