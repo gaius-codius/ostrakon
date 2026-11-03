@@ -37,6 +37,8 @@ let refused = load('sp.refused', []) // { id, text, reason, note }: notes the hu
 let projects = load('sp.projects', [])
 // Whether the hub files notes as issues, and to which repos ({ repo: 'owner/repo', public }).
 let filing = load('sp.filing', { on: false, repos: [] })
+// The last ask for it went unanswered (the hub can take longer than the phone waits).
+let isFilingStale = false
 // Set when the outbox couldn't be written: nothing is queued until it can be.
 let storageError = ''
 let online = null
@@ -349,9 +351,12 @@ const loadFiling = async () => {
     const body = await api('/api/filing')
     // `error`: the hub left out repos it couldn't check (GitHub didn't answer), so the list may be short.
     filing = { on: body.on === true, repos: Array.isArray(body.repos) ? body.repos : [], ...(typeof body.error === 'string' ? { error: body.error } : {}) }
+    isFilingStale = false
     store('sp.filing', filing)
     if (sheetFor !== null) renderSheet()
-  } catch {}
+  } catch {
+    isFilingStale = true
+  }
 }
 
 // The repo note `note` would be filed to, when the hub files there: its project key names it
@@ -1296,8 +1301,9 @@ const openSheet = (id, trigger = moreOf(id)) => {
   isSheetPressed = false
   sheetReturn = trigger ?? document.activeElement
   renderSheet()
-  // The hub keeps a short list for a minute: ask again, so a repo it can check now comes back.
-  if (filing.error !== undefined) loadFiling()
+  // The hub keeps a short list for a minute, and finishes one the phone gave up on: ask again, so a
+  // repo it can check now comes back.
+  if (filing.error !== undefined || isFilingStale) loadFiling()
   // Still leaving from last time: gone at once.
   if ($('sheet').open) $('sheet').close()
   showFirstPage()
