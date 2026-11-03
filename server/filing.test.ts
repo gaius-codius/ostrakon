@@ -25,6 +25,7 @@ const temp = (name: string) => {
 const GH_TOKEN = 'github_pat_11AAAAAAA0abcdefghijklmnopqrstuvwxyz0123456789'
 const CLAUDE_TOKEN = 'sk-ant-oat01-abcdefghijklmnopqrstuvwxyz0123456789'
 const ID = '01JA7K2M3Q9X4ZB6C8D0EFGH0A'
+const NOTE = '01JA7K2M3Q9X4ZB6C8D0EFGH0B'
 
 // Each fake logs its call to calls/<time>/ and runs <name>.sh next to it when there is one, else
 // its default answer.
@@ -49,6 +50,7 @@ const GH_DEFAULT = `case "$1 $2" in
     case "$*" in
       *user/repos*) printf 'me/cc\\tpublic\\nMe/Secret\\tprivate\\n' ;;
       *'--method=POST'*) printf 'HTTP/2.0 422 Unprocessable Entity\\r\\n\\r\\n{"message":"Invalid request."}' ;;
+      *search/issues*) if [ -f "$dir/search" ]; then cat "$dir/search"; fi ;;
       *'/issues'*) if [ -f "$dir/issues" ]; then cat "$dir/issues"; fi ;;
       *) echo "fake gh: unexpected $*" >&2; exit 1 ;;
     esac ;;
@@ -108,19 +110,20 @@ const fakes = () => {
   // Replaces a fake's answer with a script run in its place (`$dir` is the fakes' folder).
   const answer = (name: 'gh' | 'claude', script: string) => writeFileSync(join(bin, `${name}.sh`), script)
   const issues = (rows: [string, string][]) => writeFileSync(join(bin, 'issues'), rows.map(row => JSON.stringify(row)).join('\n'))
+  const search = (rows: [string, string][]) => writeFileSync(join(bin, 'search'), rows.map(row => JSON.stringify(row)).join('\n'))
   const open = (options: { draftMs?: number; ghMs?: number } = {}) => {
     const setup = filingFromEnv(hub, data, options)
     if (!('filing' in setup)) throw new Error(setup.off)
     return setup.filing
   }
-  return { bin, data, hub, calls, answer, issues, open }
+  return { bin, data, hub, calls, answer, issues, search, open }
 }
 
 const isClaude = (call: Call) => call.name === 'claude'
 
 const request = (fields: Partial<FilingRequest> = {}): FilingRequest => ({
   id: ID,
-  note: '01JA7K2M3Q9X4ZB6C8D0EFGH0B',
+  note: NOTE,
   text: 'the retry loses the last line',
   project: { key: 'github.com/me/cc', name: 'cc', path: '/home/me/cc' },
   repo: 'me/cc',
@@ -390,17 +393,28 @@ describe('filing', () => {
   test("looks for the request's marker in the repo before every create", async () => {
     const f = fakes()
     await f.open().file(approved())
-    const [list, labels, view, create] = f.calls()
+    const [list, search, labels, view, create] = f.calls()
     expect(list?.args).toEqual([
       'api',
       '--method=GET',
       '--paginate',
-      `--jq=.[] | select(.pull_request == null and ((.body // "") | contains("ostrakon: ${ID}"))) | [.html_url, .body] | @json`,
+      `--jq=.[] | select(.pull_request == null and ((.body // "") as $b | ($b | contains("ostrakon: ${ID}")) or ($b | contains("ostrakon: ${NOTE}")))) | [.html_url, .body] | @json`,
       'repos/me/cc/issues',
       '--raw-field=state=all',
       // A day before the request, for a clock that differs from GitHub's.
       '--raw-field=since=2026-10-09T01:00:00.000Z',
       '--raw-field=per_page=100',
+    ])
+    // Nothing listed: an older filing from the pane is searched for.
+    expect(search?.args).toEqual([
+      'api',
+      '--method=GET',
+      'search/issues',
+      `--raw-field=q=repo:me/cc is:issue in:body "ostrakon: ${NOTE}"`,
+      '--raw-field=sort=created',
+      '--raw-field=order=asc',
+      '--raw-field=per_page=100',
+      '--jq=.items[] | [.html_url, .body] | @json',
     ])
     expect(labels?.args.slice(0, 2)).toEqual(['label', 'list'])
     expect(view?.args).toEqual(['repo', 'view', '--json=visibility', '--', 'me/cc'])
@@ -429,6 +443,55 @@ describe('filing', () => {
     expect(await filing.file(approved())).toBe('https://github.com/me/cc/issues/5')
     expect(f.calls().map(call => call.args[0])).toEqual(['api'])
     expect(await filing.find(request({ state: 'unsure' }))).toBe('https://github.com/me/cc/issues/5')
+  })
+
+  test("records an issue filed from the pane with the note's marker, and creates none", async () => {
+    const f = fakes()
+    f.issues([
+      ['https://github.com/me/cc/issues/8', `quotes it: ostrakon: ${NOTE} in the middle`],
+      ['https://github.com/me/cc/issues/7', `Filed at the desk.\n\n\`ostrakon: ${NOTE}\``],
+    ])
+    const filing = f.open()
+    expect(await filing.file(approved())).toBe('https://github.com/me/cc/issues/7')
+    expect(f.calls().map(call => call.args[0])).toEqual(['api'])
+    expect(await filing.find(request({ state: 'unsure' }))).toBe('https://github.com/me/cc/issues/7')
+  })
+
+  test("prefers the request's own marker to the note's", async () => {
+    const f = fakes()
+    f.issues([
+      ['https://github.com/me/cc/issues/11', `From the phone.\n\nostrakon: ${ID}`],
+      ['https://github.com/me/cc/issues/10', `From the desk.\n\nostrakon: ${NOTE}`],
+    ])
+    expect(await f.open().find(request())).toBe('https://github.com/me/cc/issues/11')
+  })
+
+  test('finds an older filing from the pane by search, oldest first, when the list has none', async () => {
+    const f = fakes()
+    f.search([
+      ['https://github.com/me/cc/issues/1', `quotes it: ostrakon: ${NOTE}`],
+      ['https://github.com/me/cc/issues/2', `Filed long ago.\n\nostrakon: ${NOTE}`],
+      ['https://github.com/me/cc/issues/6', `Again.\n\nostrakon: ${NOTE}`],
+    ])
+    const filing = f.open()
+    expect(await filing.file(approved())).toBe('https://github.com/me/cc/issues/2')
+    expect(f.calls().map(call => call.args[2])).toEqual(['--paginate', 'search/issues'])
+    // Found in the list, it isn't searched.
+    f.issues([['https://github.com/me/cc/issues/9', `Filed at the desk.\n\nostrakon: ${NOTE}`]])
+    expect(await filing.find(request())).toBe('https://github.com/me/cc/issues/9')
+    expect(f.calls().at(-1)?.args[2]).toBe('--paginate')
+    await expect(filing.find(request({ note: 'x") | .body' }))).rejects.toThrow('not a note id')
+  })
+
+  test('refuses, creating nothing, when the search fails', async () => {
+    const f = fakes()
+    f.answer('gh', `case "$*" in *search/issues*) echo 'HTTP 503' >&2; exit 1 ;; esac`)
+    const failed = await f
+      .open()
+      .file(approved())
+      .catch(e => e)
+    expect(failed).toBeInstanceOf(NotCreated)
+    expect(failed.message).toStartWith("couldn't check the repo before filing: couldn't search me/cc's issues")
   })
 
   test('finds the marker on a line of its own, also with text added below it since', async () => {
@@ -687,6 +750,17 @@ describe('the runner with filing.ts', () => {
     await runner.kick()
     expect(hub.requests.get(id)).toMatchObject({ state: 'filed', issue: 'https://github.com/me/cc/issues/9' })
     expect(f.calls().filter(call => call.args[1] === 'create')).toHaveLength(1)
+  })
+
+  test('records the issue the pane filed meanwhile on the note, and creates none', async () => {
+    const { hub, runner, id, f } = hubWith()
+    await runner.kick()
+    f.issues([['https://github.com/me/cc/issues/4', `Filed at the desk.\n\nostrakon: ${note.id}`]])
+    hub.requests.approve(id, 1)
+    await runner.kick()
+    expect(hub.requests.get(id)).toMatchObject({ state: 'filed', issue: 'https://github.com/me/cc/issues/4' })
+    expect(hub.note(note.id)?.extra).toEqual(['issue: https://github.com/me/cc/issues/4'])
+    expect(f.calls().some(call => call.args[1] === 'create')).toBe(false)
   })
 
   test('moves a request whose claude call passes its deadline to failed', async () => {

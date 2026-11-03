@@ -182,6 +182,13 @@ export const openHub = (dataDir: string, { now = Date.now, origin = hostname() }
     return outcome
   }
 
+  // The issue a note was filed as before, by a filed request or its `issue:` line (§6.2), quoted
+  // or not; filing it again would file it twice. The pane's `o` leaves no line: the hub's marker
+  // check before filing covers that.
+  const filedBefore = (note: Note) =>
+    requests.filedFor(note.id)?.issue ??
+    note.extra.map(line => /^issue:\s*(["']?)(https:\/\/github\.com\/[^\s"']+)\1\s*$/.exec(line)?.[2]).find(url => url !== undefined)
+
   // A request for note `id`, refused (a reason) unless it's open, under a github.com project that
   // `repos` holds. Repo names match whatever their case, as GitHub's do.
   const request = (id: string, repos: { repo: string; public: boolean }[]): Outcome | { kind: 'refused'; reason: string } => {
@@ -190,6 +197,8 @@ export const openHub = (dataDir: string, { now = Date.now, origin = hostname() }
     // Asking again returns the open request, whatever happened to the note since.
     const open = requests.openFor(id)
     if (open) return { kind: 'ok', request: open }
+    const filed = filedBefore(note)
+    if (filed) return { kind: 'refused', reason: `filed before, as ${filed}` }
     if (note.status !== 'open') return { kind: 'refused', reason: 'only an open note can be filed as an issue' }
     const repo = repoOf(note.project)
     if (!repo) return { kind: 'refused', reason: "the note's project isn't a GitHub repo" }
@@ -210,7 +219,16 @@ export const openHub = (dataDir: string, { now = Date.now, origin = hostname() }
     startDraft: (id: string) => changing(() => requests.startDraft(id)),
     drafted: (id: string, draft: Draft) => changing(() => requests.drafted(id, draft)),
     draftFailed: (id: string, error: string) => changing(() => requests.draftFailed(id, error)),
-    startFile: (id: string) => changing(() => requests.startFile(id)),
+    // An open request whose note was filed meanwhile (a backup brought it back, or a copy with the
+    // note's `issue:` line came in) fails rather than file the note again.
+    startFile: (id: string) =>
+      changing((): Outcome => {
+        const started = requests.startFile(id)
+        if (started.kind !== 'ok') return started
+        const note = getNote(started.request.note)
+        const filed = note && !note.deleted ? filedBefore(note) : requests.filedFor(started.request.note)?.issue
+        return filed ? requests.fileFailed(id, `filed before, as ${filed}; discard this request`) : started
+      }),
     filed: (id: string, url: string) =>
       changing(() => {
         // GitHub's own answer may name the repo by a new name (renamed, transferred): any issue URL.
@@ -317,7 +335,8 @@ export const startFiling = (hub: Hub, filing: Filing) => {
   }
   const file = async (id: string) => {
     const started = hub.requests.startFile(id)
-    if (started.kind !== 'ok' || !started.request.draft) return
+    // Not when it failed as it started (its note was filed meanwhile).
+    if (started.kind !== 'ok' || started.request.state !== 'filing' || !started.request.draft) return
     try {
       hub.requests.filed(id, await filing.file({ ...started.request, draft: started.request.draft }))
     } catch (error) {

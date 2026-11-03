@@ -171,6 +171,38 @@ describe('requesting', () => {
     expect((await t.call('/api/requests', { note: 7 })).status).toBe(400)
   })
 
+  test('a note filed before is refused, whether its issue line or its filed request says so', async () => {
+    const t = fresh()
+    // Restored after the hub filed it: open again, with its issue line.
+    t.hub.push([note(A, { extra: ['issue: https://github.com/me/cc/issues/3'] })])
+    expect((await t.ask(A)).body).toEqual({ error: 'filed before, as https://github.com/me/cc/issues/3' } as never)
+    // Filed by the hub, then a newer copy without the line won the merge.
+    const filed = await drafted(t, B)
+    await t.step(filed.id, 'file', { revision: 1 })
+    await t.runner.kick()
+    t.hub.push([note(B, { updated: '2026-10-11T00:00:00.000Z' })])
+    expect(t.hub.note(B)?.extra).toEqual([])
+    const again = await t.ask(B)
+    expect(again).toEqual({ status: 400, body: { error: 'filed before, as https://github.com/me/cc/issues/7' } } as never)
+    expect(t.hub.requests.open()).toEqual([])
+    // Quoted, as YAML allows.
+    t.hub.push([note(A, { extra: ["issue: 'https://github.com/me/cc/issues/3'"], updated: '2026-10-10T09:00:00.000Z' })])
+    expect((await t.ask(A)).body.error).toBe('filed before, as https://github.com/me/cc/issues/3')
+    // A line that names no issue doesn't count.
+    t.hub.push([note(A, { extra: ['issue: TODO'], updated: '2026-10-11T00:00:00.000Z' })])
+    expect((await t.ask(A)).status).toBe(200)
+  })
+
+  test('a note whose only request was discarded can be asked for again', async () => {
+    const t = fresh({ run: false })
+    t.hub.push([note(A)])
+    const first = await t.ask()
+    await t.step(first.body.request.id, 'discard')
+    const second = await t.ask()
+    expect(second.status).toBe(200)
+    expect(second.body.request.id).not.toBe(first.body.request.id)
+  })
+
   test('with filing off, a request is refused and the hub says it is off', async () => {
     const t = fresh({ filingOn: false })
     t.hub.push([note(A)])
@@ -323,13 +355,34 @@ describe('filing', () => {
     expect(Date.parse(written?.updated ?? '')).toBeGreaterThan(Date.parse(note(A).updated))
   })
 
-  test('a note archived meanwhile gets the issue line and stays archived; one with an issue line has it replaced', async () => {
+  test('a note archived meanwhile gets the issue line and stays archived', async () => {
     const t = fresh()
     const request = await drafted(t)
-    t.hub.push([note(A, { status: 'archived', extra: ['issue: https://github.com/me/cc/issues/1'], updated: '2026-10-10T05:00:00.000Z' })])
+    t.hub.push([note(A, { status: 'archived', updated: '2026-10-10T05:00:00.000Z' })])
     await t.step(request.id, 'file', { revision: 1 })
     await t.runner.kick()
     expect(t.hub.note(A)).toMatchObject({ status: 'archived', extra: ['issue: https://github.com/me/cc/issues/7'] })
+  })
+
+  test('an open request whose note was filed meanwhile fails, and files nothing', async () => {
+    const t = fresh()
+    const request = await drafted(t)
+    // A copy with the issue line came in (quoted, as YAML allows), say from a backup brought back.
+    t.hub.push([note(A, { extra: ['issue: "https://github.com/me/cc/issues/1"'], updated: '2026-10-10T05:00:00.000Z' })])
+    await t.step(request.id, 'file', { revision: 1 })
+    await t.runner.kick()
+    expect(t.hub.requests.get(request.id)).toMatchObject({
+      state: 'failed',
+      phase: 'file',
+      error: 'filed before, as https://github.com/me/cc/issues/1; discard this request',
+    })
+    expect(t.calls.file).toEqual([])
+    expect(t.hub.note(A)?.extra).toEqual(['issue: "https://github.com/me/cc/issues/1"'])
+    // Retrying fails the same way; discarding is the way out.
+    await t.step(request.id, 'retry')
+    await t.runner.kick()
+    expect(t.hub.requests.get(request.id)?.state).toBe('failed')
+    expect(t.calls.file).toEqual([])
   })
 
   test('a note deleted meanwhile is left alone; the request still keeps the issue', async () => {
