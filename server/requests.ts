@@ -49,7 +49,7 @@ export type Filing = {
   // Returns the new issue's URL. Throws NotCreated only when GitHub said it created nothing; any
   // other failure leaves it unknown whether the issue exists.
   file: (request: FilingRequest & { draft: Draft }) => Promise<string>
-  // The URL of the issue carrying the request's `ostrakon: <id>` marker, or null.
+  // The URL of the issue carrying the request's `ostrakon: <id>` marker, else the note's, or null.
   find: (request: FilingRequest) => Promise<string | null>
 }
 

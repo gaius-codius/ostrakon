@@ -8,7 +8,6 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { isUlid, ulidTime } from '../plugin/src/ulid'
 import { type Draft, type Filing, type FilingRequest, NotCreated } from './requests'
 
 export const DRAFT_MS = 2 * 60_000
@@ -53,6 +52,13 @@ export const endsWithMarker = (body: string, id: string) => body.trimEnd().split
 export const hasMarker = (body: string, id: string) => body.split(/\r?\n/).some(line => line.trim() === marker(id))
 // The pane's `o` has Claude write the note's marker, which may come back in backticks.
 const hasNoteMarker = (body: string, id: string) => body.split(/\r?\n/).some(line => line.trim().replace(/^`(.*)`$/, '$1') === marker(id))
+// The [url, body] pairs gh printed, one JSON array a line; anything else is skipped.
+const rows = (out: string) =>
+  out
+    .split('\n')
+    .filter(Boolean)
+    .map(line => JSON.parse(line) as [unknown, unknown])
+    .filter((row): row is [string, string] => typeof row[0] === 'string' && typeof row[1] === 'string')
 
 // Why GH_TOKEN can't be used, or null: only a fine-grained token, whose repos are the allowlist.
 export const ghTokenProblem = (token: string) =>
@@ -299,15 +305,14 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
 
   // The issue in the request's repo that carries its marker, open or closed: the request's own
   // (`ostrakon: <request id>`, the hub's), else the note's (`ostrakon: <note id>`, the pane's `o`),
-  // so a note filed from the pane isn't filed again. Listed from the repo, not searched: search
-  // lags behind an issue just created, the case this is for. The list lags too, by seconds.
+  // so a note filed from the pane isn't filed again. Issues updated since a day before the request
+  // are listed from the repo, not searched: search lags behind an issue just created, the case this
+  // is for (the list lags too, by seconds). An older filing from the pane is searched for instead,
+  // where the lag doesn't matter, so an old note in a busy repo isn't paged back to its start.
   const find = async (request: FilingRequest) => {
     if (!/^[0-9A-Z]{26}$/.test(request.id)) throw new Error(`not a request id: ${request.id}`)
     if (!NOTE_ID.test(request.note)) throw new Error(`not a note id: ${request.note}`)
-    // From a day before the note was made, when its id says (the pane may have filed it any time
-    // since); without a time in the id, every issue.
-    const from = isUlid(request.note) ? Math.min(ulidTime(request.note), Date.parse(request.created)) : null
-    const since = from === null ? [] : [`--raw-field=since=${new Date(from - SKEW_MS).toISOString()}`]
+    const since = new Date(Date.parse(request.created) - SKEW_MS).toISOString()
     const markers = [marker(request.id), marker(request.note)]
     const out = await gh(
       [
@@ -319,7 +324,7 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
         `--jq=.[] | select(.pull_request == null and ((.body // "") as $b | ${markers.map(m => `($b | contains("${m}"))`).join(' or ')})) | [.html_url, .body] | @json`,
         `repos/${request.repo}/issues`,
         '--raw-field=state=all',
-        ...since,
+        `--raw-field=since=${since}`,
         '--raw-field=per_page=100',
       ],
       `couldn't list ${request.repo}'s issues`,
@@ -327,13 +332,26 @@ export const openFiling = ({ ghToken, claudeToken, dataDir, env, draftMs = DRAFT
     // GitHub lists the newest first: the last match is the one filed, not a later one quoting it.
     let byRequest: string | null = null
     let byNote: string | null = null
-    for (const line of out.split('\n').filter(Boolean)) {
-      const [url, body] = JSON.parse(line) as [unknown, unknown]
-      if (typeof url !== 'string' || typeof body !== 'string') continue
+    for (const [url, body] of rows(out)) {
       if (hasMarker(body, request.id)) byRequest = url
       else if (hasNoteMarker(body, request.note)) byNote = url
     }
-    return byRequest ?? byNote
+    if (byRequest ?? byNote) return byRequest ?? byNote
+    const found = await gh(
+      [
+        'api',
+        '--method=GET',
+        'search/issues',
+        `--raw-field=q=repo:${request.repo} is:issue in:body "${marker(request.note)}"`,
+        '--raw-field=sort=created',
+        '--raw-field=order=asc',
+        '--raw-field=per_page=100',
+        '--jq=.items[] | [.html_url, .body] | @json',
+      ],
+      `couldn't search ${request.repo}'s issues`,
+    )
+    // Oldest first: the first match is the one filed.
+    return rows(found).find(([, body]) => hasNoteMarker(body, request.note))?.[0] ?? null
   }
 
   return {
