@@ -517,7 +517,8 @@ export const handler = (
       if (path === '/api/filing' && request.method === 'GET') {
         if (!filing) return json({ on: false, repos: [] })
         try {
-          return json({ on: true, repos: await filing.repos() })
+          const { repos, error } = await filing.repos()
+          return json({ on: true, repos, ...(error ? { error: shortError(error) } : {}) })
         } catch (error) {
           return json({ on: true, repos: [], error: shortError(error) })
         }
@@ -529,7 +530,7 @@ export const handler = (
         if (typeof body?.note !== 'string') return json({ error: 'expected { note }' }, 400)
         let repos: { repo: string; public: boolean }[]
         try {
-          repos = await filing.repos()
+          repos = (await filing.repos()).repos
         } catch (error) {
           return json({ error: `couldn't read which repos the hub files to: ${shortError(error)}` }, 503)
         }

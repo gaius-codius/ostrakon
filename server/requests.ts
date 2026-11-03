@@ -41,8 +41,9 @@ export type FilingRequest = {
 // What the hub needs from outside to draft and file (#110 runs `claude` and `gh`; tests stub it).
 // Filing is on only when the hub was given one.
 export type Filing = {
-  // The repos the hub may file to, and whether each is public.
-  repos: () => Promise<{ repo: string; public: boolean }[]>
+  // The repos the hub may file to, and whether each is public; `error` says which it left out
+  // because it couldn't tell whether it may file there.
+  repos: () => Promise<{ repos: { repo: string; public: boolean }[]; error?: string }>
   draft: (request: FilingRequest) => Promise<Draft>
   // Each call has its own deadline (#110): the hub runs one request at a time and waits for it.
   // Returns the new issue's URL. Throws NotCreated only when GitHub said it created nothing; any

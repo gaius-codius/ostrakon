@@ -48,6 +48,7 @@ const GH_DEFAULT = `case "$1 $2" in
   *)
     case "$*" in
       *user/repos*) printf 'me/cc\\tpublic\\nMe/Secret\\tprivate\\n' ;;
+      *'--method=POST'*) printf 'HTTP/2.0 422 Unprocessable Entity\\r\\n\\r\\n{"message":"Invalid request."}' ;;
       *'/issues'*) if [ -f "$dir/issues" ]; then cat "$dir/issues"; fi ;;
       *) echo "fake gh: unexpected $*" >&2; exit 1 ;;
     esac ;;
@@ -503,14 +504,82 @@ describe('the repos the token covers', () => {
   test('lists them from GitHub with whether each is public, and asks again only after a while', async () => {
     const f = fakes()
     const filing = f.open()
-    expect(await filing.repos()).toEqual([
-      { repo: 'me/cc', public: true },
-      { repo: 'Me/Secret', public: false },
-    ])
+    expect(await filing.repos()).toEqual({
+      repos: [
+        { repo: 'me/cc', public: true },
+        { repo: 'Me/Secret', public: false },
+      ],
+    })
     await filing.repos()
-    expect(f.calls().map(call => call.args)).toEqual([
-      ['api', '--paginate', '--jq=.[] | select(.has_issues) | [.full_name, .visibility] | @tsv', 'user/repos?per_page=100'],
-    ])
+    const calls = f.calls()
+    expect(calls[0]?.args).toEqual(['api', '--paginate', '--jq=.[] | select(.has_issues) | [.full_name, .visibility] | @tsv', 'user/repos?per_page=100'])
+    expect(
+      calls
+        .slice(1)
+        .map(call => call.args.at(-1))
+        .sort(),
+    ).toEqual(['repos/Me/Secret/issues', 'repos/me/cc/issues'])
+    expect(calls).toHaveLength(3)
+  })
+
+  // GitHub lists every public repo a fine-grained token can read, with the user's rights; only
+  // an empty create tells the token's own repos apart, and it can't create an issue.
+  test('keeps only the repos an empty create answers 422 for, sending no title', async () => {
+    const f = fakes()
+    f.answer(
+      'gh',
+      `case "$*" in
+  *user/repos*) printf 'me/cc\\tpublic\\nme/other\\tpublic\\nme/gone\\tpublic\\nme/off\\tpublic\\nme/archived\\tpublic\\n'; exit 0 ;;
+  *repos/me/cc/issues) printf 'HTTP/2.0 422 Unprocessable Entity\\r\\n\\r\\n{"message":"Invalid request."}' ;;
+  *repos/me/other/issues) printf 'HTTP/2.0 403 Forbidden\\r\\n\\r\\n{"message":"Resource not accessible by personal access token"}' ;;
+  *repos/me/gone/issues) printf 'HTTP/2.0 404 Not Found\\r\\n\\r\\n{}' ;;
+  *repos/me/off/issues) printf 'HTTP/2.0 410 Gone\\r\\n\\r\\n{}' ;;
+  *repos/me/archived/issues) printf 'HTTP/2.0 403 Forbidden\\r\\n\\r\\n{"message":"Repository was archived so is read-only."}' ;;
+esac
+exit 1`,
+    )
+    expect(await f.open().repos()).toEqual({ repos: [{ repo: 'me/cc', public: true }] })
+    const probes = f.calls().slice(1)
+    expect(probes).toHaveLength(5)
+    for (const call of probes) {
+      expect(call.args.slice(0, -1)).toEqual(['api', '--method=POST', '--include', '--input=-'])
+      expect(call.stdin).toBe('{}')
+    }
+  })
+
+  test("leaves out a repo it can't tell about, says why in error, and asks again next time", async () => {
+    const f = fakes()
+    f.answer(
+      'gh',
+      `case "$*" in
+  *user/repos*) printf 'me/cc\\tpublic\\nme/down\\tpublic\\nme/slow\\tprivate\\nme/busy\\tpublic\\nme/quiet\\tpublic\\n'; exit 0 ;;
+  *repos/me/cc/issues) printf 'HTTP/2.0 422 Unprocessable Entity\\r\\n\\r\\n{}' ;;
+  *repos/me/down/issues) printf 'HTTP/2.0 502 Bad Gateway\\r\\n\\r\\n{}' ;;
+  *repos/me/slow/issues) sleep 5 ;;
+  *repos/me/busy/issues) printf 'HTTP/2.0 403 Forbidden\\r\\n\\r\\n{"message":"You have exceeded a secondary rate limit."}' ;;
+  *repos/me/quiet/issues) echo 'error connecting to api.github.com' >&2 ;;
+esac
+exit 1`,
+    )
+    const filing = f.open({ ghMs: 1000 })
+    const answer = await filing.repos()
+    expect(answer.repos).toEqual([{ repo: 'me/cc', public: true }])
+    expect(answer.error).toBe(
+      "couldn't tell whether the GitHub token can file to me/down (HTTP 502), me/slow (gh took longer than 1 s), me/busy (HTTP 403, rate limited), me/quiet (error connecting to api.github.com), so the list leaves them out",
+    )
+    const before = f.calls().length
+    await filing.repos()
+    expect(f.calls().length).toBeGreaterThan(before)
+  })
+
+  test("never probes a name that isn't owner/repo", async () => {
+    const f = fakes()
+    f.answer('gh', `case "$*" in *user/repos*) printf 'me/cc/../x\\tpublic\\n' ;; esac`)
+    expect(await f.open().repos()).toEqual({
+      repos: [],
+      error: "couldn't tell whether the GitHub token can file to me/cc/../x (GitHub gave a name that isn't owner/repo), so the list leaves them out",
+    })
+    expect(f.calls()).toHaveLength(1)
   })
 
   test('asks again after a failure, whose message has no token in it', async () => {
@@ -520,7 +589,7 @@ describe('the repos the token covers', () => {
     const error = await filing.repos().catch(e => e)
     expect(shortError(error)).toBe("couldn't read which repos the GitHub token covers: HTTP 401: Bad credentials for [redacted]")
     rmSync(join(f.bin, 'gh.sh'))
-    expect(await filing.repos()).toHaveLength(2)
+    expect((await filing.repos()).repos).toHaveLength(2)
   })
 })
 

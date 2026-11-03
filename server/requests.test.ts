@@ -51,10 +51,12 @@ const stubFiling = () => {
     find: async (_request: FilingRequest): Promise<string | null> => null,
   }
   const filing: Filing = {
-    repos: async () => [
-      { repo: 'me/cc', public: true },
-      { repo: 'Me/Secret', public: false },
-    ],
+    repos: async () => ({
+      repos: [
+        { repo: 'me/cc', public: true },
+        { repo: 'Me/Secret', public: false },
+      ],
+    }),
     draft: request => {
       calls.draft.push(request)
       return answers.draft(request)
@@ -185,6 +187,20 @@ describe('requesting', () => {
         { repo: 'me/cc', public: true },
         { repo: 'Me/Secret', public: false },
       ],
+    } as never)
+  })
+
+  test("the hub says which repos it left out because it couldn't tell, without the token", async () => {
+    const t = fresh()
+    t.filing.repos = async () => ({
+      repos: [{ repo: 'me/cc', public: true }],
+      error:
+        "couldn't tell whether the GitHub token can file to me/down (HTTP 502 for github_pat_11AAAAAAA0abcdefghijklmnopqrstuvwxyz0123456789), so the list leaves them out", // gitleaks:allow
+    })
+    expect((await t.call('/api/filing')).body).toEqual({
+      on: true,
+      repos: [{ repo: 'me/cc', public: true }],
+      error: "couldn't tell whether the GitHub token can file to me/down (HTTP 502 for [redacted]), so the list leaves them out",
     } as never)
   })
 
