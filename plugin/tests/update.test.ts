@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { UPDATE_CHECK_MS, UPDATE_LOOK_MS, cacheOf, isMarketplaceRoot, isStale, newestTag, noticeOf, versionOf } from '../src/update'
+import { UPDATE_CHECK_MS, cacheOf, isMarketplaceRoot, isStale, newestTag, noticeOf, versionOf } from '../src/update'
 import { MemDir } from './memdir'
-import { mountPane, startSession, texts } from './world'
+import { mountPane, run, startSession, texts } from './world'
 
 const NOW = Date.parse('2026-10-09T12:00:00.000Z')
 const CACHE = '/home/me/.cache/ostrakon/update.json'
@@ -56,7 +56,7 @@ const footer = async ($: Parameters<typeof mountPane>[0]) => {
 }
 
 describe('the update notice, in a session', () => {
-  test('a newer release shows in the footer, and the answer is kept for a day', async ($, on) => {
+  test('a newer release shows in the footer, and the answer is cached', async ($, on) => {
     const dir = new MemDir()
     asCheckout(dir, ROOT, '0.9.0')
     const asked: { argv: readonly string[]; env: Record<string, string> }[] = []
@@ -69,14 +69,28 @@ describe('the update notice, in a session', () => {
     expect(asked).toHaveLength(1)
     expect(asked[0]?.argv).toContain('ls-remote')
     expect(asked[0]?.env.GIT_TERMINAL_PROMPT).toBe('0')
-    expect(cacheOf(dir.get(CACHE))?.newest).toBe('0.10.0')
+    expect(cacheOf(dir.get(CACHE))).toEqual({ checkedAt: NOW, newest: '0.10.0' })
     expect(await footer($)).toContain('0.10.0 out · ostrakon update')
-    // An hour on, the cache answers: no second ask.
-    await clock.advance(UPDATE_LOOK_MS)
-    expect(asked).toHaveLength(1)
   })
 
-  test('after an update on disk, the footer asks for a restart', async ($, on) => {
+  test('within a day of the last check, the cache answers and git is never asked', async ($, on) => {
+    const dir = new MemDir()
+    asCheckout(dir, ROOT, '0.9.0')
+    dir.put(CACHE, JSON.stringify({ checkedAt: NOW - UPDATE_CHECK_MS + 60_000, newest: '0.10.0' }))
+    let asked = 0
+    dir.git = () => {
+      asked += 1
+      return { exitCode: 0, stdout: TAGS }
+    }
+    const { clock } = await startSession($, on, dir)
+    await clock.advance(10)
+    await run($, 'jot', '')
+    await clock.advance(10)
+    expect(asked).toBe(0)
+    expect(await footer($)).toContain('0.10.0 out · ostrakon update')
+  })
+
+  test('after an update on disk, opening the pane asks for a restart', async ($, on) => {
     const dir = new MemDir()
     asCheckout(dir, ROOT, '0.9.0')
     dir.put(CACHE, JSON.stringify({ checkedAt: NOW, newest: '0.10.0' }))
@@ -84,7 +98,8 @@ describe('the update notice, in a session', () => {
     const { clock } = await startSession($, on, dir)
     await clock.advance(10)
     asCheckout(dir, ROOT, '0.10.0')
-    await clock.advance(UPDATE_LOOK_MS)
+    await run($, 'jot', '')
+    await clock.advance(10)
     expect(await footer($)).toContain('restart to use 0.10.0')
   })
 
