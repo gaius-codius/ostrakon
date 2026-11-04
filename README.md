@@ -81,7 +81,8 @@ Either way, the install script:
 
 - switches to the newest [release](https://github.com/gaius-codius/ostrakon/releases) (leave out `--release` to run what's on `main`),
 - loads the mod in every Claude Code session, by setting `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json` (only if it isn't set already, and it keeps a `.bak` copy),
-- and adds the `ostrakon` command to `~/.local/bin`.
+- adds the `ostrakon` command to `~/.local/bin`,
+- and asks whether the mod should check once a day for new releases ([Update check](#update-check)).
 
 It's safe to run again. `./install.sh --hub` also sets up the hub (below).
 
@@ -110,6 +111,22 @@ ostrakon version
 ```
 
 If you installed a release, `update` moves you to the newest one; if you're on a branch, it pulls that branch (and stops rather than touch commits of your own). It restarts the hub if it's running here, after new code or when the hub still runs an older release, and lists what changed. Restart any open Claude Code sessions to pick up the new version. Each release's changes are in [`CHANGELOG.md`](CHANGELOG.md).
+
+### Update check
+
+```sh
+./install.sh --no-update-check   # turn it off
+./install.sh --update-check      # turn it back on
+```
+
+Once a day, the mod asks the git remote of the checkout it runs from whether a newer release is out. When there is one, the pane's footer shows it, dim: `0.10.0 out · ostrakon update`. After `ostrakon update`, it shows `restart to use 0.10.0` until you restart Claude Code.
+
+- It's on unless you turn it off. The install script asks once; run it again with a flag to change your answer.
+- It runs `git ls-remote --tags` against `origin`, the same remote `ostrakon update` uses. The remote's host (GitHub, for the usual install) sees what it sees for any `git fetch`: your IP address and git version. No notes, project names or settings are sent. If it fails (offline, say), nothing is shown.
+- Without the install script, set `updateCheck` to `false` in the plugin's options ([Configuration](#configuration)).
+- It's skipped when `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set.
+- Marketplace installs never check: Claude Code updates them.
+- Following `main` (`--main`), it tells you about releases only, not every new commit.
 
 ### If something isn't working
 
@@ -162,6 +179,7 @@ Set these under the plugin's options (`pluginConfigs.ostrakon.options` in your s
 | `harvestMaxPerTurn` | 3 | The most notes harvest offers after one turn. |
 | `hubUrl` / `hubToken` | empty | The hub to sync with, and its token. Empty: no hub. |
 | `mirrorDir` | empty | A folder to keep a synced copy of your notes in, such as a Dropbox or Syncthing folder or part of an Obsidian vault. |
+| `updateCheck` | on | Check once a day for a new release and say so in the pane's footer ([Update check](#update-check)). Install-script installs only. |
 
 ## The hub and the phone app (optional)
 

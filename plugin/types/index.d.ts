@@ -111,6 +111,8 @@ declare module 'claude-code' {
       fresh: string
       // The turn whose harvest carries the dim hint line: one of the first few harvests ever.
       harvestHint: string
+      // The pane footer's update notice (src/update.ts); '' when there's nothing newer.
+      updateNotice: string
     }
   }
 }

@@ -1,6 +1,6 @@
 # Ostrakon design system
 
-Version: 6.3.0
+Version: 6.4.0
 
 What the terminal mod (the pane, the band and the prompt hint, in `plugin/`) and the phone (`server/public/`) must agree on: colour roles, the project palette, the phone's tokens, symbols, fixed copy, motion and the accessibility bar. [`SPEC.md`](SPEC.md) describes behaviour and points here for these values instead of repeating them. The code holds the values: `plugin/src/ui/look.ts` for the terminal, `style.css`, `app.js` and `index.html` for the phone.
 
@@ -189,6 +189,8 @@ Strings the surfaces or the docs depend on, each checked word for word in every 
 | Text | Files | Use |
 |---|---|---|
 | `hub offline` | plugin/hooks/register.tsx, server/public/app.js, docs/SPEC.md | the status while the hub can't be reached |
+| `out · ostrakon update` | plugin/src/update.ts, docs/SPEC.md, README.md | the footer's dim notice when a newer release is out: `0.10.0 out · ostrakon update` |
+| `restart to use` | plugin/src/update.ts, docs/SPEC.md, README.md | the footer's dim notice once the code on disk is newer than the session's |
 | `queued` | plugin/hooks/register.tsx, server/public/app.js | changes not yet at the hub |
 | `unfiled` | plugin/src/ui/pane.tsx, server/public/app.js, server/public/index.html | a note with no project |
 | `◆ from Claude` | plugin/src/ui/look.ts, docs/SPEC.md | the pane's legend while a `◆` row shows |
@@ -307,6 +309,11 @@ Keys, layout and behaviour are in [`SPEC.md`](SPEC.md). The terminal's spacing i
 ## 11. Changelog
 
 Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one or more `- Change:` lines and one or more `- Why:` lines. The newest entry ends with `Fingerprint: <hash>` of the design values in the code (`bun tools/check-design.ts --fingerprint` prints it). Versions: major when a meaning changes or something goes (a glyph means something else, a colour role moves); minor when something is added; patch for a value tweak or a doc fix. Entries are never removed.
+
+### 6.4.0 — 2026-11-04
+- Change: The pane's footer ends with a dim update notice, after any other status: `0.10.0 out · ostrakon update` when a newer release is out, `restart to use 0.10.0` once the code on disk is newer than the session's. Dim with no colour, the one status drawn that way, and the first to give way when the line is short. New copy in §6.
+- Why: Install-script users had no way to learn a release was out short of looking. Nothing is wrong when one is, so it stays out of the warning colour.
+Fingerprint: d452695010c0
 
 ### 6.3.0 — 2026-11-03
 - Change: **File as issue** shows off with `hub couldn't check this repo` on a note under a GitHub repo the hub's list left out while it says it couldn't check some repos. New copy in §6.

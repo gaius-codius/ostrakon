@@ -61,6 +61,12 @@
       "title": "Mirror folder",
       "description": "Another folder to keep in step with the notes, for Dropbox, Syncthing or an Obsidian vault (e.g. ~/Dropbox/Ostrakon). Made if its parent exists. Empty: none.",
       "default": ""
+    },
+    "updateCheck": {
+      "type": "boolean",
+      "title": "Update check",
+      "description": "Once a day, ask the install script's checkout's git remote for new release tags (git ls-remote, nothing sent but the request), and say in the pane's footer when one is out. Off: no check. Marketplace installs never check.",
+      "default": true
     }
   }
 }

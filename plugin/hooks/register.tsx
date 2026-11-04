@@ -56,6 +56,8 @@ import type { Sync, SyncIO } from '../src/sync/core'
 import { ARCHIVE_FOLDER, folderAdapter } from '../src/sync/folder'
 import type { MirrorIO } from '../src/sync/folder'
 import { hubAdapter } from '../src/sync/hub'
+import { UPDATE_LOOK_MS, cacheOf, isMarketplaceRoot, isStale, newestTag, noticeOf, shown, versionOf } from '../src/update'
+import type { Version } from '../src/update'
 import {
   canReview,
   freshTurns,
@@ -110,6 +112,8 @@ const savedAt = atom({ plugin: 'ostrakon', key: 'savedAt' } as const, 0)
 // harvest still carries the dim hint line.
 const fresh = atom({ plugin: 'ostrakon', key: 'fresh' } as const, '')
 const harvestHint = atom({ plugin: 'ostrakon', key: 'harvestHint' } as const, '')
+// The footer's update notice (src/update.ts): empty while there's nothing newer, or the check is off.
+const updateNotice = atom({ plugin: 'ostrakon', key: 'updateNotice' } as const, '')
 
 // The pane's last drawn geometry: actions page and focus against what the person sees.
 const geometry = { bodyRows: 30, width: 70, isInline: false, isFocused: true }
@@ -566,6 +570,7 @@ const viewOf = async ($: EngineInterface): Promise<PaneView> => {
     syncStatus: [syncStatusOf(await read($, syncState), 'hub offline'), syncStatusOf(await read($, mirrorState), 'mirror unavailable')]
       .filter(text => text !== '')
       .join(' · '),
+    updateNotice: await read($, updateNotice),
     tone,
   }
   const capacity = Math.max(1, geometry.bodyRows - chromeRows(partial))
@@ -1580,6 +1585,62 @@ const startSync = async ($: EngineInterface) => {
   isSyncSet = true
 }
 
+// ---- update notice (src/update.ts) ----
+
+// The updateCheck option; on by default.
+const updateOptions = { isOn: true }
+// The version this module was loaded with, read at session start (a reload reads it again).
+let runningVersion: Version | undefined
+let isUpdateLooking = false
+
+const manifestVersion = async ($: EngineInterface) =>
+  versionOf((JSON.parse(String(await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`))) as { version?: unknown }).version)
+
+// Asks the checkout's remote for its release tags, once a day for the whole machine (the cache
+// file), and sets the footer's notice from that and the version on disk. Quiet when anything fails:
+// offline, no remote, a refusal. Only for a checkout the install script loads, never a marketplace
+// copy, and never with the check off or CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC set.
+const lookForUpdate = async ($: EngineInterface) => {
+  if (isUpdateLooking) return
+  isUpdateLooking = true
+  try {
+    const root = $.plugin.root.replace(/\/+$/, '')
+    const checkout = root.replace(/\/plugin$/, '')
+    const isCheckout = checkout !== root && !isMarketplaceRoot(root) && (await $.fs.exists(`${checkout}/.git`))
+    if (!updateOptions.isOn || !isCheckout) {
+      await update($, updateNotice, () => '')
+      return
+    }
+    const onDisk = await manifestVersion($).catch(() => undefined)
+    const path = `${cacheDirOf(await cacheEnv($))}/update.json`
+    let cache = cacheOf(await $.fs.read(path).then(String, () => undefined))
+    const now = await $.clock.now()
+    if (isStale(cache, now) && !(await $.env.get('CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC'))) {
+      // Never a prompt: no credential helper asks, and ssh fails rather than ask for a passphrase
+      // (unless the person set their own ssh command).
+      const env: Record<string, string> = { GIT_TERMINAL_PROMPT: '0' }
+      if (!(await $.env.get('GIT_SSH_COMMAND'))) env.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes'
+      const listed = await $.process.run(['git', '-C', checkout, 'ls-remote', '--tags', '--refs', 'origin', 'v*'], { env, timeoutMs: 20_000 })
+      if (listed.exitCode === 0) {
+        const newest = newestTag(listed.stdout)
+        cache = { checkedAt: now, newest: newest ? shown(newest) : '' }
+        await $.process.run(['mkdir', '-p', path.replace(/\/[^/]+$/, '')])
+        const tmp = `${path}.${Math.random().toString(36).slice(2)}.tmp`
+        await $.fs.write(tmp, `${JSON.stringify(cache)}\n`)
+        await $.process.run(['mv', '-f', tmp, path])
+      } else {
+        $.ui.log(`ostrakon: update check: git exited ${listed.exitCode}`, { to: 'debug' })
+      }
+    }
+    const notice = noticeOf(runningVersion, onDisk, versionOf(cache?.newest))
+    await update($, updateNotice, () => notice)
+  } catch (error) {
+    $.ui.log(`ostrakon: update check: ${messageOf(error)}`, { to: 'debug' })
+  } finally {
+    isUpdateLooking = false
+  }
+}
+
 // Replaced in register once the person's notesDir option is known.
 let store = createStore()
 
@@ -1597,6 +1658,7 @@ export const register: Register = (on, options) => {
       ? Math.max(1, Math.min(9, Math.floor(options.harvestMaxPerTurn)))
       : 3
   pocketOptions.max = typeof options.pocketMax === 'number' && Number.isFinite(options.pocketMax) ? Math.max(1, Math.min(9, Math.floor(options.pocketMax))) : 5
+  updateOptions.isOn = options.updateCheck !== false
 
   on('session.start', async ($, e, next) => {
     // Decided now, before any wait: a session starting (or the module reloading) begins a newer
@@ -1646,6 +1708,11 @@ export const register: Register = (on, options) => {
         .catch(error => reportStorage($, error))
     })
     void startSync($).catch(error => noteProblem($, 'sync', error))
+    // The version this module runs, then the update notice: now and hourly (it reaches the network
+    // once a day at most). Not awaited: git may take a while.
+    runningVersion = await manifestVersion($).catch(() => undefined)
+    void lookForUpdate($)
+    $.clock.every(UPDATE_LOOK_MS, () => void lookForUpdate($))
     // Not awaited: a slow disk never holds the session up for a diagnostic (saveReport catches).
     void saveReport($)
     return next(e)
