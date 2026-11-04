@@ -57,6 +57,8 @@ export type PaneView = {
   bodyRows: number
   // `hub offline · 3 queued` while a configured hub can't be reached (SPEC §9.4); empty otherwise.
   syncStatus: string
+  // `0.10.0 out · ostrakon update` or `restart to use 0.10.0` (src/update.ts); empty otherwise.
+  updateNotice: string
   // How the person's theme draws project colours.
   tone: Tone
 }
@@ -505,6 +507,8 @@ const Footer = ({ el, view }: { el: E; view: PaneView }) => {
   if (view.problems.length > 0 && focus.kind !== 'line')
     statuses.push([`${view.problems.length} unreadable file${view.problems.length === 1 ? '' : 's'}`, COLOUR.problem])
   if (view.syncStatus !== '') statuses.push([view.syncStatus, COLOUR.offline])
+  // Last, so it gives way first; dim, with no colour: nothing is wrong (colour '' draws dim).
+  if (view.updateNotice !== '') statuses.push([view.updateNotice, ''])
   // One line: as many actions as fit, the legend before any past the first WIDTH.footerPairs, and
   // `i keys` on the right.
   const all: [string, string][] = focus.kind === 'unfocused' ? TEXT.unfocused : footerPairs(view.keys)
@@ -533,11 +537,15 @@ const Footer = ({ el, view }: { el: E; view: PaneView }) => {
     <Box key={FOOTER_KEY} flexDirection='column' width={view.width} flexShrink={0}>
       {!view.isInline && <Box height={1} />}
       <Box columnGap={2} width={view.width} height={FOOTER_ROWS}>
-        {shown.map(([text, colour]) => (
-          <Text color={colour} bold>
-            {text}
-          </Text>
-        ))}
+        {shown.map(([text, colour]) =>
+          colour === '' ? (
+            <Text dimColor>{text}</Text>
+          ) : (
+            <Text color={colour} bold>
+              {text}
+            </Text>
+          ),
+        )}
         {pairs.map(pair => (
           <Pair pair={pair} />
         ))}

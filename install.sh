@@ -3,6 +3,8 @@
 #   ./install.sh         the mod (in every Claude Code session) and the `ostrakon` command
 #   ./install.sh --hub   also the hub: a token, the systemd user unit, started now and at login
 #   --keys / --no-keys   add the README's keybindings without asking, or skip them (default: ask)
+#   --update-check / --no-update-check
+#                        turn the daily check for new releases on or off without asking (default: ask once)
 #   --release            first move this checkout to the newest release (what the README's install does)
 set -euo pipefail
 
@@ -18,14 +20,16 @@ ENV_FILE=$HOME/.config/ostrakon-hub/env
 UNIT_DIR=$HOME/.config/systemd/user
 KEYS_FILE=$CONFIG_DIR/keybindings.json
 
-want_hub=0 want_release=0 want_keys=ask rest=()
+want_hub=0 want_release=0 want_keys=ask want_check=ask rest=()
 for arg in "$@"; do
   case $arg in
     --hub) want_hub=1; rest+=("$arg") ;;
     --release) want_release=1 ;;
     --keys) want_keys=yes; rest+=("$arg") ;;
     --no-keys) want_keys=no; rest+=("$arg") ;;
-    -h | --help) sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --update-check) want_check=yes; rest+=("$arg") ;;
+    --no-update-check) want_check=no; rest+=("$arg") ;;
+    -h | --help) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "install.sh: unknown option: $arg" >&2; exit 1 ;;
   esac
 done
@@ -141,6 +145,60 @@ elif python3 -I -c "$keys_py" check "$KEYS_FILE" "$ROOT/bin/keybindings.json"; t
   case $answer in
     [Yy]*) mkdir -p "$(dirname "$KEYS_FILE")"; python3 -I -c "$keys_py" apply "$KEYS_FILE" "$ROOT/bin/keybindings.json" ;;
     *) say "not added; to add them later: ./install.sh --keys (or by hand: README.md, Keybindings)" ;;
+  esac
+fi
+
+# The update check: the mod's updateCheck option (on unless set), in pluginConfigs.ostrakon.options.
+# Asked once: a value already set is kept unless a flag changes it. A marketplace install never
+# checks (Claude Code updates it), so there's nothing to ask.
+check_py=$(cat <<'EOF'
+import json, os, shutil, sys
+mode, path = sys.argv[1], sys.argv[2]
+try:
+    settings = json.load(open(path)) if os.path.exists(path) else {}
+except ValueError:
+    print("invalid")
+    sys.exit(0)
+if mode == "get":
+    if settings.get("enabledPlugins", {}).get("ostrakon@ostrakon"):
+        print("marketplace")
+    else:
+        value = settings.get("pluginConfigs", {}).get("ostrakon", {}).get("options", {}).get("updateCheck")
+        print("unset" if value is None else ("on" if value else "off"))
+    sys.exit(0)
+options = settings.setdefault("pluginConfigs", {}).setdefault("ostrakon", {}).setdefault("options", {})
+options["updateCheck"] = mode == "on"
+if os.path.exists(path):
+    shutil.copy2(path, path + ".bak")
+with open(path, "w") as out:
+    json.dump(settings, out, indent=2)
+    out.write("\n")
+EOF
+)
+say "== update check"
+if ! has python3; then
+  say "! python3 not found; it's on unless you set pluginConfigs.ostrakon.options.updateCheck to false in $SETTINGS"
+else
+  current=$(python3 -I -c "$check_py" get "$SETTINGS")
+  case $current in
+    invalid) say "! $SETTINGS isn't valid JSON; set pluginConfigs.ostrakon.options.updateCheck yourself" ;;
+    marketplace) say "installed from the marketplace: Claude Code updates it, so no check" ;;
+    *)
+      answer=$want_check
+      if [ "$answer" = ask ] && [ "$current" != unset ]; then
+        answer=keep
+      elif [ "$answer" = ask ] && { : </dev/tty; } 2>/dev/null; then
+        read -r -p "check once a day for new releases (git ls-remote to this checkout's remote; the pane's footer says when one is out)? [Y/n] " answer </dev/tty || answer=n
+        answer=${answer:-y}
+      elif [ "$answer" = ask ]; then
+        answer=keep
+      fi
+      case $answer in
+        keep) say "${current/unset/on (the default)}; to change it: ./install.sh --update-check or --no-update-check" ;;
+        [Yy]*) python3 -I -c "$check_py" on "$SETTINGS"; say "on: set in $SETTINGS" ;;
+        *) python3 -I -c "$check_py" off "$SETTINGS"; say "off: set in $SETTINGS; to turn it on: ./install.sh --update-check" ;;
+      esac
+      ;;
   esac
 fi
 

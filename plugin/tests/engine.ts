@@ -63,6 +63,11 @@ export const engineOver = (on: On, dir: MemDir) => {
         return ran(0, '4242\n')
       case 'uname':
         return ran(0, 'office\n')
+      case 'git': {
+        if (!dir.git) return ran(127, '', 'git: not mocked')
+        const answered = dir.git(args, e.init?.env ?? {})
+        return ran(answered.exitCode, answered.stdout)
+      }
       case 'ps': {
         const state = await io.processState(Number(last))
         return state?.isRunning ? ran(0, `${state.started}\n`) : ran(1)

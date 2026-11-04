@@ -9,6 +9,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 ### Added
 
 - The key sheet lists `ctrl+x ← / →`, Claude Code's keys that make the pane bigger or smaller.
+- The pane's footer says when a newer release is out (`0.10.0 out · ostrakon update`), and after `ostrakon update`, that a restart picks it up (`restart to use 0.10.0`). Once a day the mod runs `git ls-remote --tags origin` in the install script's checkout; marketplace installs never check. On by default: the install script asks once, `./install.sh --no-update-check` turns it off, or set the `updateCheck` option to `false` (README, Update check).
 
 ## [0.9.0] - 2026-11-03
 

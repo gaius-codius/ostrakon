@@ -20,6 +20,13 @@ The hub (`server/hub.ts`) holds your notes and accepts changes to them, so treat
 - **Filing notes as issues uses two tokens of the hub's own**, in its env file: a fine-grained GitHub token for the repos you pick (a classic one is refused) and a `claude setup-token` token. It never uses your own `gh` or Claude login. The tokens are in plain text in the env file, readable by the hub and any program running as you. A leaked GitHub token can change any issue in its repos until it expires, and read private repos' issues, so give it an expiry and as few repos as you need. Anyone with the hub token can file issues to those repos and use your Claude subscription, but not reach your account. These tokens are for filing from the phone only: the pane's `o` uses your own `gh` login in your session. Without both tokens, filing is off ([Filing notes as issues](docs/phone.md#filing-notes-as-issues)).
 - **Notes aren't encrypted.** They're stored as plain SQLite and Markdown files. Don't jot secrets.
 
+## What the mod connects to
+
+- **The hub**, if you set `hubUrl`.
+- **The update check**, once a day, unless you turn it off. The mod runs `git ls-remote --tags origin` in the checkout the install script made, to see whether a newer release is out. The remote's host (GitHub, for the usual install) sees your IP address and git version, as for any `git fetch`. No notes, project names or settings are sent. Git runs with prompts off, so it never asks for a password or passphrase; if the remote needs one, the check fails quietly. The answer is cached in `~/.cache/ostrakon/update.json`. It's skipped when `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is set, and never runs for a marketplace install. Turn it off with `./install.sh --no-update-check`, or set the `updateCheck` option to `false` ([Update check](README.md#update-check)).
+
+Filing a note with `o` uses your own `gh` login, and harvest asks the model through Claude Code; both only when you use them. The mod sends no telemetry.
+
 ## Scope
 
 Ostrakon is a Claude Code mod, and it runs with your user's permissions. Its data lives in the notes folder, the mirror folder if you set one, the cache at `~/.cache/ostrakon`, and the hub you point it at.

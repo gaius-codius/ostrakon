@@ -16,6 +16,7 @@ export class MemDir {
   failWrites = false // fs.write refuses (a full disk, a read-only mount)
   holdWrite: ((path: string) => Promise<void> | undefined) | undefined // fs.write waits for what it returns: one slow file
   failMovesTo = new Set<string>() // mv onto these exits 1, leaving the source (a mount gone read-only)
+  git: ((argv: readonly string[], env: Record<string, string>) => { exitCode: number; stdout: string }) | undefined // answers `git`; unset, git isn't there
   clock = 1_760_000_000_000
 
   tick() {
