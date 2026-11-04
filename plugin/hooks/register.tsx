@@ -937,6 +937,9 @@ const openPane = async ($: EngineInterface, mode: 'browse' | 'capture') => {
     await afterClose($)
     return why
   }
+  // The notice is fresh whenever the pane opens: a restart is asked for as soon as `ostrakon update`
+  // has run, not up to an hour later. The network still waits on the day-old cache.
+  if (!wasOpen) void lookForUpdate($)
   if (resumesEdit) focusKey($, EDIT_KEY)
   return undefined
 }
