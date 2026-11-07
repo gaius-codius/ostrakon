@@ -133,4 +133,12 @@ describe('focus', () => {
     expect(land(person('key-e'), 'place-3')).toEqual({ to: 'place-3', last: 'place-3' })
     expect(land(person('key-pane:previous'), TARGET_KEY)).toEqual({ to: TARGET_KEY, last: TARGET_KEY })
   })
+  test("the move picker's rows keep the picker open and mark the row; its field clears the mark", () => {
+    const moving: PaneState = { ...freshPane(), mode: 'move', moving: 'n1' }
+    const onRow = after(land(person('place-1'), MOVE_KEY), moving)
+    expect(onRow).toMatchObject({ mode: 'move', moving: 'n1', focus: 'control', moveAt: 1 })
+    expect(after(land(person(MOVE_KEY), 'place-0'), onRow).moveAt).toBeUndefined()
+    // Anywhere else still ends the move.
+    expect(after(land(person(SEARCH_KEY), 'place-0'), onRow).mode).toBe('browse')
+  })
 })

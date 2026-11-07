@@ -550,7 +550,13 @@ export const keysFor = (focus: Focus, scope: PaneState['scope'] = 'project'): Ke
         chord('keys', 'keys', '', false),
       ]
     case 'move':
-      return [{ action: 'move', shown: ['⏎', 'move'] }, { action: 'back', shown: ['esc', 'back'] }, ...CHORDS(false), chord('keys', 'keys', '', false)]
+      return [
+        { action: 'move', shown: ['⏎', 'move'] },
+        { action: 'down', shown: ['↑↓', 'choose'] },
+        { action: 'back', shown: ['esc', 'back'] },
+        ...CHORDS(false),
+        chord('keys', 'keys', '', false),
+      ]
     case 'sheet':
       return [
         k('keys', 'i', 'close keys'),

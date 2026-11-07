@@ -29,6 +29,7 @@ export type Handlers = {
   editCancel: () => void
   moveInput: (value: string) => void
   moveSubmit: (value: string) => void
+  movePick: (value: string) => void
 }
 
 export type PaneView = {
@@ -584,7 +585,8 @@ const ActionLayer = ({ el, view, handlers }: { el: E; view: PaneView; handlers: 
     view.focus.kind === 'bundle' ||
     view.focus.kind === 'sheet' ||
     (view.focus.kind === 'edit' && view.pane.focus === 'control') ||
-    (view.focus.kind === 'target' && view.pane.capture.at !== undefined)
+    (view.focus.kind === 'target' && view.pane.capture.at !== undefined) ||
+    (view.focus.kind === 'move' && view.pane.moveAt !== undefined)
   const taken = new Set([...keys.map(key => key.hotkey), ...digits.map(String)])
   const idle = holdsKeys ? [...'abcdefghijklmnopqrstuvwxyz0123456789'].filter(char => !taken.has(char)) : []
   return (
@@ -828,7 +830,17 @@ const Move = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
           />
         </Box>
       </Box>
-      <Places el={el} options={view.places} rows={placeRows(view)} width={view.width - cells(lead)} paddingLeft={cells(lead)} height={placeRows(view)} />
+      {/* The rows' focus targets sit in the label's last two columns, so the names line up under the field. */}
+      <Places
+        el={el}
+        options={view.places}
+        rows={placeRows(view)}
+        width={view.width - cells(lead) + 2}
+        paddingLeft={cells(lead) - 2}
+        height={placeRows(view)}
+        onPick={value => handlers.movePick(value)}
+        at={view.pane.moveAt}
+      />
     </Box>
   )
 }

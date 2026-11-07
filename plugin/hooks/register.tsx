@@ -1128,7 +1128,7 @@ const act = async ($: EngineInterface, action: Action) => {
     }
     case 'move':
       if (!note) return
-      await setPane($, current => ({ ...current, mode: 'move', moving: note.id, moveFind: '' }))
+      await setPane($, current => ({ ...current, mode: 'move', moving: note.id, moveFind: '', moveAt: undefined }))
       focusKey($, MOVE_KEY)
       return
     case 'copy':
@@ -1333,7 +1333,23 @@ const targetPick = async ($: EngineInterface, value: string) => {
 
 // Enter in the move picker: the note goes to the first place that matches. With nothing matching,
 // the picker stays, its text drawn again (the field emptied itself on Enter).
-const moveSubmit = async ($: EngineInterface, value: string) => {
+const moveSubmit = ($: EngineInterface, value: string) =>
+  moveNote(
+    $,
+    (view, note) => placesOf(view.ctx, view.projects, note, value)[0]?.value,
+    () => setPane($, current => ({ ...current, moveFind: redrawn(value) })),
+  )
+
+// Enter on one of the move picker's rows (reached with ↓): the note goes there.
+const movePick = ($: EngineInterface, value: string) =>
+  moveNote(
+    $,
+    () => value,
+    async () => undefined,
+  )
+
+// Moves the note the picker opened on to the place `choose` names; none, `onNone` runs instead.
+const moveNote = async ($: EngineInterface, choose: (view: PaneView, note: Note) => string | undefined, onNone: () => Promise<unknown>) => {
   // An Enter that lands after Esc already went back moves nothing.
   if ((await read($, pane)).mode !== 'move') return
   const view = await viewOf($)
@@ -1343,12 +1359,12 @@ const moveSubmit = async ($: EngineInterface, value: string) => {
     await setPane($, state => ({ ...state, mode: 'browse', moving: null }))
     return
   }
-  const first = placesOf(view.ctx, view.projects, note.note, value)[0]
-  if (!first) {
-    await setPane($, current => ({ ...current, moveFind: redrawn(value) }))
+  const place = choose(view, note.note)
+  if (place === undefined) {
+    await onNone()
     return
   }
-  const into = first.value === 'unfiled' ? null : (view.projects.find(item => item.key === first.value) ?? null)
+  const into = place === 'unfiled' ? null : (view.projects.find(item => item.key === place) ?? null)
   const before = note.note.project
   const changed = await changeNote($, note.note.id, item => ({ ...item, project: into }))
   await setPane($, state => ({
@@ -2109,6 +2125,7 @@ export const register: Register = (on, options) => {
       editCancel: () => run(serially(() => act($, 'back'))),
       moveInput: value => run(setPane($, state => ({ ...state, moveFind: value }))),
       moveSubmit: value => run(serially(() => moveSubmit($, value))),
+      movePick: value => run(serially(() => movePick($, value))),
     }
     return <Pane el={el} view={view} handlers={handlers} hasHub={hubOptions.url !== ''} hasHarvest={harvestOptions.isOn} />
   })
