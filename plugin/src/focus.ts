@@ -38,7 +38,7 @@ export const needsView = (move: FocusMove) => move.kind === 'layer' || move.kind
 export const leaveMode = (state: PaneState, to: string | undefined): PaneState => {
   const stays =
     (state.mode === 'edit' && (to === EDIT_KEY || to === 'edit-cancel' || to === 'edit-save')) ||
-    (state.mode === 'move' && to === MOVE_KEY) ||
+    (state.mode === 'move' && (to === MOVE_KEY || to?.startsWith(PLACE_PREFIX) === true)) ||
     state.mode === 'capture' ||
     state.mode === 'target' ||
     state.mode === 'bundle' ||
@@ -66,8 +66,8 @@ export const routeFocus = (move: FocusMove, e: FocusEvent, previous: string | un
     case 'pass':
       return { to: element }
     case 'layer': {
-      // In the target picker, past its last project stays there; Shift+Tab off its field goes back
-      // to the field.
+      // In a picker, past its last project stays there; Shift+Tab off the target picker's field
+      // goes back to the field.
       if (previous?.startsWith(PLACE_PREFIX) || previous === TARGET_KEY) return { to: previous, last: previous }
       // Moving on past the last row stays there; Shift+Tab off the search field goes to the last
       // row; anything else to the search field.
@@ -100,10 +100,16 @@ export const routeFocus = (move: FocusMove, e: FocusEvent, previous: string | un
         return line ? { to: element, pane: state => ({ ...after(state), cursor: line.key, focus: 'line' }) } : { to: element }
       }
       if (element === SEARCH_KEY) return { to: element, pane: state => ({ ...after(state), focus: 'search' }) }
-      // The target picker's rows: the one the ring is on is the one Enter picks.
-      if (element?.startsWith(PLACE_PREFIX) || element === TARGET_KEY) {
-        const at = element === TARGET_KEY ? undefined : Number(element.slice(PLACE_PREFIX.length))
-        return { to: element, pane: state => ({ ...after(state), focus: 'control', capture: { ...state.capture, at } }) }
+      // A picker's rows: the one the ring is on is the one Enter picks; its field, the first.
+      if (element?.startsWith(PLACE_PREFIX) || element === TARGET_KEY || element === MOVE_KEY) {
+        const at = element.startsWith(PLACE_PREFIX) ? Number(element.slice(PLACE_PREFIX.length)) : undefined
+        return {
+          to: element,
+          pane: state => {
+            const next = { ...after(state), focus: 'control' as const }
+            return next.mode === 'move' ? { ...next, moveAt: at } : { ...next, capture: { ...next.capture, at } }
+          },
+        }
       }
       return { to: element, pane: state => ({ ...after(state), focus: element === undefined ? 'none' : 'control' }) }
     }

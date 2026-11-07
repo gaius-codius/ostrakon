@@ -67,8 +67,10 @@ export type PaneState = {
   sheetFrom: 'search' | 'capture' | 'edit' | null
   edit: { id: string; draft: string } | null
   // The note a move (m) applies to, fixed when the picker opens, and what's typed in the picker.
+  // `moveAt`: the picker's row the ring is on (↓ from its field), absent while the field has it.
   moving: string | null
   moveFind: string
+  moveAt?: number
   // `target`: the project capture saves to; null until capture first sets it, and again once the
   // pane closes. `find`: what's typed in its picker (ctrl+s). `at`: the picker's row the ring is on
   // (↓ from its field), absent while the field has it.

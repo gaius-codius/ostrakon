@@ -1161,6 +1161,24 @@ test("m offers every place but the note's own, and Enter with nothing typed move
   await ui.unmount()
 })
 
+test("the move picker's places are rows: the ring on one marks it, and Enter there moves the note", async ($, on) => {
+  const { dir, ui } = await movingFlaky($, on)
+  const focus = (element: string) => $.ui.focus({ component: 'Pane', requestId: PANE.requestId, element, origin: { kind: 'person' } })
+  // infra, api, unfiled: ↓ twice from the field lands on api, which takes the accent.
+  await focus('place-0')
+  await focus('place-1')
+  const colours = async (label: RegExp) =>
+    (await ui.findAll({ type: 'Text', text: label })).map(text => (text.props as { color?: string }).color).filter(colour => colour !== undefined)
+  expect(await colours(/^api$/)).toEqual([COLOUR.accent])
+  expect(await colours(/^infra$/)).toEqual([])
+  // Still moving: the picker stays while the ring is on its rows.
+  expect(await ui.find({ type: 'Input', key: 'move' })).toBeDefined()
+  await ui.press({ key: 'place-1' })
+  expect(savedFile(dir, 'flaky')).toContain(API.key)
+  expect(await ui.find({ type: 'Input', key: 'move' })).toBeUndefined()
+  await ui.unmount()
+})
+
 test('in the move picker, typing narrows the places and Enter moves the note to the first, selected', async ($, on) => {
   const { dir, world, ui } = await movingFlaky($, on)
   await ui.input({ key: 'move', text: 'INF', kind: 'change' })
