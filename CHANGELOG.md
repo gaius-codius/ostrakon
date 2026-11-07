@@ -6,6 +6,8 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-07
+
 ### Added
 
 - In the `ctrl+s` project picker, ↓ moves from the field onto the projects, ↑ and ↓ move between them, and Enter picks the one you're on. Typing still narrows the list first, so `conspector` then ↓ ↓ reaches `conspector-working-docs`.
@@ -184,7 +186,8 @@ The first public release.
 - `ostrakon pair`: a QR code with a one-time code (5 minutes, works once) pairs a phone with the hub; `--token` prints the long-lived link instead.
 - The `ostrakon` command (`pair`, `hub`, `update`, `version`), `install.sh` and `update.sh`.
 
-[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/gaius-codius/ostrakon/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/gaius-codius/ostrakon/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/gaius-codius/ostrakon/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/gaius-codius/ostrakon/compare/v0.7.0...v0.8.0
