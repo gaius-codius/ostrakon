@@ -1169,7 +1169,7 @@ const act = async ($: EngineInterface, action: Action) => {
       return
     case 'scope':
       if (state.mode === 'capture') {
-        await setPane($, current => ({ ...current, mode: 'target', capture: { ...current.capture, find: '' } }))
+        await setPane($, current => ({ ...current, mode: 'target', capture: { ...current.capture, find: '', at: undefined } }))
         focusKey($, TARGET_KEY)
         return
       }
@@ -1304,7 +1304,7 @@ const editSubmit = async ($: EngineInterface, value: string) => {
 
 // Back from capture's target picker to capture, the draft as it was.
 const leaveTarget = async ($: EngineInterface) => {
-  await setPane($, current => ({ ...current, mode: 'capture', capture: { ...current.capture, find: '' } }))
+  await setPane($, current => ({ ...current, mode: 'capture', capture: { ...current.capture, find: '', at: undefined } }))
   focusKey($, CAPTURE_KEY)
   return true
 }
@@ -1321,6 +1321,13 @@ const targetSubmit = async ($: EngineInterface, value: string) => {
     return
   }
   await setPane($, current => ({ ...current, capture: { ...current.capture, target: first.value } }))
+  await leaveTarget($)
+}
+
+// Enter on one of the picker's rows (reached with ↓): that project becomes capture's target.
+const targetPick = async ($: EngineInterface, value: string) => {
+  if ((await read($, pane)).mode !== 'target') return
+  await setPane($, current => ({ ...current, capture: { ...current.capture, target: value } }))
   await leaveTarget($)
 }
 
@@ -2096,6 +2103,7 @@ export const register: Register = (on, options) => {
       captureSubmit: value => run(serially(() => captureSubmit($, value))),
       targetInput: value => run(setPane($, state => ({ ...state, capture: { ...state.capture, find: value } }))),
       targetSubmit: value => run(serially(() => targetSubmit($, value))),
+      targetPick: value => run(serially(() => targetPick($, value))),
       editInput: value => run(setPane($, state => ({ ...state, edit: state.edit ? { ...state.edit, draft: value } : null }))),
       editSubmit: value => run(serially(() => editSubmit($, value))),
       editCancel: () => run(serially(() => act($, 'back'))),

@@ -8,6 +8,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ### Added
 
+- In the `ctrl+s` project picker, ↓ moves from the field onto the projects, ↑ and ↓ move between them, and Enter picks the one you're on. Typing still narrows the list first, so `conspector` then ↓ ↓ reaches `conspector-working-docs`.
 - The key sheet lists `ctrl+x ← / →`, Claude Code's keys that make the pane bigger or smaller.
 - The pane's footer says when a newer release is out (`0.10.0 out · ostrakon update`), and after `ostrakon update`, that a restart picks it up (`restart to use 0.10.0`). Once a day the mod runs `git ls-remote --tags origin` in the install script's checkout; marketplace installs never check. On by default: the install script asks once, `./install.sh --no-update-check` turns it off, or set the `updateCheck` option to `false` (README, Update check).
 
