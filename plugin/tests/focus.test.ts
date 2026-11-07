@@ -4,7 +4,7 @@ import type { PaneState } from '../types'
 import type { FocusEvent, FocusView } from '../src/focus'
 import { focusMove, leaveMode, needsView, pagedSlot, routeFocus } from '../src/focus'
 import { freshPane } from '../src/model'
-import { DOWN_KEY, EDIT_KEY, MOVE_KEY, SEARCH_KEY, SHEET_KEY, UP_KEY } from '../src/ui/pane'
+import { DOWN_KEY, EDIT_KEY, MOVE_KEY, SEARCH_KEY, SHEET_KEY, TARGET_KEY, UP_KEY } from '../src/ui/pane'
 
 // Ten lines, a window of four from `offset`.
 const viewAt = (offset: number, rows = 4, total = 10): FocusView => {
@@ -124,5 +124,13 @@ describe('focus', () => {
     expect(after(land(person(DOWN_KEY), 'slot-3', viewAt(2)), editing()).mode).toBe('browse')
     expect(after(land(person('slot-1'), EDIT_KEY), editing()).mode).toBe('browse')
     expect(after(land(person('edit-save'), EDIT_KEY), editing())).toMatchObject({ mode: 'edit', focus: 'control' })
+  })
+  test("the target picker's rows: landing on one marks it, the field clears the mark, and the layer keeps the ring in the picker", () => {
+    const picking: PaneState = { ...freshPane(), mode: 'target' }
+    const onRow = after(land(person('place-2'), 'place-1'), picking)
+    expect(onRow).toMatchObject({ mode: 'target', focus: 'control', capture: { at: 2 } })
+    expect(after(land(person(TARGET_KEY), 'place-0'), onRow).capture.at).toBeUndefined()
+    expect(land(person('key-e'), 'place-3')).toEqual({ to: 'place-3', last: 'place-3' })
+    expect(land(person('key-pane:previous'), TARGET_KEY)).toEqual({ to: TARGET_KEY, last: TARGET_KEY })
   })
 })

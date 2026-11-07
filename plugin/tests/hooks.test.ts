@@ -1277,6 +1277,33 @@ test('in capture, ctrl+s opens a picker: typing narrows the projects and Enter p
   await ui.unmount()
 })
 
+test("the picker's projects are rows: the ring on one marks it, and Enter there picks it, the draft kept", async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.press({ key: 'key-pane:next' })
+  await ui.input({ key: 'capture', text: 'bump the base image', kind: 'change' })
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  const focus = (element: string) => $.ui.focus({ component: 'Pane', requestId: PANE.requestId, element, origin: { kind: 'person' } })
+  // This project, unfiled, infra: ↓ twice from the field lands on infra, which takes the accent.
+  await focus('place-0')
+  await focus('place-2')
+  const colours = async (label: RegExp) =>
+    (await ui.findAll({ type: 'Text', text: label })).map(text => (text.props as { color?: string }).color).filter(colour => colour !== undefined)
+  expect(await colours(/^infra$/)).toEqual([COLOUR.accent])
+  expect(await colours(/^cc$/)).toEqual([])
+  // Past the last row the ring stays there.
+  await focus('key-e')
+  await ui.press({ key: 'place-2' })
+  const field = await ui.find({ type: 'Input', key: 'capture' })
+  expect((field?.props as { value?: string } | undefined)?.value).toBe('bump the base image')
+  expect(await ui.find({ type: 'Text', text: /saves to infra/ })).toBeDefined()
+  await ui.input({ key: 'capture', text: 'bump the base image', kind: 'submit' })
+  expect(savedFile(dir, 'bump the base image')).toContain(INFRA.key)
+  await ui.unmount()
+})
+
 test("the picker's ctrl+s goes back to capture with the target as it was; nothing matching, Enter stays", async ($, on) => {
   await startSession($, on, fixture())
   await run($, 'jot', '')

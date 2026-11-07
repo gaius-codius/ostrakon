@@ -1,5 +1,5 @@
 import type { PaneState } from '../types'
-import { DOWN_KEY, EDIT_KEY, LAYER_PREFIX, MOVE_KEY, SEARCH_KEY, SHEET_KEY, UP_KEY, slotKey } from './ui/pane'
+import { DOWN_KEY, EDIT_KEY, LAYER_PREFIX, MOVE_KEY, PLACE_PREFIX, SEARCH_KEY, SHEET_KEY, TARGET_KEY, UP_KEY, slotKey } from './ui/pane'
 
 // The pane's focus ring: where a move of the ring lands, and what the pane's state becomes. Pure;
 // the ui.focus hook in hooks/register.tsx reads the view, applies the decision and moves the ring
@@ -66,6 +66,9 @@ export const routeFocus = (move: FocusMove, e: FocusEvent, previous: string | un
     case 'pass':
       return { to: element }
     case 'layer': {
+      // In the target picker, past its last project stays there; Shift+Tab off its field goes back
+      // to the field.
+      if (previous?.startsWith(PLACE_PREFIX) || previous === TARGET_KEY) return { to: previous, last: previous }
       // Moving on past the last row stays there; Shift+Tab off the search field goes to the last
       // row; anything else to the search field.
       const last = page.lines.length - 1
@@ -97,6 +100,11 @@ export const routeFocus = (move: FocusMove, e: FocusEvent, previous: string | un
         return line ? { to: element, pane: state => ({ ...after(state), cursor: line.key, focus: 'line' }) } : { to: element }
       }
       if (element === SEARCH_KEY) return { to: element, pane: state => ({ ...after(state), focus: 'search' }) }
+      // The target picker's rows: the one the ring is on is the one Enter picks.
+      if (element?.startsWith(PLACE_PREFIX) || element === TARGET_KEY) {
+        const at = element === TARGET_KEY ? undefined : Number(element.slice(PLACE_PREFIX.length))
+        return { to: element, pane: state => ({ ...after(state), focus: 'control', capture: { ...state.capture, at } }) }
+      }
       return { to: element, pane: state => ({ ...after(state), focus: element === undefined ? 'none' : 'control' }) }
     }
   }

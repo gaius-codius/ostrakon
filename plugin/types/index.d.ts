@@ -70,8 +70,9 @@ export type PaneState = {
   moving: string | null
   moveFind: string
   // `target`: the project capture saves to; null until capture first sets it, and again once the
-  // pane closes. `find`: what's typed in its picker (ctrl+s).
-  capture: { draft: string; target: string | null; find: string; saved: string[]; error: string | null }
+  // pane closes. `find`: what's typed in its picker (ctrl+s). `at`: the picker's row the ring is on
+  // (↓ from its field), absent while the field has it.
+  capture: { draft: string; target: string | null; find: string; saved: string[]; error: string | null; at?: number }
   // The person's prompt draft, held while the pane has the keyboard (SPEC §4.4).
   stash: string
   // What the pane put into the prompt since the last submit, so a submit containing a fill's text

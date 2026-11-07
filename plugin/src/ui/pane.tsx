@@ -23,6 +23,7 @@ export type Handlers = {
   captureSubmit: (value: string) => void
   targetInput: (value: string) => void
   targetSubmit: (value: string) => void
+  targetPick: (value: string) => void
   editInput: (value: string) => void
   editSubmit: (value: string) => void
   editCancel: () => void
@@ -70,6 +71,10 @@ export const SEND_KEY = 'bundle-send'
 export const MOVE_KEY = 'move'
 export const TARGET_KEY = 'target'
 export const slotKey = (slot: number) => `slot-${slot}`
+// Capture's target picker draws its projects as rows the ring stops on: ↓ from the field, ↑ and ↓
+// between them, Enter on one picks it.
+export const PLACE_PREFIX = 'place-'
+export const placeKey = (row: number) => `${PLACE_PREFIX}${row}`
 export const UP_KEY = 'more-up'
 export const DOWN_KEY = 'more-down'
 export const LAYER_PREFIX = 'key-'
@@ -371,33 +376,42 @@ type Picker = {
   paddingY?: number
   paddingLeft?: number
   height?: number
+  // Rows the ring stops on, each picking its project on Enter; `at`, the row the ring is on.
+  onPick?: (value: string) => void
+  at?: number
 }
 
-// The projects a picker offers, as many as `rows` take: the first, which Enter picks, in the
-// accent; `now`, the one capture saves to, marked.
-const Places = ({ el, options, rows, width, now, paddingY, paddingLeft, height }: Picker & { el: E }) => {
-  const { Box, Text } = el
+// The projects a picker offers, as many as `rows` take: the one Enter picks in the accent (the
+// first, or the row the ring is on); `now`, the one capture saves to, marked.
+const Places = ({ el, options, rows, width, now, paddingY, paddingLeft, height, onPick, at }: Picker & { el: E }) => {
+  const { Box, Button, Text } = el
   const shown = options.slice(0, Math.max(1, rows))
-  const room = width - (now === undefined ? 0 : cells(' · now'))
+  const lead = onPick ? 2 : 0
+  const room = width - lead - (now === undefined ? 0 : cells(' · now'))
+  const chosen = at ?? 0
   return (
     <Box flexDirection='column' paddingY={paddingY} paddingLeft={paddingLeft} height={height} flexShrink={0}>
       {shown.length === 0 ? (
         <Text dimColor>{TEXT.noTarget}</Text>
       ) : (
         shown.map((option, i) => (
-          <Text>
-            <Text color={i === 0 ? COLOUR.accent : undefined} bold={i === 0}>
-              {cut(option.label, room)}
+          <Box>
+            {onPick && <Button key={placeKey(i)} plain label=' ' onPress={() => onPick(option.value)} />}
+            {onPick && <Text> </Text>}
+            <Text>
+              <Text color={i === chosen ? COLOUR.accent : undefined} bold={i === chosen}>
+                {cut(option.label, room)}
+              </Text>
+              {option.value === now && <Text dimColor> · now</Text>}
             </Text>
-            {option.value === now && <Text dimColor> · now</Text>}
-          </Text>
+          </Box>
         ))
       )}
     </Box>
   )
 }
 
-const Targets = ({ el, view, rows }: { el: E; view: PaneView; rows: number }) => (
+const Targets = ({ el, view, rows, handlers }: { el: E; view: PaneView; rows: number; handlers: Handlers }) => (
   <Places
     el={el}
     options={view.targets}
@@ -405,6 +419,8 @@ const Targets = ({ el, view, rows }: { el: E; view: PaneView; rows: number }) =>
     width={view.width - 8}
     now={view.pane.capture.target ?? view.ctx.current.key}
     paddingY={view.isInline ? 0 : 1}
+    onPick={value => handlers.targetPick(value)}
+    at={view.pane.capture.at}
   />
 )
 
@@ -564,7 +580,11 @@ const ActionLayer = ({ el, view, handlers }: { el: E; view: PaneView; handlers: 
   // With a row or Button focused, a letter no Button answers would go to the prompt and take the
   // keyboard with it. Every other letter and digit is answered here and does nothing.
   const holdsKeys =
-    view.focus.kind === 'line' || view.focus.kind === 'bundle' || view.focus.kind === 'sheet' || (view.focus.kind === 'edit' && view.pane.focus === 'control')
+    view.focus.kind === 'line' ||
+    view.focus.kind === 'bundle' ||
+    view.focus.kind === 'sheet' ||
+    (view.focus.kind === 'edit' && view.pane.focus === 'control') ||
+    (view.focus.kind === 'target' && view.pane.capture.at !== undefined)
   const taken = new Set([...keys.map(key => key.hotkey), ...digits.map(String)])
   const idle = holdsKeys ? [...'abcdefghijklmnopqrstuvwxyz0123456789'].filter(char => !taken.has(char)) : []
   return (
@@ -901,7 +921,7 @@ export const Pane = ({ el, view, handlers, hasHub, hasHarvest }: { el: E; view: 
   const hasNotes = view.lines.some(line => line.kind !== 'group')
   const body = () => {
     if (pane.mode === 'capture') return <Capture el={el} view={view} />
-    if (pane.mode === 'target') return <Targets el={el} view={view} rows={middleRows} />
+    if (pane.mode === 'target') return <Targets el={el} view={view} rows={middleRows} handlers={handlers} />
     if (pane.mode === 'bundle') return <Bundle el={el} view={view} handlers={handlers} rows={middleRows} />
     // A storage problem's row stays above the no-match line.
     if (isNoMatch(view)) return [view.lines.length > 0 && <Rows el={el} view={view} handlers={handlers} />, <NoMatch el={el} view={view} />]

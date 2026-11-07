@@ -530,7 +530,14 @@ export const keysFor = (focus: Focus, scope: PaneState['scope'] = 'project'): Ke
       ]
     case 'target':
       // No key sheet over the picker (it would drop it), as over the move picker.
-      return [{ action: 'scope', shown: ['⏎', 'pick'] }, { action: 'back', shown: ['esc', 'back'] }, ...CHORDS(false), chord('keys', 'keys', '', false)]
+      // ↓ is the field's own move onto the projects; the pair only says it's there.
+      return [
+        { action: 'scope', shown: ['⏎', 'pick'] },
+        { action: 'down', shown: ['↑↓', 'choose'] },
+        { action: 'back', shown: ['esc', 'back'] },
+        ...CHORDS(false),
+        chord('keys', 'keys', '', false),
+      ]
     case 'edit':
       return [{ action: 'new', shown: ['⏎', 'save'] }, { action: 'back', shown: ['esc', 'back, draft kept'] }, ...CHORDS(false), fieldKeys]
     case 'bundle':
