@@ -270,6 +270,17 @@ describe('model', () => {
     expect(TEXT.keySheet.map(([key]) => key)).toEqual(expect.arrayContaining([CHORD.keys.keys, 'ctrl+x tab']))
   })
 
+  test("the reader offers its note's row keys: t s e on an open note, t on a proposal, only back once gone", () => {
+    const pairs = (focus: Focus) => footerPairs(keysFor(focus)).map(([key]) => key)
+    expect(pairs({ kind: 'read', status: 'open', isListed: true })).toEqual(['t', 's', 'e', '↑↓', '⏎ / esc'])
+    expect(pairs({ kind: 'read', status: 'open', isListed: false })).toEqual(['t', 's', '↑↓', '⏎ / esc'])
+    expect(pairs({ kind: 'read', status: 'proposed', isListed: true })).toEqual(['t', '↑↓', '⏎ / esc'])
+    expect(pairs({ kind: 'read', status: 'archived', isListed: true })).toEqual(['↑↓', '⏎ / esc'])
+    expect(pairs({ kind: 'read', status: 'sent', isListed: true })).toEqual(['↑↓', '⏎ / esc'])
+    expect(pairs({ kind: 'read', status: undefined, isListed: false })).toEqual(['⏎ / esc'])
+    expect(uniqueKeys(keysFor({ kind: 'read', status: 'sent', isListed: true })).some(key => key.hotkey === 'y')).toBe(true)
+  })
+
   test("the key sheet leads with a row's own keys, in its footer's order", () => {
     const open = note('n', CC, 1)
     const row: Focus = { kind: 'line', line: { kind: 'note', key: open.id, note: open, group: CC.key, hits: [] }, picks: 0 }
@@ -279,7 +290,7 @@ describe('model', () => {
     expect(ownKeys(keysFor(picked))).toEqual(['b', 'v', 'x', 't'])
     expect(ownKeys(keysFor(group))).toEqual([])
     const sheet = sheetLines(TEXT.keySheet, ownKeys(keysFor(row)))
-    expect(sheet.slice(0, 9).map(([key]) => key)).toEqual(['⏎ / t', 's', 'e', 'd / u', 'm', 'y', 'o', 'v / x', '↑ ↓ j k'])
+    expect(sheet.slice(0, 9).map(([key]) => key)).toEqual(['t', 's', 'e', 'd / u', 'm', 'y', 'o', 'v / x', '↑ ↓ j k'])
     expect(sheet).toHaveLength(TEXT.keySheet.length)
     expect(new Set(sheet).size).toBe(TEXT.keySheet.length)
     expect(sheetLines(TEXT.keySheet, [])).toEqual(TEXT.keySheet)
@@ -290,7 +301,7 @@ describe('model', () => {
       sheetLines(TEXT.keySheet, ownKeys(keysFor(proposed)))
         .slice(0, 2)
         .map(([key]) => key),
-    ).toEqual(['a / r', '⏎ / t'])
+    ).toEqual(['a / r', 't'])
     for (const [key, label] of TEXT.keySheet) expect(cells(key) <= WIDTH.sheetKey && cells(label) <= WIDTH.keySheet - 4 - WIDTH.sheetKey).toBe(true)
   })
 

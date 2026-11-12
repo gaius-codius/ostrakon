@@ -428,6 +428,7 @@ export type Action =
   | 'pick'
   | 'clearPicks'
   | 'toPrompt'
+  | 'read'
   | 'issue'
   | 'send'
   | 'bundle'
@@ -485,6 +486,9 @@ export type Focus =
   | { kind: 'edit' }
   | { kind: 'bundle' }
   | { kind: 'move' }
+  // The reader: its note's status (undefined once the note is gone), and whether the note has a row
+  // on the list, which the edit card is drawn in.
+  | { kind: 'read'; status: Note['status'] | undefined; isListed: boolean }
   // `lead`: the hotkeys of the row the sheet was opened on, its own actions; none off a row.
   // `omit`: the row's keys it doesn't answer, left off the sheet (`o` on a note outside GitHub).
   | { kind: 'sheet'; page: number; pages: number; lead: string[]; omit?: string[] }
@@ -557,6 +561,26 @@ export const keysFor = (focus: Focus, scope: PaneState['scope'] = 'project'): Ke
         ...CHORDS(false),
         chord('keys', 'keys', '', false),
       ]
+    case 'read': {
+      // No key sheet over the reader, as over the bundle: it would drop it. The note's own keys are
+      // its row's: to the prompt for an open note or a proposal, send and edit for an open note
+      // only, edit only while its row (where the card is drawn) is on the list. Gone: only back.
+      const back: Key = { action: 'back', shown: ['⏎ / esc', 'back'] }
+      if (focus.status === undefined) return [back, ...CHORDS(false), chord('keys', 'keys', '', false)]
+      const isOpen = focus.status === 'open'
+      return [
+        ...(isOpen || focus.status === 'proposed' ? [k('toPrompt', 't', 'to prompt')] : []),
+        ...(isOpen ? [k('send', 's', 'send')] : []),
+        ...(isOpen && focus.isListed ? [k('edit', 'e', 'edit')] : []),
+        { action: 'down', shown: ['↑↓', 'scroll'] },
+        back,
+        k('down', 'j', '', false),
+        k('up', 'k', '', false),
+        k('copy', 'y', 'copy', false),
+        ...CHORDS(false),
+        chord('keys', 'keys', '', false),
+      ]
+    }
     case 'sheet':
       return [
         k('keys', 'i', 'close keys'),

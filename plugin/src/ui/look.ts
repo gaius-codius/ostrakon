@@ -107,6 +107,7 @@ export const TEXT = {
   editLabel: 'edit',
   editHint: 'draft kept if the pane closes',
   // The edit box's buttons carry their keys, since that's where the eye is while editing.
+  readGone: 'This note is gone. ⏎ back',
   editBack: 'esc back',
   editSave: `${GLYPH.enter} save`,
   emptyTitle: (where: string) => `Nothing pending in ${where}.`,
@@ -119,7 +120,8 @@ export const TEXT = {
     ['↑ ↓ j k', 'move'],
     ['1–9', 'jump to a row'],
     ['g', 'top, again bottom'],
-    ['⏎ / t', 'to prompt'],
+    ['⏎', 'read the whole note'],
+    ['t', 'to prompt'],
     ['a / r', 'keep / dismiss'],
     ['s', 'send'],
     ['v / x', 'pick / clear picks'],

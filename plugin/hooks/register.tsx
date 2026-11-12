@@ -76,7 +76,21 @@ import { HarvestRow, PocketRow, SwitchKey, harvestOf, openerOf, pocketOf } from 
 import type { BandHandlers, Drawn } from '../src/ui/band'
 import { BAND_KEY, HINT, JOT_CONTEXT, MS, TEXT, TOAST, WIDTH, toneOf } from '../src/ui/look'
 import type { Tone } from '../src/ui/look'
-import { CAPTURE_KEY, EDIT_KEY, MOVE_KEY, Pane, SEARCH_KEY, SEND_KEY, SHEET_KEY, TARGET_KEY, chromeRows, sheetPages, slotKey } from '../src/ui/pane'
+import {
+  CAPTURE_KEY,
+  EDIT_KEY,
+  MOVE_KEY,
+  Pane,
+  READ_KEY,
+  SEARCH_KEY,
+  SEND_KEY,
+  SHEET_KEY,
+  TARGET_KEY,
+  chromeRows,
+  readFit,
+  sheetPages,
+  slotKey,
+} from '../src/ui/pane'
 import type { Handlers, PaneView } from '../src/ui/pane'
 
 const PANE = 'ostrakon'
@@ -473,8 +487,9 @@ const toolView = async ($: EngineInterface) => {
   return { ctx, all, projects }
 }
 
-const focusOf = (state: PaneState, lines: Line[], problemCount: number): Focus => {
+const focusOf = (state: PaneState, lines: Line[], problemCount: number, reading?: Note): Focus => {
   if (!geometry.isFocused) return { kind: 'unfocused' }
+  if (state.mode === 'read') return { kind: 'read', status: reading?.status, isListed: lines.some(line => line.key === reading?.id) }
   if (state.mode === 'sheet') {
     // Opened on a row, the sheet leads with that row's own keys, as its footer does, and leaves off
     // the ones it doesn't offer.
@@ -534,7 +549,10 @@ const viewOf = async ($: EngineInterface): Promise<PaneView> => {
     if (at >= 0) lastCursorIndex = at
     else if (lines.length > 0) state = { ...state, cursor: lines[Math.min(lastCursorIndex, lines.length - 1)]?.key ?? null }
   }
-  const focus = focusOf(state, lines, broken.length)
+  // The reader keeps its note by id: one sent or moved meanwhile stays in view, never its neighbour.
+  // A deleted note (a tombstone) is gone, as the list has it.
+  const reading = state.mode === 'read' ? all.find(note => note.id === state.reading && !note.deleted) : undefined
+  const focus = focusOf(state, lines, broken.length, reading)
   const keys = keysFor(focus, state.scope)
   const noteLines = lines.filter((line): line is Extract<Line, { kind: 'note' }> => line.kind === 'note')
   const cursorNote = noteLines.find(line => line.key === state.cursor)?.note
@@ -562,11 +580,12 @@ const viewOf = async ($: EngineInterface): Promise<PaneView> => {
     counts: { shown: noteLines.length, total, searched },
     picksHidden: state.picks.filter(id => !shownIds.has(id)).length,
     bundle: state.picks.map(id => byId.get(id)).filter((note): note is Note => note !== undefined),
+    reading,
     projects,
     captureLabel: labelOf(ctx, captureProject),
     targets: state.mode === 'target' ? targetsOf(ctx, projects, state.capture.find) : [],
     places: movingNote ? placesOf(ctx, projects, movingNote, state.moveFind) : [],
-    showLegend: state.picks.length === 0 && noteLines.some(line => line.note.by === 'claude'),
+    showLegend: state.mode !== 'read' && state.picks.length === 0 && noteLines.some(line => line.note.by === 'claude'),
     syncStatus: [syncStatusOf(await read($, syncState), 'hub offline'), syncStatusOf(await read($, mirrorState), 'mirror unavailable')]
       .filter(text => text !== '')
       .join(' · '),
@@ -629,7 +648,7 @@ const openSheet = async ($: EngineInterface) => {
   const state = await read($, pane)
   // The bundle and the pickers answer the chord so it doesn't reach the engine's own action, and
   // keep their place: the sheet would drop them.
-  if (state.mode === 'bundle' || state.mode === 'move' || state.mode === 'target') return
+  if (state.mode === 'bundle' || state.mode === 'read' || state.mode === 'move' || state.mode === 'target') return
   const from = state.mode === 'capture' || state.mode === 'edit' ? state.mode : state.focus === 'search' ? 'search' : null
   await setPane($, current => ({ ...current, mode: 'sheet', sheetPage: 0, sheetFrom: from }))
   if (from !== null) focusKey($, SHEET_KEY)
@@ -666,6 +685,9 @@ const goBack = async ($: EngineInterface) => {
     await closeSheet($)
     return true
   }
+  // ⏎ in the reader goes back through act, from the view: Esc goes to the same row, the one that
+  // took the note's place if it left the list.
+  if (state.mode === 'read') return act($, 'back').then(() => true)
   if (state.mode === 'move' || state.mode === 'sheet' || state.mode === 'bundle') {
     await setPane($, current => ({ ...current, mode: 'browse', moving: null }))
     if (state.cursor !== null && state.focus === 'line') await focusLine($, state.cursor)
@@ -710,6 +732,7 @@ const refocus = async ($: EngineInterface) => {
     return
   }
   if (state.mode === 'bundle') return focusKey($, SEND_KEY)
+  if (state.mode === 'read') return focusKey($, READ_KEY)
   // The selected note may have left the list while the prompt had the keys: the line that took its
   // place (viewOf picks it, as realign does) takes them.
   const cursor = state.focus === 'line' ? (await viewOf($)).pane.cursor : null
@@ -1002,12 +1025,14 @@ const act = async ($: EngineInterface, action: Action) => {
   const view = await viewOf($)
   const state = view.pane
   const line = view.lines.find(candidate => candidate.key === state.cursor)
-  const note = line?.kind === 'note' ? line.note : undefined
+  // In the reader, its own note: the cursor's line may have moved on under it.
+  const note = state.mode === 'read' ? view.reading : line?.kind === 'note' ? line.note : undefined
   const at = line ? view.lines.indexOf(line) : -1
   switch (action) {
     case 'down':
     case 'up': {
       const step = action === 'down' ? 1 : -1
+      if (state.mode === 'read') return scrollRead($, step)
       // The key sheet pages round instead.
       if (view.focus.kind === 'sheet') {
         const { page, pages } = view.focus
@@ -1085,6 +1110,11 @@ const act = async ($: EngineInterface, action: Action) => {
         })
       return
     }
+    case 'read':
+      if (!note) return
+      await setPane($, current => ({ ...current, mode: 'read', reading: note.id, readOffset: 0 }))
+      focusKey($, READ_KEY)
+      return
     case 'bundle':
       if (state.picks.length === 0) return toast($, TOAST.pickFirst)
       await setPane($, current => ({ ...current, mode: 'bundle' }))
@@ -1385,7 +1415,19 @@ const pressSlot = async ($: EngineInterface, slot: number) => {
   const line = view.page.lines[slot]
   if (!line) return
   await setPane($, state => ({ ...state, cursor: line.key, focus: 'line' }))
-  await act($, line.kind === 'note' ? 'toPrompt' : line.kind === 'group' ? (line.isBare ? 'history' : 'fold') : 'details')
+  await act($, line.kind === 'note' ? 'read' : line.kind === 'group' ? (line.isBare ? 'history' : 'fold') : 'details')
+}
+
+// Scrolls the reader a line, kept within its note.
+const scrollRead = async ($: EngineInterface, step: number) => {
+  const view = await viewOf($)
+  if (view.pane.mode !== 'read' || !view.reading) return
+  // From the offset drawn: a stored one past the end (the pane grew since) is clamped first.
+  const text = view.reading.text
+  await setPane($, current => {
+    const { offset, max } = readFit(view, text, current.readOffset ?? 0)
+    return { ...current, readOffset: Math.max(0, Math.min(max, offset + step)) }
+  })
 }
 
 const digit = async ($: EngineInterface, n: number) => {
@@ -2088,6 +2130,7 @@ export const register: Register = (on, options) => {
     // Where the ring stays where it went, that's its last element now, before any wait.
     if (move.kind === 'pass' || move.kind === 'land') lastElement = e.element
     const landing = routeFocus(move, event, previous, needsView(move) ? await viewOf($) : undefined)
+    if (move.kind === 'scroll') await scrollRead($, move.isDown ? 1 : -1)
     if (landing.last !== undefined) lastElement = landing.last
     if (landing.pane) await setPane($, landing.pane)
     if (landing.paged !== undefined) {

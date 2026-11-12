@@ -4,7 +4,7 @@ import type { PaneState } from '../types'
 import type { FocusEvent, FocusView } from '../src/focus'
 import { focusMove, leaveMode, needsView, pagedSlot, routeFocus } from '../src/focus'
 import { freshPane } from '../src/model'
-import { DOWN_KEY, EDIT_KEY, MOVE_KEY, SEARCH_KEY, SHEET_KEY, TARGET_KEY, UP_KEY } from '../src/ui/pane'
+import { DOWN_KEY, EDIT_KEY, MOVE_KEY, READ_DOWN_KEY, READ_KEY, READ_UP_KEY, SEARCH_KEY, SHEET_KEY, TARGET_KEY, UP_KEY } from '../src/ui/pane'
 
 // Ten lines, a window of four from `offset`.
 const viewAt = (offset: number, rows = 4, total = 10): FocusView => {
@@ -140,5 +140,17 @@ describe('focus', () => {
     expect(after(land(person(MOVE_KEY), 'place-0'), onRow).moveAt).toBeUndefined()
     // Anywhere else still ends the move.
     expect(after(land(person(SEARCH_KEY), 'place-0'), onRow).mode).toBe('browse')
+  })
+
+  test("the reader's edges scroll and send the ring back to its stop; Tab off a gone note's stop stays there", () => {
+    expect(focusMove(person(READ_DOWN_KEY))).toEqual({ kind: 'scroll', isDown: true })
+    expect(focusMove(person(READ_UP_KEY))).toEqual({ kind: 'scroll', isDown: false })
+    expect(needsView(focusMove(person(READ_DOWN_KEY)))).toBe(false)
+    expect(land(person(READ_DOWN_KEY), READ_KEY)).toEqual({ to: READ_KEY, last: READ_KEY })
+    // The engine's own move onto an edge is only remembered: it doesn't scroll.
+    expect(focusMove(engine(READ_UP_KEY))).toEqual({ kind: 'pass' })
+    expect(land(person('key-t'), READ_KEY)).toEqual({ to: READ_KEY, last: READ_KEY })
+    const reading: PaneState = { ...freshPane(), mode: 'read', reading: 'n1' }
+    expect(leaveMode(reading, READ_KEY).mode).toBe('read')
   })
 })
