@@ -17,7 +17,7 @@ const PROPOSED_TOO = '01JA7K2M3Q9X4ZB6C8D0EFGH05'
 const BAND = {
   component: 'AbovePrompt',
   requestId: 'band',
-  props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 120, scroll: { offset: 0, bodyRows: 6 }, view: {} },
+  props: { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 6, bodyColumns: 120, scroll: { offset: 0, bodyRows: 6 }, view: {} },
 } as const
 
 const fixture = () => {

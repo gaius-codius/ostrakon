@@ -378,7 +378,7 @@ test('an edit whose note its Pocket chip fills and the submit sends goes to the 
     surface: 'terminal',
     component: 'AbovePrompt',
     requestId: 'band',
-    props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 120, scroll: { offset: 0, bodyRows: 6 }, view: {} },
+    props: { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 6, bodyColumns: 120, scroll: { offset: 0, bodyRows: 6 }, view: {} },
   })
   await band.press({ key: 'band-chip-1' })
   await clock.advance(10)

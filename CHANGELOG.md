@@ -6,6 +6,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Changed
+
+- Tested with Claude Code 2.1.322; `ostrakon doctor` now compares your version to that.
+
 ## [0.10.0] - 2026-11-07
 
 ### Added

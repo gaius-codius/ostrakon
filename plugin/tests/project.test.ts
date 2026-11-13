@@ -4,7 +4,7 @@ import { serializeNote } from '../src/frontmatter'
 import { folderNotes } from '../src/project'
 import type { Note } from '../types'
 import { MemDir } from './memdir'
-import { CC, INFRA, NOTE, noteIn, put, run, startSession } from './world'
+import { bodyText, CC, INFRA, NOTE, noteIn, put, run, startSession } from './world'
 
 // Which project a session is (SPEC §6): a worktree is its main checkout's, and a folder that gained
 // a remote doesn't stay two projects.
@@ -101,7 +101,7 @@ const hubWith = (on: Parameters<typeof startSession>[1], held: Note[]) => {
   const waiting: (() => void)[] = []
   on('http.fetch', async ($, e) => {
     if (e.url.includes('/api/notes')) {
-      const pushed = (JSON.parse(e.init?.body ?? '{}') as { notes: Note[] }).notes
+      const pushed = (JSON.parse(bodyText(e.init?.body)) as { notes: Note[] }).notes
       return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ notes: pushed, cursor: 2 }) } }
     }
     if (e.url.includes('wait=25')) await new Promise<void>(resolve => waiting.push(resolve))

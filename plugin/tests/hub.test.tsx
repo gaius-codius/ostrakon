@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Note } from '../types'
 import { MemDir } from './memdir'
-import { CC, mountPane, noteIn, put, startSession, texts } from './world'
+import { bodyText, CC, mountPane, noteIn, put, startSession, texts } from './world'
 
 const HUB = { hubUrl: 'https://hub.test/', hubToken: 'secret' }
 const PHONE = '01JA7K2M3Q9X4ZB6C8D0EFGH9P'
@@ -33,7 +33,7 @@ test('a note made on the phone shows in the open pane and is written as a file',
   on('http.fetch', async ($, e) => {
     calls.push(`${e.init?.method ?? 'GET'} ${e.url} ${e.init?.headers?.authorization ?? ''}`)
     if (e.url.includes('/api/notes')) {
-      const notes = (JSON.parse(e.init?.body ?? '{}') as { notes: Note[] }).notes
+      const notes = (JSON.parse(bodyText(e.init?.body)) as { notes: Note[] }).notes
       pushed.push(...notes)
       return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ notes, cursor: 2 }) } }
     }
