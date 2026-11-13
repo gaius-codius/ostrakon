@@ -27,11 +27,11 @@ const CLAUDE_TOKEN = 'sk-ant-oat01-abcdefghijklmnopqrstuvwxyz0123456789'
 const ID = '01JA7K2M3Q9X4ZB6C8D0EFGH0A'
 const NOTE = '01JA7K2M3Q9X4ZB6C8D0EFGH0B'
 
-// Each fake logs its call to calls/<time>/ and runs <name>.sh next to it when there is one, else
+// Each fake logs its call to calls/<time>.<random>/ (the suffix keeps two calls in the same
+// nanosecond apart, as parallel probes can be) and runs <name>.sh next to it when there is one, else
 // its default answer.
 const LOG = `dir=$(cd "$(dirname "$0")" && pwd)
-call="$dir/calls/$(date +%s%N)"
-mkdir -p "$call"
+call=$(mktemp -d "$dir/calls/$(date +%s%N).XXXXXX")
 printf '%s\\0' "$@" > "$call/args"
 env -0 > "$call/env"
 pwd > "$call/cwd"
