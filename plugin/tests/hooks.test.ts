@@ -4,7 +4,7 @@ import type { Engine } from 'claude-code/testing'
 import { MemDir } from './memdir'
 import { cells } from '../src/model'
 import { FOOTER_KEY, PREVIEW_ROWS, TEXT_COLUMN } from '../src/ui/pane'
-import { COLOUR, GLYPH, JOT_CONTEXT, WIDTH } from '../src/ui/look'
+import { COLOUR, GLYPH, JOT_CONTEXT, TEXT, WIDTH } from '../src/ui/look'
 import { CC, INFRA, NOTE, PANE, mountPane, noteIn, put, run, startSession, texts } from './world'
 import { serializeNote } from '../src/frontmatter'
 
@@ -1001,7 +1001,7 @@ test("opened on a row, the key sheet leads with the row's own keys and the row s
   const ui = await mountPane($)
   await ui.input({ key: 'q', text: '', kind: 'submit' })
   await ui.press({ key: 'key-i' })
-  const lead = ['⏎ / t', 's', 'e', 'd / u', 'm', 'y', 'v / x', '↑ ↓ j k']
+  const lead = ['t', 's', 'e', 'd / u', 'm', 'y', 'v / x', '↑ ↓ j k']
   const keys = (await texts(ui)).map(text => text.trim()).filter(text => lead.includes(text))
   expect(keys).toEqual(lead)
   expect(await ui.find({ type: 'Text', text: /check why the cache test is flaky/ })).toBeDefined()
@@ -1565,5 +1565,115 @@ test('with a capture target picked, an edit closed and reopened comes back, and 
   expect(await ui.find({ type: 'Text', text: /saves to cc/ })).toBeDefined()
   await ui.input({ key: 'capture', text: 'after the reopen', kind: 'submit' })
   expect(savedFile(dir, 'after the reopen')).toContain(CC.key)
+  await ui.unmount()
+})
+
+// A note too long for the preview: fifty lines, `line 01` to `line 50`.
+const longNote = Array.from({ length: 50 }, (_, i) => `line ${String(i + 1).padStart(2, '0')}`).join('\n')
+
+const readingLong = async ($: Engine, on: Parameters<typeof startSession>[1]) => {
+  const dir = new MemDir()
+  put(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH01', longNote, CC, 12)
+  const { world, clock } = await startSession($, on, dir, 'my draft')
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  // The heading is slot 0, the note slot 1: ⏎ on it.
+  await ui.press({ key: 'slot-1' })
+  return { dir, world, clock, ui }
+}
+
+test('⏎ on a note opens it whole in the reader, sending nothing; ⏎ again goes back to its row', async ($, on) => {
+  const { dir, world, ui } = await readingLong($, on)
+  expect(world.box.text).toBe('')
+  expect(world.closed).toBe(0)
+  // Docked at 37 rows: the header, a blank, 32 lines and what's below.
+  expect(await ui.find({ type: 'Text', text: /line 32$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /line 33$/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /↓ 18 more/ })).toBeDefined()
+  expect(await ui.find({ type: 'Input', key: 'q' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /⏎ \/ esc/ })).toBeDefined()
+  await ui.press({ key: 'read' })
+  expect(await ui.find({ type: 'Input', key: 'q' })).toBeDefined()
+  // Back on its row: t sends that note.
+  await ui.press({ key: 'key-t' })
+  expect(world.box.text).toBe(`my draft\n\n${longNote}`)
+  expect(noteIn(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH01').status).toBe('open')
+  await ui.unmount()
+})
+
+test('the reader scrolls a line with j k and with ↑ ↓ onto its edges, and stops at both ends', async ($, on) => {
+  const { world, ui } = await readingLong($, on)
+  const focus = (element: string) => $.ui.focus({ component: 'Pane', requestId: PANE.requestId, element, origin: { kind: 'person' } })
+  await ui.press({ key: 'key-k' })
+  expect(await ui.find({ type: 'Text', text: /line 01$/ })).toBeDefined()
+  await ui.press({ key: 'key-j' })
+  await focus('read-down')
+  expect(world.focused.at(-1)).toBe('read')
+  expect(await ui.find({ type: 'Text', text: /line 02$/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /line 03$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /↑ 2 more/ })).toBeDefined()
+  await focus('read-up')
+  expect(await ui.find({ type: 'Text', text: /line 02$/ })).toBeDefined()
+  for (let i = 0; i < 30; i += 1) await ui.press({ key: 'key-j' })
+  expect(await ui.find({ type: 'Text', text: /line 50$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /↓ \d+ more/ })).toBeUndefined()
+  // Past the end and back: one k shows the line above at once.
+  await ui.press({ key: 'key-j' })
+  await ui.press({ key: 'key-k' })
+  expect(await ui.find({ type: 'Text', text: /line 50$/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('from the reader, t fills the prompt with the note after the held draft', async ($, on) => {
+  const { world, ui } = await readingLong($, on)
+  await ui.press({ key: 'key-t' })
+  expect(world.box.text).toBe(`my draft\n\n${longNote}`)
+  expect(world.closed).toBe(1)
+  await ui.unmount()
+})
+
+test('the reader keeps the footer on screen in a short docked pane', async ($, on) => {
+  const { ui } = await readingLong($, on)
+  for (let bodyRows = 6; bodyRows <= 20; bodyRows += 1) {
+    await dockAt(ui, bodyRows)
+    expect(await footerRow(ui)).toBe(bodyRows - 1)
+    expect(await spill(ui)).toBeLessThanOrEqual(0)
+  }
+  await ui.unmount()
+})
+
+const LONG_FILE = '/data/notes/01JA7K2M3Q9X4ZB6C8D0EFGH01.md'
+
+test('a note archived while it is read stays in view, offering no t, s or e, and ⏎ goes back to the list', async ($, on) => {
+  const { dir, world, clock, ui } = await readingLong($, on)
+  dir.put(LONG_FILE, dir.get(LONG_FILE)?.replace('status: open', 'status: archived') ?? '')
+  await clock.advance(2000)
+  expect(await ui.find({ type: 'Text', text: /line 01$/ })).toBeDefined()
+  const shown = (await texts(ui)).map(text => text.trim())
+  for (const label of ['to prompt', 'send', 'edit']) expect(shown).not.toContain(label)
+  expect(shown).toContain('back')
+  // Not answered: the layer's idle t and e do nothing.
+  expect(await ui.find({ type: 'Button', key: 'key-t' })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', key: 'key-e' })).toBeUndefined()
+  await ui.press({ key: 'key-idle-t' })
+  await ui.press({ key: 'key-idle-e' })
+  expect(world.box.text).toBe('')
+  expect(await ui.find({ type: 'Input', key: 'edit' })).toBeUndefined()
+  await ui.press({ key: 'read' })
+  expect(await ui.find({ type: 'Input', key: 'q' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a note deleted while it is read says it is gone, and offers only back', async ($, on) => {
+  const { dir, clock, ui } = await readingLong($, on)
+  dir.put(LONG_FILE, dir.get(LONG_FILE)?.replace('deleted: false', 'deleted: true') ?? '')
+  await clock.advance(2000)
+  expect(await ui.find({ type: 'Text', text: TEXT.readGone })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /line 01$/ })).toBeUndefined()
+  const shown = (await texts(ui)).map(text => text.trim())
+  for (const label of ['to prompt', 'scroll', 'edit']) expect(shown).not.toContain(label)
+  await ui.press({ key: 'read' })
+  expect(await ui.find({ type: 'Input', key: 'q' })).toBeDefined()
   await ui.unmount()
 })

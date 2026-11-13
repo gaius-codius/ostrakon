@@ -48,6 +48,8 @@ export type PaneView = {
   counts: { shown: number; total: number; searched: number }
   picksHidden: number
   bundle: Note[]
+  // The note open in the reader; undefined off it, or once the note is gone.
+  reading: Note | undefined
   projects: NoteProject[]
   captureLabel: string
   // What capture's target picker offers for what's typed, first the one Enter picks.
@@ -70,6 +72,11 @@ export const CAPTURE_KEY = 'capture'
 export const EDIT_KEY = 'edit'
 export const SEND_KEY = 'bundle-send'
 export const MOVE_KEY = 'move'
+// The reader's stop, where the ring rests, and its edges above and below it: the ring landing on
+// an edge (↑ or ↓) scrolls a line and goes back to the stop.
+export const READ_KEY = 'read'
+export const READ_UP_KEY = 'read-up'
+export const READ_DOWN_KEY = 'read-down'
 export const TARGET_KEY = 'target'
 export const slotKey = (slot: number) => `slot-${slot}`
 // Capture's target picker draws its projects as rows the ring stops on: ↓ from the field, ↑ and ↓
@@ -583,6 +590,7 @@ const ActionLayer = ({ el, view, handlers }: { el: E; view: PaneView; handlers: 
   const holdsKeys =
     view.focus.kind === 'line' ||
     view.focus.kind === 'bundle' ||
+    view.focus.kind === 'read' ||
     view.focus.kind === 'sheet' ||
     (view.focus.kind === 'edit' && view.pane.focus === 'control') ||
     (view.focus.kind === 'target' && view.pane.capture.at !== undefined) ||
@@ -805,6 +813,73 @@ const Bundle = ({ el, view, handlers, rows }: { el: E; view: PaneView; handlers:
   )
 }
 
+// The reader (⏎ on a row): the whole note, wrapped and scrolled, under a header naming its project
+// and where it came from. Docked, a blank follows the header; the last row says what's below.
+const readTextRows = (view: { isInline: boolean; bodyRows: number }) =>
+  Math.max(1, view.bodyRows - (view.isInline ? FOOTER_ROWS : 1 + FOOTER_ROWS) - (view.isInline ? 2 : 3))
+export const readFit = (view: { isInline: boolean; bodyRows: number; width: number }, text: string, offset: number) => {
+  const rows = readTextRows(view)
+  const all = wrap(text, Math.max(1, view.width - TEXT_COLUMN - 2))
+  const max = Math.max(0, all.length - rows)
+  const at = Math.max(0, Math.min(offset, max))
+  return { lines: all.slice(at, at + rows), offset: at, max, above: at, below: Math.max(0, all.length - at - rows) }
+}
+
+const Read = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handlers }) => {
+  const { Box, Text, Button } = el
+  const note = view.reading
+  const stop = <Button key={READ_KEY} plain label=' ' onPress={() => handlers.action('back')} />
+  const gutter = (first: boolean) => (
+    <Box width={TEXT_COLUMN} flexShrink={0}>
+      {first ? stop : <Text> </Text>}
+    </Box>
+  )
+  if (!note) {
+    return (
+      <Box width={view.width}>
+        {gutter(true)}
+        <Text dimColor>{TEXT.readGone}</Text>
+      </Box>
+    )
+  }
+  const fit = readFit(view, note.text, view.pane.readOffset ?? 0)
+  // Cut to a third of the width, so the header stays one row and the meta keeps some room.
+  const label = cut(labelOf(view.ctx, note.project), Math.max(4, Math.floor((view.width - TEXT_COLUMN) / 3)))
+  const more = fit.above > 0 ? `${GLYPH.up} ${fit.above} more` : ''
+  const room = Math.max(1, view.width - TEXT_COLUMN - cells(label) - cells(' · ') - (more === '' ? 0 : cells(more) + 2))
+  return (
+    <Box flexDirection='column' width={view.width}>
+      <Box width={view.width}>
+        <Box width={TEXT_COLUMN} flexShrink={0}>
+          <Button key={READ_UP_KEY} plain dimColor label=' ' onPress={() => handlers.action('up')} />
+        </Box>
+        <Text color={COLOUR.accent} bold>
+          {label}
+        </Text>
+        <Text dimColor> · {metaOf(view, note, room)}</Text>
+        <Box flexGrow={1} />
+        {more !== '' && <Text dimColor>{more}</Text>}
+      </Box>
+      {!view.isInline && <Box height={1} />}
+      {fit.lines.map((line, i) => (
+        <Box width={view.width}>
+          {gutter(i === 0)}
+          <Text>
+            <Text dimColor>{GLYPH.quote} </Text>
+            {line === '' ? ' ' : line}
+          </Text>
+        </Box>
+      ))}
+      <Box width={view.width}>
+        <Box width={TEXT_COLUMN} flexShrink={0}>
+          <Button key={READ_DOWN_KEY} plain dimColor label=' ' onPress={() => handlers.action('down')} />
+        </Box>
+        <Text dimColor>{fit.below > 0 ? `${GLYPH.down} ${fit.below} more` : ' '}</Text>
+      </Box>
+    </Box>
+  )
+}
+
 // The move picker (m) sits under the rows, so the note being moved stays in view: a field, and
 // the places it narrows to under it, as capture's target picker. Enter moves to the first.
 const Move = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handlers }) => {
@@ -853,7 +928,7 @@ const sheetTop = (isInline: boolean) => (isInline ? 1 : 2)
 // one docked only), and a blank docked. The bundle has neither.
 const topRows = (view: { pane: PaneState; isInline: boolean; width: number; bodyRows: number }) => {
   const { mode } = view.pane
-  if (mode === 'bundle') return 0
+  if (mode === 'bundle' || mode === 'read') return 0
   const field = mode === 'capture' ? captureRows(view) : mode === 'target' ? 1 : 0
   if (field > 0) return view.isInline ? 1 + field : 1 + field + 1 + 1
   return sheetTop(view.isInline)
@@ -935,6 +1010,7 @@ export const Pane = ({ el, view, handlers, hasHub, hasHarvest }: { el: E; view: 
     if (pane.mode === 'capture') return <Capture el={el} view={view} />
     if (pane.mode === 'target') return <Targets el={el} view={view} rows={middleRows} handlers={handlers} />
     if (pane.mode === 'bundle') return <Bundle el={el} view={view} handlers={handlers} rows={middleRows} />
+    if (pane.mode === 'read') return <Read el={el} view={view} handlers={handlers} />
     // A storage problem's row stays above the no-match line.
     if (isNoMatch(view)) return [view.lines.length > 0 && <Rows el={el} view={view} handlers={handlers} />, <NoMatch el={el} view={view} />]
     if (view.lines.length === 0 && pane.query.trim() === '') return <Empty el={el} view={view} hasHub={hasHub} hasHarvest={hasHarvest} />
@@ -948,14 +1024,14 @@ export const Pane = ({ el, view, handlers, hasHub, hasHarvest }: { el: E; view: 
   ]
   return (
     <Box flexDirection='column' width={view.width} height={isFilled ? view.bodyRows : undefined}>
-      {pane.mode === 'bundle' ? null : pane.mode === 'capture' ? (
+      {pane.mode === 'bundle' || pane.mode === 'read' ? null : pane.mode === 'capture' ? (
         <CaptureRow el={el} view={view} handlers={handlers} />
       ) : pane.mode === 'target' ? (
         <TargetRow el={el} view={view} handlers={handlers} />
       ) : (
         <SearchRow el={el} view={view} handlers={handlers} />
       )}
-      {pane.mode !== 'bundle' && !view.isInline && <Box height={1} />}
+      {pane.mode !== 'bundle' && pane.mode !== 'read' && !view.isInline && <Box height={1} />}
       {isFilled ? (
         <Box flexDirection='column' flexShrink={0} height={middleRows} overflow='hidden'>
           <Box flexDirection='column' flexShrink={0}>

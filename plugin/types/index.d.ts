@@ -37,7 +37,7 @@ export type NoteProblem = { file: string; reason: string }
 
 // The launcher pane's state (SPEC §4). Note ids, project keys and line keys only; the notes
 // themselves live in `notes`.
-export type PaneMode = 'browse' | 'capture' | 'target' | 'edit' | 'bundle' | 'move' | 'sheet'
+export type PaneMode = 'browse' | 'capture' | 'target' | 'edit' | 'bundle' | 'move' | 'sheet' | 'read'
 
 export type Undo =
   | { kind: 'status'; id: string; before: NoteStatus }
@@ -71,6 +71,9 @@ export type PaneState = {
   moving: string | null
   moveFind: string
   moveAt?: number
+  // The note open in the reader (⏎ on a row), and the first of its wrapped lines drawn.
+  reading?: string
+  readOffset?: number
   // `target`: the project capture saves to; null until capture first sets it, and again once the
   // pane closes. `find`: what's typed in its picker (ctrl+s). `at`: the picker's row the ring is on
   // (↓ from its field), absent while the field has it.

@@ -1,5 +1,19 @@
 import type { PaneState } from '../types'
-import { DOWN_KEY, EDIT_KEY, LAYER_PREFIX, MOVE_KEY, PLACE_PREFIX, SEARCH_KEY, SHEET_KEY, TARGET_KEY, UP_KEY, slotKey } from './ui/pane'
+import {
+  DOWN_KEY,
+  EDIT_KEY,
+  LAYER_PREFIX,
+  MOVE_KEY,
+  PLACE_PREFIX,
+  READ_DOWN_KEY,
+  READ_KEY,
+  READ_UP_KEY,
+  SEARCH_KEY,
+  SHEET_KEY,
+  TARGET_KEY,
+  UP_KEY,
+  slotKey,
+} from './ui/pane'
 
 // The pane's focus ring: where a move of the ring lands, and what the pane's state becomes. Pure;
 // the ui.focus hook in hooks/register.tsx reads the view, applies the decision and moves the ring
@@ -16,8 +30,13 @@ export type FocusView = { lines: { key: string }[]; page: { offset: number; line
 // layer, only remembered. `layer`: onto the action layer, drawn last, which is never a stop.
 // `edge`: onto an edge sentinel, which pages. `land`: anywhere else (a row, the search field, a
 // control, nowhere), where the ring stays. A pass or a landing is the ring's last element at once,
-// before any wait.
-export type FocusMove = { kind: 'pass' } | { kind: 'layer' } | { kind: 'edge'; isDown: boolean } | { kind: 'land'; slot: number | undefined }
+// before any wait. `scroll`: onto one of the reader's edges, which scrolls its text a line.
+export type FocusMove =
+  | { kind: 'pass' }
+  | { kind: 'layer' }
+  | { kind: 'edge'; isDown: boolean }
+  | { kind: 'scroll'; isDown: boolean }
+  | { kind: 'land'; slot: number | undefined }
 
 export const focusMove = (e: FocusEvent): FocusMove => {
   const element = e.element
@@ -27,6 +46,7 @@ export const focusMove = (e: FocusEvent): FocusMove => {
   if (!e.isPerson && element === SHEET_KEY) return { kind: 'pass' }
   if (element?.startsWith(LAYER_PREFIX)) return { kind: 'layer' }
   if (element === DOWN_KEY || element === UP_KEY) return { kind: 'edge', isDown: element === DOWN_KEY }
+  if (element === READ_DOWN_KEY || element === READ_UP_KEY) return { kind: 'scroll', isDown: element === READ_DOWN_KEY }
   return { kind: 'land', slot: element?.startsWith('slot-') ? Number(element.slice(5)) : undefined }
 }
 
@@ -42,6 +62,7 @@ export const leaveMode = (state: PaneState, to: string | undefined): PaneState =
     state.mode === 'capture' ||
     state.mode === 'target' ||
     state.mode === 'bundle' ||
+    state.mode === 'read' ||
     state.mode === 'browse'
   return stays ? state : { ...state, mode: 'browse', moving: null, sheetFrom: null }
 }
@@ -65,7 +86,13 @@ export const routeFocus = (move: FocusMove, e: FocusEvent, previous: string | un
   switch (move.kind) {
     case 'pass':
       return { to: element }
+    // The ring goes back to the reader's own stop; the mod scrolls (hooks/register.tsx).
+    case 'scroll':
+      return { to: READ_KEY, last: READ_KEY }
     case 'layer': {
+      // In the reader, Tab and Shift+Tab land on its edges and scroll, as ↓ and ↑ do; with no
+      // edges drawn (its note gone), Tab stays on its stop.
+      if (previous === READ_KEY) return { to: READ_KEY, last: READ_KEY }
       // In a picker, past its last project stays there; Shift+Tab off the target picker's field
       // goes back to the field.
       if (previous?.startsWith(PLACE_PREFIX) || previous === TARGET_KEY) return { to: previous, last: previous }

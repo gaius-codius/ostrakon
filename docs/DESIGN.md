@@ -1,6 +1,6 @@
 # Ostrakon design system
 
-Version: 6.4.0
+Version: 6.5.0
 
 What the terminal mod (the pane, the band and the prompt hint, in `plugin/`) and the phone (`server/public/`) must agree on: colour roles, the project palette, the phone's tokens, symbols, fixed copy, motion and the accessibility bar. [`SPEC.md`](SPEC.md) describes behaviour and points here for these values instead of repeating them. The code holds the values: `plugin/src/ui/look.ts` for the terminal, `style.css`, `app.js` and `index.html` for the phone.
 
@@ -203,6 +203,7 @@ Strings the surfaces or the docs depend on, each checked word for word in every 
 | `all projects` | plugin/src/model.ts, docs/SPEC.md | the footer's `ctrl+s` in this project's scope |
 | `this project` | plugin/src/model.ts, plugin/src/ui/pane.tsx, docs/SPEC.md | the footer's `ctrl+s` in scope all, and the search row's scope |
 | `symbols` | plugin/src/ui/look.ts, docs/SPEC.md | the key sheet's heading over the row markers |
+| `This note is gone.` | plugin/src/ui/look.ts, docs/SPEC.md | the reader once its note is deleted: `This note is gone. ⏎ back` |
 | `Archived · u undo` | plugin/src/ui/look.ts, docs/SPEC.md | the pane's archive toast |
 | `Please look at these notes from my ostrakon:` | plugin/src/ui/look.ts, docs/SPEC.md | the bundle's first line |
 | `· waiting to sync` | server/public/app.js | after Save, until the hub has the note |
@@ -309,6 +310,11 @@ Keys, layout and behaviour are in [`SPEC.md`](SPEC.md). The terminal's spacing i
 ## 11. Changelog
 
 Newest first. Each entry is a heading `### <version> — <YYYY-MM-DD>`, then one or more `- Change:` lines and one or more `- Why:` lines. The newest entry ends with `Fingerprint: <hash>` of the design values in the code (`bun tools/check-design.ts --fingerprint` prints it). Versions: major when a meaning changes or something goes (a glyph means something else, a colour role moves); minor when something is added; patch for a value tweak or a doc fix. Entries are never removed.
+
+### 6.5.0 — 2026-11-13
+- Change: The pane gains a reader: ⏎ on a note shows the whole note in place of the list, under a header in the accent naming its project, its text down the dim quote bar the preview and the bundle use, with dim `↑ N more` and `↓ N more`. No new glyph or colour. New copy in §6.
+- Why: The preview stops at six lines, and ⏎ used to send the note to the prompt, so a long note couldn't be read without sending or editing it.
+Fingerprint: e4df80653572
 
 ### 6.4.0 — 2026-11-04
 - Change: The pane's footer ends with a dim update notice, after any other status: `0.10.0 out · ostrakon update` when a newer release is out, `restart to use 0.10.0` once the code on disk is newer than the session's. Dim with no colour, the one status drawn that way, and the first to give way when the line is short. New copy in §6.
