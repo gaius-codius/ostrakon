@@ -6,6 +6,10 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Fixed
+
+- Fast typing and voice-to-text in the pane's text fields no longer drop letters or mix in earlier text. The search, a new note, the edit card and both pickers keep what you type.
+
 ### Changed
 
 - Tested with Claude Code 2.1.322; `ostrakon doctor` now compares your version to that.

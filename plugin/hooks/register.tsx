@@ -3,6 +3,7 @@ import type { Elements, EngineInterface, Register } from 'claude-code'
 
 import type { Fill, Note, NoteProblem, NoteProject, NoteStatus, PaneState, SyncState } from '../types'
 import { focusMove, needsView, pagedSlot, routeFocus } from '../src/focus'
+import { drawField, drawnTyped, emptiedAfter, settleDrawn } from '../src/fields'
 import { createMirrorStore } from '../src/mirror'
 import type { Action, Ctx, Focus, Line } from '../src/model'
 import {
@@ -109,7 +110,7 @@ const notes = atom({ plugin: 'ostrakon', key: 'notes' } as const, {})
 const problems = atom({ plugin: 'ostrakon', key: 'problems' } as const, [])
 // Shaped: a reload keeps the atoms, so a PaneState from older code (lastFill before fills) would
 // throw in the hooks that read it. Bump the tag when PaneState changes.
-const pane = atom({ plugin: 'ostrakon', key: 'pane' } as const, freshPane(), { shape: 'fills' })
+const pane = atom({ plugin: 'ostrakon', key: 'pane' } as const, freshPane(), { shape: 'drawn' })
 // Shaped: the value was a list of ids before the band was drawn against the latest turn.
 const harvest = atom({ plugin: 'ostrakon', key: 'harvest' } as const, null, { shape: 'order' })
 const turns = atom(
@@ -426,7 +427,7 @@ const toast = ($: EngineInterface, text: string) => {
   $.ui.toast(text)
 }
 
-const setPane = ($: EngineInterface, edit: (state: PaneState) => PaneState) => update($, pane, edit)
+const setPane = ($: EngineInterface, edit: (state: PaneState) => PaneState) => update($, pane, state => settleDrawn(state, edit(state)))
 
 // The pane's handlers run one at a time: each reads the view the previous one left (fast j j j, or
 // v j v, would otherwise act twice on one row).
@@ -436,10 +437,6 @@ const serially = <T,>(work: () => Promise<T>): Promise<T> => {
   tail = run.catch(() => undefined)
   return run
 }
-
-// An Input empties itself on Enter and only redraws a value that differs from the last one drawn:
-// toggling a trailing space (trimmed everywhere it's read) draws the same text back.
-const redrawn = (text: string) => (text === text.trimEnd() ? `${text} ` : text.trimEnd())
 
 const joined = (...parts: string[]) => parts.filter(part => part.trim() !== '').join('\n\n')
 
@@ -706,10 +703,8 @@ const goBack = async ($: EngineInterface) => {
     focusKey($, SEARCH_KEY)
     return true
   }
-  // Plain '', not redrawn(''): the query drawn last isn't empty, so '' redraws the field anyway,
-  // and a redrawn space would hide the placeholder and lead whatever is typed next.
   if (state.query.trim() !== '') {
-    await setPane($, current => ({ ...current, query: '', offset: 0, cursor: null, scope: current.scopeChosen ? current.scope : 'project' }))
+    await setPane($, current => drawField({ ...current, query: '', offset: 0, cursor: null, scope: current.scopeChosen ? current.scope : 'project' }, 'q', ''))
     focusKey($, SEARCH_KEY)
     return true
   }
@@ -817,19 +812,21 @@ const cleanUp = async ($: EngineInterface) => {
   await giveBack($)
   // Closed on the edit card (or the key sheet over it), the pane opens on it again; anywhere else,
   // on the list, with any edit draft kept for the next `e` on that note.
-  await setPane($, current => ({
-    ...current,
-    moving: null,
-    mode: current.mode === 'edit' || (current.mode === 'sheet' && current.sheetFrom === 'edit') ? 'edit' : 'browse',
-    sheetFrom: null,
-    query: '',
-    scope: 'project',
-    scopeChosen: false,
-    focus: 'search',
-    offset: 0,
-    // The next note goes to this project again, whatever the last capture picked (SPEC §4.4).
-    capture: { ...current.capture, target: null, find: '' },
-  }))
+  await setPane($, current =>
+    drawnTyped({
+      ...current,
+      moving: null,
+      mode: current.mode === 'edit' || (current.mode === 'sheet' && current.sheetFrom === 'edit') ? 'edit' : 'browse',
+      sheetFrom: null,
+      query: '',
+      scope: 'project',
+      scopeChosen: false,
+      focus: 'search',
+      offset: 0,
+      // The next note goes to this project again, whatever the last capture picked (SPEC §4.4).
+      capture: { ...current.capture, target: null, find: '' },
+    }),
+  )
   await update($, isOpen, () => false)
 }
 
@@ -875,6 +872,7 @@ const handOff = async ($: EngineInterface) => {
       },
     )
     if (!isClosed) return
+    await setPane($, drawnTyped)
     const opened = await $.ui.open({ id: PANE, title: 'ostrakon', closeOnEscape: true })
     if (!opened.isPlaced) why = opened.reason ?? 'not placed'
   } catch (error) {
@@ -1255,15 +1253,14 @@ const searchSubmit = async ($: EngineInterface, value: string) => {
   const first =
     view.lines.find(line => line.kind === 'note') ?? (value.trim() === '' ? view.lines.find(line => line.kind === 'group' && line.isBare) : undefined)
   if (first) {
-    // The field empties itself on Enter and only takes a value that differs from the last one
-    // drawn; a trailing space (search trims it) draws the query back.
-    await setPane($, state => ({ ...state, query: state.query === state.query.trimEnd() ? `${state.query} ` : state.query.trimEnd() }))
+    // The field empties itself on Enter: the query is drawn back.
+    await setPane($, state => drawField(state, 'q', state.query))
     return focusLine($, first.key)
   }
   // A search that found nothing becomes a note: its words, not its tokens (@infra, is:sent).
   const text = parseQuery(value).words.trim()
   if (text === '') {
-    await setPane($, state => ({ ...state, query: redrawn(value) }))
+    await setPane($, state => drawField(state, 'q', value))
     return
   }
   try {
@@ -1274,7 +1271,7 @@ const searchSubmit = async ($: EngineInterface, value: string) => {
   } catch (error) {
     noteProblem($, 'storage', error)
     toast($, TOAST.failed(messageOf(error)))
-    await setPane($, state => ({ ...state, query: redrawn(value) }))
+    await setPane($, state => drawField(state, 'q', value))
   }
 }
 
@@ -1301,10 +1298,10 @@ const captureSubmit = async ($: EngineInterface, value: string) => {
     }))
   } catch (error) {
     noteProblem($, 'storage', error)
-    await setPane($, state => ({
-      ...state,
-      capture: { ...state.capture, draft: state.capture.draft === value ? redrawn(value) : state.capture.draft, error: TOAST.failed(messageOf(error)) },
-    }))
+    await setPane($, state => {
+      const failed = { ...state, capture: { ...state.capture, error: TOAST.failed(messageOf(error)) } }
+      return state.capture.draft === value ? drawField(failed, 'capture', value) : failed
+    })
   }
 }
 
@@ -1321,7 +1318,7 @@ const editSubmit = async ($: EngineInterface, value: string) => {
     })
     if (!changed) {
       // Kept in the field (the Input emptied itself on Enter) for another try.
-      await setPane($, current => ({ ...current, edit: current.edit ? { ...current.edit, draft: redrawn(value) } : null }))
+      await setPane($, current => drawField(current, 'edit', value))
       return
     }
     const was = before
@@ -1347,7 +1344,7 @@ const targetSubmit = async ($: EngineInterface, value: string) => {
   const view = await viewOf($)
   const first = targetsOf(view.ctx, view.projects, value)[0]
   if (!first) {
-    await setPane($, current => ({ ...current, capture: { ...current.capture, find: redrawn(value) } }))
+    await setPane($, current => drawField(current, 'target', value))
     return
   }
   await setPane($, current => ({ ...current, capture: { ...current.capture, target: first.value } }))
@@ -1367,7 +1364,7 @@ const moveSubmit = ($: EngineInterface, value: string) =>
   moveNote(
     $,
     (view, note) => placesOf(view.ctx, view.projects, note, value)[0]?.value,
-    () => setPane($, current => ({ ...current, moveFind: redrawn(value) })),
+    () => setPane($, current => drawField(current, 'move', value)),
   )
 
 // Enter on one of the move picker's rows (reached with ↓): the note goes there.
@@ -1796,7 +1793,8 @@ export const register: Register = (on, options) => {
     const ending = sessionEnded(turnState)
     turnState = ending.state
     // $.state is about to reset: a draft the open pane holds goes back into the prompt first.
-    const held = (await read($, pane)).stash
+    const before = await read($, pane)
+    const held = before.stash
     if (held !== '') {
       const box = await $.prompt.read().catch(() => ({ text: '' }))
       const filled = await $.prompt.fill({ text: joined(box.text, held), mode: 'replace' }).catch(() => ({ isFilled: false }))
@@ -1805,6 +1803,7 @@ export const register: Register = (on, options) => {
     }
     const ended = await next(e)
     await update($, turns, ending.facts)
+    await setPane($, state => ({ ...state, drawn: emptiedAfter(before.drawn) }))
     $.clock.after(100, () => {
       storeIO($)
         .then(store.loadAll)
