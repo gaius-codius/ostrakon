@@ -177,3 +177,7 @@ export const texts = async (ui: Awaited<ReturnType<typeof mountPane>>) =>
   (await ui.findAll({ type: 'Text' })).map((found: { text?: unknown }) => String(found.text ?? ''))
 
 export const noteIn = (dir: MemDir, id: string) => parseNote(dir.get(`/data/notes/${id}.md`) ?? '')
+
+// A fetch body as text: the mod only sends JSON, but the engine types a body as text or base64.
+export const bodyText = (body: string | { readonly base64: string } | undefined) =>
+  typeof body === 'string' ? body : body === undefined ? '{}' : atob(body.base64)

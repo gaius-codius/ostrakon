@@ -31,7 +31,7 @@ const BAND = {
   surface: 'terminal',
   component: 'AbovePrompt',
   requestId: 'band',
-  props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 120, scroll: { offset: 0, bodyRows: 6 }, view: {} },
+  props: { hasSurvey: false, isCollapsed: false, isWorking: false, maxRows: 6, bodyColumns: 120, scroll: { offset: 0, bodyRows: 6 }, view: {} },
 } as const
 
 const fixture = () => {
