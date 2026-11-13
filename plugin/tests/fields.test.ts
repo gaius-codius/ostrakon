@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing'
 
 import type { PaneState } from '../types'
-import { drawField, drawnTyped, settleDrawn } from '../src/fields'
+import { drawField, drawnTyped, emptiedAfter, settleDrawn } from '../src/fields'
 import { freshPane } from '../src/model'
 
 const browsing = (query: string, drawn = ''): PaneState => ({ ...freshPane(), query, drawn: { ...freshPane().drawn, q: drawn } })
@@ -40,8 +40,29 @@ describe('fields', () => {
     expect(drawField(browsing('rename ', 'rename '), 'q', 'rename ').drawn.q).toBe('rename')
   })
 
+  test('what a field draws on purpose is its typed text too, so its next Enter compares with that', () => {
+    const redrawnBack = drawField(
+      {
+        ...browsing('rename', 'rename'),
+        mode: 'capture',
+        capture: { ...freshPane().capture, draft: 'keep me' },
+        drawn: { ...freshPane().drawn, capture: 'keep me' },
+      },
+      'capture',
+      'keep me',
+    )
+    expect(redrawnBack.drawn.capture).toBe('keep me ')
+    expect(redrawnBack.capture.draft).toBe('keep me ')
+    expect(drawField(browsing('rename', 'rename'), 'q', 'rename').query).toBe('rename ')
+    expect(drawField(browsing('cache'), 'q', '').query).toBe('')
+  })
+
   test('a pane opened again draws every field with its typed text', () => {
     const state = { ...browsing('rename'), moveFind: 'inf', edit: { id: 'a', draft: 'one' } }
     expect(drawnTyped(state).drawn).toEqual({ q: 'rename', capture: '', target: '', edit: 'one', move: 'inf' })
+  })
+
+  test('after a state reset every field is drawn empty with a value other than its last', () => {
+    expect(emptiedAfter({ q: '', capture: 'half', target: null, edit: 'one', move: '' })).toEqual({ q: null, capture: '', target: '', edit: '', move: null })
   })
 })

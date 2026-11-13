@@ -3,7 +3,7 @@ import type { Elements, EngineInterface, Register } from 'claude-code'
 
 import type { Fill, Note, NoteProblem, NoteProject, NoteStatus, PaneState, SyncState } from '../types'
 import { focusMove, needsView, pagedSlot, routeFocus } from '../src/focus'
-import { drawField, drawnTyped, settleDrawn } from '../src/fields'
+import { drawField, drawnTyped, emptiedAfter, settleDrawn } from '../src/fields'
 import { createMirrorStore } from '../src/mirror'
 import type { Action, Ctx, Focus, Line } from '../src/model'
 import {
@@ -1793,7 +1793,8 @@ export const register: Register = (on, options) => {
     const ending = sessionEnded(turnState)
     turnState = ending.state
     // $.state is about to reset: a draft the open pane holds goes back into the prompt first.
-    const held = (await read($, pane)).stash
+    const before = await read($, pane)
+    const held = before.stash
     if (held !== '') {
       const box = await $.prompt.read().catch(() => ({ text: '' }))
       const filled = await $.prompt.fill({ text: joined(box.text, held), mode: 'replace' }).catch(() => ({ isFilled: false }))
@@ -1802,6 +1803,7 @@ export const register: Register = (on, options) => {
     }
     const ended = await next(e)
     await update($, turns, ending.facts)
+    await setPane($, state => ({ ...state, drawn: emptiedAfter(before.drawn) }))
     $.clock.after(100, () => {
       storeIO($)
         .then(store.loadAll)

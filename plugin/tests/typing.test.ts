@@ -97,3 +97,45 @@ test('Enter on a search that lists draws the query back each time: the field emp
   expect(await drawnIn(ui, 'q')).toBe('rename ')
   await ui.unmount()
 })
+
+test('capture saves retried after a failure keep the text each time, and a saved one never comes back', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.press({ key: 'key-pane:next' })
+  await ui.input({ key: 'capture', text: 'keep me', kind: 'change' })
+  // To the picker and back: the field comes into view drawn with the draft.
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  expect(await drawnIn(ui, 'capture')).toBe('keep me')
+  dir.failWrites = true
+  await ui.input({ key: 'capture', text: 'keep me', kind: 'submit' })
+  const once = await drawnIn(ui, 'capture')
+  expect(String(once).trimEnd()).toBe('keep me')
+  await ui.input({ key: 'capture', text: String(once), kind: 'submit' })
+  const twice = await drawnIn(ui, 'capture')
+  expect(String(twice).trimEnd()).toBe('keep me')
+  expect(twice).not.toBe(once)
+  dir.failWrites = false
+  await ui.input({ key: 'capture', text: String(twice), kind: 'submit' })
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  expect(await drawnIn(ui, 'capture')).toBe('')
+  await ui.unmount()
+})
+
+test('a search saved as a note after failed saves leaves the list unfiltered', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.input({ key: 'q', text: 'unique missing note', kind: 'change' })
+  dir.failWrites = true
+  await ui.input({ key: 'q', text: 'unique missing note', kind: 'submit' })
+  await ui.input({ key: 'q', text: String(await drawnIn(ui, 'q')), kind: 'submit' })
+  dir.failWrites = false
+  await ui.input({ key: 'q', text: String(await drawnIn(ui, 'q')), kind: 'submit' })
+  expect(await ui.find({ type: 'Text', text: /store helpers/ })).toBeDefined()
+  await ui.unmount()
+})

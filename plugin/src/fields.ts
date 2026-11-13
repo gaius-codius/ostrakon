@@ -45,14 +45,33 @@ export const settleDrawn = (before: PaneState, after: PaneState): PaneState => {
 // (and empties itself on Enter): the same text comes back with a trailing space toggled (trimmed
 // everywhere it's read), and an empty field drawn empty last is drawn with no value.
 export const redrawn = (text: string) => (text === text.trimEnd() ? `${text} ` : text.trimEnd())
+// The typed state becomes what's drawn too, space and all: the field holds exactly that now, and
+// its next Enter is compared with it.
 export const drawField = (state: PaneState, field: FieldKey, text: string): PaneState => {
   const last = state.drawn[field]
   const next = text === '' ? (last === '' ? null : '') : text === last ? redrawn(text) : text
-  return { ...state, drawn: { ...state.drawn, [field]: next } }
+  return { ...typedAs(state, field, next ?? ''), drawn: { ...state.drawn, [field]: next } }
 }
+
+const typedAs = (state: PaneState, field: FieldKey, text: string): PaneState =>
+  field === 'q'
+    ? { ...state, query: text }
+    : field === 'capture'
+      ? { ...state, capture: { ...state.capture, draft: text } }
+      : field === 'target'
+        ? { ...state, capture: { ...state.capture, find: text } }
+        : field === 'edit'
+          ? { ...state, edit: state.edit ? { ...state.edit, draft: text } : null }
+          : { ...state, moveFind: text }
 
 // A pane opened again draws its fields afresh, each with the text typed in it.
 export const drawnTyped = (state: PaneState): PaneState => ({
   ...state,
   drawn: Object.fromEntries(FIELDS.map(field => [field, typedIn(state, field)])) as PaneState['drawn'],
 })
+
+// After $.state resets with the pane open, every field is empty again but the engine holds what it
+// last drew, and the fresh state's '' may be just that: each field is drawn empty with a value
+// other than the one it had before the reset.
+export const emptiedAfter = (before: PaneState['drawn']): PaneState['drawn'] =>
+  Object.fromEntries(FIELDS.map(field => [field, before[field] === '' ? null : ''])) as PaneState['drawn']
