@@ -275,7 +275,7 @@ const SearchRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Ha
         <Input
           key={SEARCH_KEY}
           placeholder={TEXT.placeholder}
-          value={view.pane.query}
+          value={view.pane.drawn.q ?? undefined}
           submitLabel={isNoMatch(view) ? '' : TEXT.toList}
           autoFocus={view.pane.mode === 'browse' ? true : undefined}
           onInput={value => handlers.searchInput(value)}
@@ -340,7 +340,7 @@ const CaptureRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: H
         <Input
           key={CAPTURE_KEY}
           placeholder='write a note'
-          value={view.pane.capture.draft}
+          value={view.pane.drawn.capture ?? undefined}
           submitLabel=''
           rows={captureRows(view)}
           autoFocus
@@ -364,7 +364,7 @@ const TargetRow = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Ha
         <Input
           key={TARGET_KEY}
           placeholder={TEXT.targetPlaceholder}
-          value={view.pane.capture.find}
+          value={view.pane.drawn.target ?? undefined}
           submitLabel=''
           autoFocus
           onInput={value => handlers.targetInput(value)}
@@ -637,7 +637,7 @@ const Rows = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
               <Box width={view.width}>
                 <Input
                   key={EDIT_KEY}
-                  value={view.pane.edit.draft}
+                  value={view.pane.drawn.edit ?? undefined}
                   submitLabel=''
                   rows={editFieldRows(view)}
                   onInput={value => handlers.editInput(value)}
@@ -897,7 +897,7 @@ const Move = ({ el, view, handlers }: { el: E; view: PaneView; handlers: Handler
           <Input
             key={MOVE_KEY}
             placeholder={TEXT.targetPlaceholder}
-            value={view.pane.moveFind}
+            value={view.pane.drawn.move ?? undefined}
             submitLabel=''
             autoFocus
             onInput={value => handlers.moveInput(value)}

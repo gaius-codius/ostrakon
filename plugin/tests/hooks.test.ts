@@ -408,10 +408,12 @@ test("ctrl+s in the edit card of another project's note, in scope all, does noth
   await ui.input({ key: 'q', text: 'metric', kind: 'change' })
   await ui.input({ key: 'q', text: 'metric', kind: 'submit' })
   await ui.press({ key: 'key-e' })
+  const opened = (await ui.find({ type: 'Input', key: 'edit' }))?.props?.value
   await ui.input({ key: 'edit', text: 'half-edited metric', kind: 'change' })
   await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  // Still the card's field, never drawn again: it keeps what was typed in it.
   const field = await ui.find({ type: 'Input', key: 'edit' })
-  expect((field?.props as { value?: string } | undefined)?.value).toBe('half-edited metric')
+  expect(field?.props?.value).toBe(opened)
   expect((await texts(ui)).some(text => /draft kept/.test(text))).toBe(true)
   await ui.unmount()
 })
@@ -781,7 +783,8 @@ test('docked at short heights, editing a note in a long list grows its field and
     expect(await spill(ui)).toBeLessThanOrEqual(0)
     const field = await ui.find({ type: 'Input', key: 'edit' })
     expect(field?.props?.rows).toBe(Math.max(2, Math.min(WIDTH.fieldRows, bodyRows - 9)))
-    expect(String(field?.props?.value)).toMatch(/TAIL$/)
+    // Resizing never draws the field again: it keeps what was typed in it.
+    expect(field?.props?.value).toMatch(/^note number \d+$/)
     // The field holds the text, so the preview doesn't repeat it.
     const boxes = (await ui.findAll({ type: 'Box' })) as Drawn[]
     expect(boxes.some(box => box.props?.paddingLeft === TEXT_COLUMN)).toBe(false)

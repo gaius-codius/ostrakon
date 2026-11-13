@@ -84,7 +84,12 @@ export type PaneState = {
   // marks its notes sent.
   fills: Fill[]
   undo: Undo[]
+  // What each text field draws, by its key: never the typed text above while it's typed in
+  // (src/fields.ts). null draws no value, which is how a field drawn empty last is emptied again.
+  drawn: Record<FieldKey, string | null>
 }
+
+export type FieldKey = 'q' | 'capture' | 'target' | 'edit' | 'move'
 
 // A queued fill is carried by a prompt waiting in the queue: a later queued prompt leaves it, and
 // taking that prompt back into the box makes it held again. Only a queued fill is sent by a row.

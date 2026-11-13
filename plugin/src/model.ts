@@ -25,6 +25,7 @@ export const freshPane = (): PaneState => ({
   stash: '',
   fills: [],
   undo: [],
+  drawn: { q: '', capture: '', target: '', edit: '', move: '' },
 })
 
 // ---- text ----
