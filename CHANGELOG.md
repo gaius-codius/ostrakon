@@ -6,13 +6,15 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-14
+
 ### Fixed
 
 - Fast typing and voice-to-text in the pane's text fields no longer drop letters or mix in earlier text. The search, a new note, the edit card and both pickers keep what you type.
 
 ### Changed
 
-- Tested with Claude Code 2.1.322; `ostrakon doctor` now compares your version to that.
+- Tested with Claude Code 2.1.325; `ostrakon doctor` now compares your version to that.
 - Enter on a note in the pane opens it in full instead of sending it to the prompt. ↑ ↓ or `j` `k` scroll a long note; `t` sends it to the prompt, `s` sends it, `e` edits it, and Enter or Esc goes back. `t` still sends a note straight from the list.
 
 ## [0.10.0] - 2026-11-07
@@ -195,7 +197,8 @@ The first public release.
 - `ostrakon pair`: a QR code with a one-time code (5 minutes, works once) pairs a phone with the hub; `--token` prints the long-lived link instead.
 - The `ostrakon` command (`pair`, `hub`, `update`, `version`), `install.sh` and `update.sh`.
 
-[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/gaius-codius/ostrakon/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/gaius-codius/ostrakon/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/gaius-codius/ostrakon/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/gaius-codius/ostrakon/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/gaius-codius/ostrakon/compare/v0.8.0...v0.8.1
