@@ -1037,7 +1037,10 @@ const act = async ($: EngineInterface, action: Action) => {
         await setPane($, current => ({ ...current, sheetPage: (page + step + pages) % pages }))
         return
       }
-      const next = view.lines[Math.max(0, Math.min(view.lines.length - 1, (at < 0 ? -1 : at) + step))]
+      // Off either end, round to the other: ↓ on the last row goes to the top, ↑ on the first to the
+      // bottom. With no row selected, either goes to the top.
+      const count = view.lines.length
+      const next = view.lines[at < 0 ? 0 : (at + step + count) % count]
       if (next) await focusLine($, next.key)
       return
     }
@@ -2135,6 +2138,13 @@ export const register: Register = (on, options) => {
     if (landing.paged !== undefined) {
       lastElement = pagedSlot(await viewOf($), landing.paged)
       return next({ ...e, element: lastElement })
+    }
+    if (landing.wrap !== undefined) {
+      const stayed = await next({ ...e, element: landing.to })
+      // In turn with the keys, so an Enter pressed right after acts once the ring is on the new row.
+      const line = landing.wrap
+      serially(() => focusLine($, line)).catch(error => reportStorage($, error))
+      return stayed
     }
     return next(landing.to === e.element ? e : { ...e, element: landing.to })
   })

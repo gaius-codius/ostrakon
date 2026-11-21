@@ -1381,7 +1381,8 @@ const showMovePage = () => {
   $('sheet-move').append($('picker-body'))
   renderPickerList()
   motion.pageTurn($('sheet-actions'), $('sheet-move'), 1, () => {})
-  ;($('picker-body').querySelector('[aria-pressed="true"]') ?? $('picker-search')).focus({ preventScroll: true })
+  // As in File under: the search takes the typing at once.
+  $('picker-search').focus({ preventScroll: true })
 }
 
 // Back to the actions, by Back, Escape or a swipe right; `isDragged` for the swipe.
@@ -2138,7 +2139,8 @@ const openPicker = ({ trigger = null }) => {
   // Still leaving from last time: gone at once.
   if ($('picker').open) $('picker').close()
   $('picker').showModal()
-  ;($('picker').querySelector('[aria-pressed="true"]') ?? $('picker-search')).focus({ preventScroll: true })
+  // Opened to find a project: the search takes the typing at once.
+  $('picker-search').focus({ preventScroll: true })
   motion.sheetIn($('picker'))
 }
 
