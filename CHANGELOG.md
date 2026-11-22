@@ -10,6 +10,13 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 - In the pane, ↓ on the last note goes back to the top of the list, and `k` on the top row goes to the bottom.
 - In the phone app, the project search takes focus when the project picker or Move to opens, so you can type straight away.
+- In the phone app, Enter in the project search picks the first project that matches.
+
+### Fixed
+
+- In the pane, Enter pressed straight after ↓ or `j` acts on the row the move went to, even when the list scrolls.
+- In the pane, the selected row and the keyboard focus no longer end up a row apart after `g` or another move scrolls a long list, so Enter acts on the row that's highlighted.
+- In the phone app, the project picker and Move to fit above the keyboard, so their projects aren't hidden under it.
 
 ## [0.11.0] - 2026-11-14
 

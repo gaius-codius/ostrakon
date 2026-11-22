@@ -383,14 +383,13 @@ test('Cancel and Escape close the editor and keep the note', async () => {
   assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('more')), true, "focus isn't back on the note's ⋯")
 })
 
-// Editing a note with the keyboard up: the editor fills the screen above it, and the page under it
-// never scrolls. Playwright's WebKit has no keyboard, so the page gets a stand-in visualViewport,
-// shrunk by a keyboard's height on cue.
+// Playwright's WebKit has no keyboard, so a page that needs one gets a stand-in visualViewport,
+// shrunk by a keyboard's height on cue: `showKeyboard_(px)`, then `showKeyboard_(0)` to put it away.
 const KEYBOARD_PX = 320
-test('the editor fills the screen above the keyboard, and nothing scrolls', async t => {
-  const edited = await pageWith(devices['iPhone 15'])
-  t.after(() => edited.context().close())
-  await edited.context().addInitScript(() => {
+const keyboardPage = async t => {
+  const shown = await pageWith(devices['iPhone 15'])
+  t.after(() => shown.context().close())
+  await shown.context().addInitScript(() => {
     const view = new EventTarget()
     Object.assign(view, { offsetTop: 0, offsetLeft: 0, scale: 1, width: innerWidth, height: innerHeight })
     Object.defineProperty(window, 'visualViewport', { value: view, configurable: true })
@@ -409,6 +408,13 @@ test('the editor fills the screen above the keyboard, and nothing scrolls', asyn
         requestAnimationFrame(next)
       })
   })
+  return shown
+}
+
+// Editing a note with the keyboard up: the editor fills the screen above it, and the page under it
+// never scrolls.
+test('the editor fills the screen above the keyboard, and nothing scrolls', async t => {
+  const edited = await keyboardPage(t)
   await edited.goto(HUB)
   await edited.locator('li.note').first().waitFor()
   // The last row (the long note's group comes last), with the list scrolled to its end.
@@ -439,6 +445,78 @@ test('the editor fills the screen above the keyboard, and nothing scrolls', asyn
   await edited.waitForTimeout(100)
   const rest = await edited.evaluate(() => document.querySelector('#editor .panel').getBoundingClientRect().bottom)
   assert.ok(rest > bottom + KEYBOARD_PX - 50, `the editor didn't grow back when the keyboard went (its bottom at ${Math.round(rest)}px)`)
+})
+
+// The project search takes focus as Move to and File under open, so the keyboard comes up over
+// them: each fits above it, with its search and projects in view, and takes the screen back after.
+test('with the keyboard up, Move to and File under fit above it', async t => {
+  const shown = await keyboardPage(t)
+  await shown.goto(HUB)
+  await shown.locator('li.note').first().waitFor()
+  const height = await shown.evaluate(() => innerHeight)
+  const above = height - KEYBOARD_PX
+  const boxes = async (panel, list) =>
+    shown.evaluate(
+      ([panel, list]) => {
+        const box = selector => document.querySelector(selector).getBoundingClientRect()
+        return { panel: box(panel).bottom, search: box('#picker-search').bottom, first: box(list).bottom }
+      },
+      [panel, list],
+    )
+  const check = async (name, { panel, search, first }) => {
+    assert.ok(panel <= above + SLACK_PX, `${name} runs under the keyboard: its bottom at ${Math.round(panel)}px, the keyboard's top at ${above}px`)
+    assert.ok(search <= above && first <= above, `${name}'s search or first project is under the keyboard`)
+    // Scrolled to its end, the list's last row, unfiled, is there to tap: not cut off or covered.
+    const reached = await shown.evaluate(() => {
+      const scroll = document.querySelector('#picker-body .picks-scroll')
+      scroll.scrollTop = scroll.scrollHeight
+      const unfiled = document.getElementById('picker-unfiled').getBoundingClientRect()
+      const hit = document.elementFromPoint(unfiled.left + unfiled.width / 2, unfiled.top + unfiled.height / 2)
+      return hit !== null && hit.closest('#picker-unfiled') === document.getElementById('picker-unfiled')
+    })
+    assert.ok(reached, `${name}'s list can't be scrolled to unfiled`)
+  }
+
+  await shown.locator('li.note').first().locator('.more').tap()
+  await shown.waitForFunction(() => document.getElementById('sheet').open)
+  await shown.locator('#sheet-actions .action', { hasText: 'Move to project' }).tap()
+  await shown.evaluate(height => window.showKeyboard_(height), KEYBOARD_PX)
+  await shown.waitForTimeout(400)
+  await check('Move to', await boxes('#sheet .panel', '#sheet-move .pick'))
+  // Back with the keyboard still up: the actions page keeps the note's quote.
+  await shown.locator('#sheet-back').tap()
+  await shown.waitForTimeout(400)
+  assert.equal(await shown.evaluate(() => getComputedStyle(document.querySelector('#sheet .head')).display), 'flex', 'the quote stayed hidden after Back')
+  await shown.evaluate(() => window.showKeyboard_(0))
+  await shown.waitForTimeout(100)
+  assert.equal(await shown.evaluate(() => document.getElementById('sheet').hasAttribute('data-keyboard')), false, 'the menu kept its keyboard fit')
+  await shown.keyboard.press('Escape')
+  await shown.waitForFunction(() => !document.getElementById('sheet').open)
+
+  await shown.evaluate(() => openPicker({}))
+  await shown.evaluate(height => window.showKeyboard_(height), KEYBOARD_PX)
+  await shown.waitForTimeout(400)
+  await check('File under', await boxes('#picker .panel', '#picker-list .pick'))
+})
+
+test('Enter in the project search picks the first project it matches; with nothing typed it does nothing', async () => {
+  await page.evaluate(() => openPicker({}))
+  await page.waitForFunction(() => document.activeElement?.id === 'picker-search')
+  await page.keyboard.press('Enter')
+  assert.equal(await page.evaluate(() => document.getElementById('picker').open), true, 'Enter with nothing typed closed the picker')
+  // "l" matches long and later: Enter takes the first drawn.
+  const [first, count] = await page.evaluate(() => {
+    const field = document.getElementById('picker-search')
+    field.value = 'l'
+    field.dispatchEvent(new Event('input'))
+    const picks = document.querySelectorAll('#picker-list .pick')
+    return [picks[0]?.dataset.key, picks.length]
+  })
+  assert.ok(count >= 2, `"l" matches ${count} projects, not several`)
+  await page.keyboard.press('Enter')
+  await page.waitForFunction(() => !document.getElementById('picker').open)
+  assert.equal(await page.evaluate(() => chosen), first)
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'text', "focus isn't back in the note's field")
 })
 
 test('Save changes the note', async () => {
