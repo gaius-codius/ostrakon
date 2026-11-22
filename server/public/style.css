@@ -967,6 +967,19 @@ dialog.sheet::backdrop {
   /* Over the actions as it slides in. */
   background: var(--surface);
 }
+/* With the keyboard up (app.js fitPickers), the sheet is the part of the screen above it: Move to
+   takes that room, and the note's quote goes to make it. */
+.sheet[data-keyboard] .panel {
+  bottom: 0.5rem;
+}
+.sheet[data-keyboard] .head {
+  display: none;
+}
+/* The room above the keyboard less the panel's top gap (3rem), its bottom (0.5rem), and Cancel
+   with the gap over it (4rem): the list's end, unfiled, stays in reach. */
+.sheet[data-keyboard] .move {
+  height: min(30rem, calc(var(--view-height) - 7.5rem));
+}
 /* Swipes on the sheet are its own (down closes it, right goes back a page), except up and down on
    what scrolls: Move to's projects, and a long note or actions that don't fit. */
 .sheet .panel {
@@ -1266,6 +1279,10 @@ dialog.drawer .panel {
 }
 .drawer .picks-scroll {
   padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+}
+/* With the keyboard up the home bar's room is the keyboard's. */
+.drawer[data-keyboard] .picks-scroll {
+  padding-bottom: 1.25rem;
 }
 .picks {
   list-style: none;

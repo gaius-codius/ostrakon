@@ -1049,6 +1049,32 @@ const fitEditor = () => {
   editor.toggleAttribute('data-keyboard', window.innerHeight - view.height > 40)
 }
 
+// The project search in File under and Move to takes focus when they open, so the keyboard comes
+// up over them. iOS slides the view over the page for it rather than shrinking the page, so each
+// is fitted, while the keyboard is up, to the part of the screen above it: its projects stay in
+// reach rather than under the keyboard.
+const fitPickers = () => {
+  const view = window.visualViewport
+  // Zoomed in, the view is smaller for that, not for a keyboard.
+  const isKeyboard = view !== undefined && view !== null && view.scale <= 1.01 && window.innerHeight - view.height > 40
+  for (const dialog of [$('sheet'), $('picker')]) {
+    // The sheet only on Move to: its actions page keeps the note's quote and its own place.
+    if (isKeyboard && dialog.open && (dialog !== $('sheet') || sheetPage === 'move')) {
+      dialog.style.top = `${view.offsetTop}px`
+      dialog.style.height = `${view.height}px`
+      dialog.style.setProperty('--view-height', `${view.height}px`)
+      dialog.toggleAttribute('data-keyboard', true)
+    } else {
+      dialog.style.removeProperty('top')
+      dialog.style.removeProperty('height')
+      dialog.style.removeProperty('--view-height')
+      dialog.toggleAttribute('data-keyboard', false)
+    }
+  }
+}
+window.visualViewport?.addEventListener('resize', fitPickers)
+window.visualViewport?.addEventListener('scroll', fitPickers)
+
 // Opened from a hold's lift or Edit's tap: the field takes focus in that same touch, as iOS shows
 // the keyboard only for a focus a touch asked for.
 const startEdit = id => {
@@ -1322,6 +1348,8 @@ const openSheet = (id, trigger = moreOf(id)) => {
   $('sheet').querySelector('.quote').scrollTop = 0
   markScrolls()
   $('sheet-actions').querySelector('button')?.focus({ preventScroll: true })
+  // Not fitted to the keyboard from last time.
+  fitPickers()
   motion.sheetIn($('sheet'))
   renderList()
 }
@@ -1383,6 +1411,7 @@ const showMovePage = () => {
   motion.pageTurn($('sheet-actions'), $('sheet-move'), 1, () => {})
   // As in File under: the search takes the typing at once.
   $('picker-search').focus({ preventScroll: true })
+  fitPickers()
 }
 
 // Back to the actions, by Back, Escape or a swipe right; `isDragged` for the swipe.
@@ -1392,6 +1421,7 @@ const showActionsPage = (isDragged = false) => {
   picking = null
   motion.pageTurn($('sheet-move'), $('sheet-actions'), -1, () => pickerHome().append($('picker-body')), isDragged)
   $('sheet-actions').querySelector('[data-key="Move to project"]')?.focus({ preventScroll: true })
+  fitPickers()
 }
 
 // The ⋯ to focus once note `id` leaves the list: the next row's, else the one before.
@@ -2139,8 +2169,10 @@ const openPicker = ({ trigger = null }) => {
   // Still leaving from last time: gone at once.
   if ($('picker').open) $('picker').close()
   $('picker').showModal()
-  // Opened to find a project: the search takes the typing at once.
+  // Opened to find a project: the search takes the typing at once. The keyboard may be up already,
+  // from the note's field.
   $('picker-search').focus({ preventScroll: true })
+  fitPickers()
   motion.sheetIn($('picker'))
 }
 
@@ -2240,6 +2272,16 @@ $('editor').addEventListener('cancel', event => {
 })
 
 $('picker-search').addEventListener('input', renderPickerList)
+// Enter picks the first project the typed words match, as the pane's pickers do. With nothing
+// typed, or nothing matching, it does nothing.
+$('picker-search').addEventListener('keydown', event => {
+  // 229: an input method's own Enter, which some WebKit versions don't mark as composing.
+  if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return
+  event.preventDefault()
+  if ($('picker-search').value.trim() === '') return
+  const first = $('picker-list').querySelector('.pick')
+  if (first) choose(first.dataset.key)
+})
 $('picker-unfiled').addEventListener('click', () => choose(null))
 $('picker-done').addEventListener('click', () => closePicker())
 $('picker')

@@ -102,6 +102,9 @@ const HARVEST_HINTS_KEY = 'harvestHints'
 const POLL_MS = 2000
 // After a refused close (Esc as back), when the keys have gone back to the prompt.
 const REFOCUS_MS = 60
+// How long after a redraw that adds or drops the ↑ line the ring is put back on its row: long
+// enough for the terminal to have drawn it.
+const SETTLE_MS = 20
 
 // The session's state values. $.state resets on /clear, /resume and /branch; the store reloads
 // notes from disk then, so nothing here is the only copy of a note.
@@ -785,6 +788,33 @@ const realign = async ($: EngineInterface) => {
   }
 }
 
+// The terminal keeps the ring at its place among the controls across a redraw (pane.tsx), and the
+// ↑ line above the rows is one of them: a move that pages it in or out leaves the ring a row off
+// the one the mod just focused (below it, paging to the top; above it, paging down). So after
+// such a redraw the ring goes back to the selected row's slot.
+// `settles` counts the settles asked for: one stands only while no later settle, person's move or
+// close came after it, so it never pulls the ring back from a row the person has since moved to.
+// Until it runs, `isSettling`, a row's press acts on the selected row (pressSlot), not the row
+// the ring was left on.
+let drewAbove: boolean | undefined
+let settles = 0
+let isSettling = false
+const cancelSettle = () => {
+  settles += 1
+  isSettling = false
+}
+const settleRing = async ($: EngineInterface, asked: number) => {
+  if (asked !== settles) return
+  const view = (await read($, isOpen)) ? await viewOf($) : undefined
+  if (asked !== settles) return
+  isSettling = false
+  if (view?.focus.kind !== 'line' || view.pane.cursor === null) return
+  const slot = view.page.lines.findIndex(line => line.key === view.pane.cursor)
+  if (slot < 0 || !lastElement?.startsWith('slot-')) return
+  lastElement = slotKey(slot)
+  focusKey($, lastElement)
+}
+
 // Puts the held draft back and resets what lasts only while the pane is open. Runs from the mod's
 // own close and from the ui.close hook (Esc, the close mark); the second run finds nothing held.
 let closing: Promise<void> | undefined
@@ -809,6 +839,8 @@ const giveBack = async ($: EngineInterface) => {
 
 const cleanUp = async ($: EngineInterface) => {
   generation += 1
+  drewAbove = undefined
+  cancelSettle()
   await giveBack($)
   // Closed on the edit card (or the key sheet over it), the pane opens on it again; anywhere else,
   // on the list, with any edit draft kept for the next `e` on that note.
@@ -1410,9 +1442,14 @@ const moveNote = async ($: EngineInterface, choose: (view: PaneView, note: Note)
   await focusLine($, (await viewOf($)).pane.cursor)
 }
 
-const pressSlot = async ($: EngineInterface, slot: number) => {
+// A row pressed, as the render it was pressed in drew it: `key` the line drawn there. A press on
+// the selected row (Enter, which presses the ring's row) acts on the selection as it is now, so a
+// move still in the queue (↓ then Enter at once) counts; any other row acts on the line drawn
+// there, never on whatever the slot holds once the window has paged.
+const pressSlot = async ($: EngineInterface, key: string | undefined, isSelection: boolean) => {
   const view = await viewOf($)
-  const line = view.page.lines[slot]
+  const wanted = isSelection && view.focus.kind === 'line' && view.pane.cursor !== null ? view.pane.cursor : key
+  const line = view.lines.find(candidate => candidate.key === wanted)
   if (!line) return
   await setPane($, state => ({ ...state, cursor: line.key, focus: 'line' }))
   await act($, line.kind === 'note' ? 'read' : line.kind === 'group' ? (line.isBare ? 'history' : 'fold') : 'details')
@@ -2127,6 +2164,8 @@ export const register: Register = (on, options) => {
   // The ring's routing is decided in src/focus.ts; this applies it.
   on('ui.focus', { component: 'Pane', requestId: PANE }, async ($, e, next) => {
     const event = { element: e.element, isPerson: e.origin.kind === 'person' }
+    // The person's own move wins over a settle still to come.
+    if (event.isPerson) cancelSettle()
     const previous = lastElement
     const move = focusMove(event)
     // Where the ring stays where it went, that's its last element now, before any wait.
@@ -2156,6 +2195,16 @@ export const register: Register = (on, options) => {
     geometry.isFocused = e.props.isFocused
     const el = $.ui.resolve(e) as Elements['terminal']
     const view = await viewOf($)
+    const hasAbove = view.page.above > 0
+    if (drewAbove !== undefined && hasAbove !== drewAbove && view.focus.kind === 'line') {
+      cancelSettle()
+      const asked = settles
+      isSettling = true
+      $.clock.after(SETTLE_MS, () => {
+        serially(() => settleRing($, asked)).catch(error => reportStorage($, error))
+      })
+    }
+    drewAbove = hasAbove
     const run = (work: Promise<unknown>) => {
       work.catch(error => reportStorage($, error))
     }
@@ -2164,7 +2213,13 @@ export const register: Register = (on, options) => {
       action: action => run(serially(() => act($, action))),
       switchKeys: () => serially(() => switchKeys($)).catch(error => reportStorage($, error)),
       digit: n => run(serially(() => digit($, n))),
-      pressSlot: slot => run(serially(() => pressSlot($, slot))),
+      pressSlot: slot => {
+        const line = view.page.lines[slot]
+        // A press on the selected row acts on the selection; so does any row's while the ring may
+        // still be a row off the selected one (a settle to come).
+        const isSelection = view.focus.kind === 'line' && line !== undefined && (view.pane.cursor === line.key || isSettling)
+        run(serially(() => pressSlot($, line?.key, isSelection)))
+      },
       searchInput: value => run(searchInput($, value)),
       searchSubmit: value => run(serially(() => searchSubmit($, value))),
       captureInput: value => run(setPane($, state => ({ ...state, capture: { ...state.capture, draft: value } }))),

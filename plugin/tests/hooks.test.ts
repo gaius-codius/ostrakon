@@ -1149,6 +1149,27 @@ test('↓ on the bottom row goes round to the top, and ↑ there back to the bot
   await ui.unmount()
 })
 
+test('⏎ pressed at once after a move acts on the row the move went to', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-g' })
+  await ui.press({ key: 'key-g' })
+  // The ring is on the bottom row, infra's note. j and ⏎ land together, so ⏎ presses that row's
+  // slot as drawn before the move: it still acts on the top row, cc's heading, which folds.
+  const bottom = (await ui.findAll({ type: 'Button' }))
+    .map(found => found.key)
+    .filter(key => key?.startsWith('slot-'))
+    .at(-1)
+  await Promise.all([ui.press({ key: 'key-j' }), ui.press({ key: bottom ?? '' })])
+  expect(await ui.find({ type: 'Text', text: /^ unfold$/ })).toBeDefined()
+  expect(noteIn(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH03').status).toBe('open')
+  await ui.unmount()
+})
+
 test('the ↓ arrow on the bottom row goes round to the top too', async ($, on) => {
   const dir = fixture()
   await startSession($, on, dir)
