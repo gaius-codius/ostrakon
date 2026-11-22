@@ -77,6 +77,10 @@ export type FocusLanding = {
   // Paged by one line: the ring goes instead to this line's slot in the window drawn after `pane`
   // (pagedSlot), which becomes the last element.
   paged?: string
+  // Gone round to this line: the ring stays put, and the mod then selects the line and moves the
+  // ring to it once the window is redrawn, as `j` does. Moved at once, the ring would land a row
+  // low when the redraw drops the ↑ sentinel above it.
+  wrap?: string
 }
 
 // Where a move lands, from the ring's last element before it and the view (when needsView).
@@ -96,9 +100,13 @@ export const routeFocus = (move: FocusMove, e: FocusEvent, previous: string | un
       // In a picker, past its last project stays there; Shift+Tab off the target picker's field
       // goes back to the field.
       if (previous?.startsWith(PLACE_PREFIX) || previous === TARGET_KEY) return { to: previous, last: previous }
-      // Moving on past the last row stays there; Shift+Tab off the search field goes to the last
-      // row; anything else to the search field.
+      // Moving on past the list's last row goes round to its first, paging back to the top (↓ there
+      // as `j` does); past a row that isn't the list's last stays there; Shift+Tab off the search
+      // field goes to the last row; anything else to the search field.
       const last = page.lines.length - 1
+      const first = view?.lines[0]
+      const isListEnd = previous?.startsWith('slot-') === true && page.offset + Number(previous.slice(5)) === (view?.lines.length ?? 0) - 1
+      if (isListEnd && first) return { to: previous, last: previous, wrap: first.key }
       const to = previous?.startsWith('slot-') ? previous : previous === SEARCH_KEY && last >= 0 ? slotKey(last) : SEARCH_KEY
       const line = to.startsWith('slot-') ? page.lines[Number(to.slice(5))] : undefined
       return {

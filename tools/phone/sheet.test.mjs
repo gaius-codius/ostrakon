@@ -173,6 +173,8 @@ test('the File under drawer rises into place', async () => {
   // It opens from the capture form's "more" chip, shown only with more projects than fit as chips;
   // opened straight here instead.
   await watchRise('#picker', () => page.evaluate(() => openPicker({})))
+  // The search takes the typing at once, even with a project already chosen.
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'picker-search')
 })
 
 const sheetOpen = () => page.waitForFunction(() => document.getElementById('sheet').open)
@@ -230,6 +232,8 @@ test('Move to project turns to a page of the menu, and Back turns back', async (
   await openMovePage()
   assert.equal(await page.evaluate(() => document.getElementById('picker').open), false, 'the picker opened as a second dialog')
   assert.ok((await page.locator('#sheet-move .pick').count()) >= 3, 'the Move to page has no projects')
+  // The search takes the typing at once, though the note already has a project.
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'picker-search')
   const { width } = page.viewportSize()
   const left = (await page.locator('#sheet-move').boundingBox()).x
   assert.ok(left >= 0 && left < width / 4, `the Move to page came to rest at ${left}px`)

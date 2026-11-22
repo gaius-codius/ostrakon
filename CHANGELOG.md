@@ -6,6 +6,11 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 
 ## [Unreleased]
 
+### Changed
+
+- In the pane, ↓ on the last note goes back to the top of the list, and `k` on the top row goes to the bottom.
+- In the phone app, the project search takes focus when the project picker or Move to opens, so you can type straight away.
+
 ## [0.11.0] - 2026-11-14
 
 ### Fixed

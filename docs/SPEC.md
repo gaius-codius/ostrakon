@@ -184,7 +184,7 @@ Letter and digit keys work only while a row, header or Button has focus (an Inpu
 
 | Key | Action |
 |---|---|
-| ↑ ↓ / Tab / `j` `k` | move; selection follows focus |
+| ↑ ↓ / Tab / `j` `k` | move; selection follows focus. ↓, Tab and `j` on the last row go round to the top; `k` on the top row goes round to the bottom, while ↑ there goes to the search field |
 | `1`–`9` | jump to that row in the window |
 | `g` | the top row; on the top row, the bottom one (`G` can't be a hotkey, §2.2). In the key sheet, not the footer |
 | ⏎ | in search: focus the first result. On a note: open it in the reader (§4.7) |

@@ -54,6 +54,13 @@ describe('focus', () => {
     expect(after(fromFooter, { ...freshPane(), focus: 'control', cursor: 'n2' })).toMatchObject({ cursor: 'n2', focus: 'search' })
   })
 
+  test("past the list's last row the layer goes round to the first, paging back to the top", () => {
+    // The window shows n6–n9: n9 is the list's last row.
+    const wrapped = land(person('key-e'), 'slot-3', viewAt(6))
+    // The ring stays on the last row until the mod has moved the selection, and the window, to n0.
+    expect(wrapped).toEqual({ to: 'slot-3', last: 'slot-3', wrap: 'n0' })
+  })
+
   test("off search with no rows the layer sends the ring to search; from a row that left the window the pane's focus goes to search", () => {
     const empty = land(person('key-e'), SEARCH_KEY, EMPTY)
     expect(empty.to).toBe(SEARCH_KEY)

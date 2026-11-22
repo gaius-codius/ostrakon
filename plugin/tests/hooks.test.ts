@@ -848,9 +848,10 @@ test('docked at short heights, the bundle keeps its send button and the note lis
   await run($, 'jot', '')
   const ui = await mountPane($)
   await ui.input({ key: 'q', text: '', kind: 'submit' })
+  // No ↓ after the last pick: on the bottom row it would go round to the top.
   for (let i = 0; i < 5; i += 1) {
     await ui.press({ key: 'key-v' })
-    await ui.press({ key: 'key-j' })
+    if (i < 4) await ui.press({ key: 'key-j' })
   }
   await ui.press({ key: 'key-b' })
   expect(await ui.find({ type: 'Text', text: /5 notes into one prompt/ })).toBeDefined()
@@ -1123,6 +1124,45 @@ test('g goes to the top row, and pressed there to the bottom', async ($, on) => 
   await ui.press({ key: 'key-g' })
   await ui.press({ key: 'key-d' })
   expect(noteIn(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH03').status).toBe('archived')
+  await ui.unmount()
+})
+
+test('↓ on the bottom row goes round to the top, and ↑ there back to the bottom', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-j' })
+  // To the bottom row, infra's one note, then ↓ past it: back on cc's heading, whose footer leads with fold.
+  await ui.press({ key: 'key-g' })
+  await ui.press({ key: 'key-g' })
+  expect(await ui.find({ type: 'Text', text: /^ to prompt$/ })).toBeDefined()
+  await ui.press({ key: 'key-j' })
+  expect(await ui.find({ type: 'Text', text: /^ to prompt$/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^ fold$/ })).toBeDefined()
+  // ↑ on the top row: the bottom row again, so d archives infra's note.
+  await ui.press({ key: 'key-k' })
+  await ui.press({ key: 'key-d' })
+  expect(noteIn(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH03').status).toBe('archived')
+  await ui.unmount()
+})
+
+test('the ↓ arrow on the bottom row goes round to the top too', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-g' })
+  await ui.press({ key: 'key-g' })
+  expect(await ui.find({ type: 'Text', text: /^ to prompt$/ })).toBeDefined()
+  // The arrow moves the ring on past the last row, onto the action layer drawn after it.
+  await $.ui.focus({ component: 'Pane', requestId: PANE.requestId, element: 'key-e', origin: { kind: 'person' } })
+  expect(await ui.find({ type: 'Text', text: /^ to prompt$/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^ fold$/ })).toBeDefined()
   await ui.unmount()
 })
 
