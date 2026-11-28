@@ -19,8 +19,12 @@ usage: ostrakon <command>
                machine's Tailscale name on port 8443
   jot [--project|-p <name>] <text>
                save a note of yours from outside Claude Code: into this machine's notes, and
-               to the hub at once if one is set up. --ask asks for it in a desktop prompt
-               (bind that to a key; README)
+               to the hub at once if one is set up. A note holds at most 8 KB.
+               Bind these to a key (README):
+                 --ask        ask for it in a desktop prompt
+                 --selection  save the text highlighted on the desktop
+  jot [--project|-p <name>] -
+               save what comes in on stdin: cmd | ostrakon jot -
   hub          run the hub in the foreground
   update       update this checkout (newest release, or pull its branch) and restart the
                hub if it's installed; --release / --main to switch (update.sh)
@@ -65,6 +69,14 @@ case ${1:-help} in
   jot)
     shift
     if [ "${1:-}" = --ask ]; then exec "$ROOT/bin/jot-ask"; fi
+    # --selection as an option before --, not as -p's value: bin/jot-selection passes it all to jot.
+    for ((i = 1; i <= $#; i++)); do
+      case ${!i} in
+        --) break ;;
+        -p | --project) i=$((i + 1)) ;;
+        --selection) exec "$ROOT/bin/jot-selection" "$@" ;;
+      esac
+    done
     need_bun; exec bun "$ROOT/server/jot.ts" jot "$@" ;;
   # The hub files issues only with the tokens in $ENV_FILE, never ones your shell exports for
   # your own use (SPEC §9.2 Filing).

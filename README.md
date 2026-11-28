@@ -206,11 +206,13 @@ Save a note without opening Claude Code. Needs [Bun](https://bun.sh).
 ```sh
 ostrakon jot call the plumber
 ostrakon jot -p cc fix the flaky test     # file it under a project
+make 2>&1 | tail -5 | ostrakon jot -      # save what comes in on stdin
 ```
 
 - **Where it goes:** this machine's notes folder, so it shows in your sessions here. If the mod has a hub set, the note goes to the hub at once and reaches your phone and other machines within seconds.
 - **Hub down?** The note stays here, and a session sends it to the hub later.
 - **`--project` / `-p`** takes a project your notes already know, by name or key.
+- **`-`** reads the note from stdin and keeps its newlines. A note holds at most 8 KB; longer text is refused.
 - **No mod on this machine?** Set `OSTRAKON_HUB_URL` and `OSTRAKON_HUB_TOKEN`. If either is set, both are read from the environment.
 
 ### A quick-note key
@@ -230,6 +232,28 @@ o.bind("SUPER + SHIFT + J", "Ostrakon note", "~/.local/bin/ostrakon jot --ask")
 ```
 
 The prompt comes from a tool you likely have already: walker, fuzzel, rofi, wofi or zenity. On Omarchy it uses Omarchy's own prompt. On macOS it uses osascript, which is untested so far.
+
+### Save the highlighted text
+
+`ostrakon jot --selection` saves the text you last highlighted, in any app, and shows it in a notification. Add `-p <name>` to file it under a project.
+
+Bind `~/.local/bin/ostrakon jot --selection` to a key. On Hyprland, in `bindings.conf`:
+
+```
+bindd = SUPER ALT, J, Ostrakon note from selection, exec, ~/.local/bin/ostrakon jot --selection
+```
+
+On Omarchy, in `~/.config/hypr/bindings.lua`:
+
+```lua
+o.bind("SUPER + ALT + J", "Ostrakon note from selection", "~/.local/bin/ostrakon jot --selection")
+```
+
+On GNOME or KDE, add it as a custom shortcut in the keyboard settings.
+
+- **Reads:** the primary selection, with `wl-paste` on Wayland, or `xclip` or `xsel` on X11. Never the clipboard.
+- **macOS** has no primary selection, so it saves the clipboard (`pbpaste`) instead. Untested so far.
+- **Check what you saved.** The selection holds whatever you highlighted last, which can be a password. With a hub set up, the note reaches your phone and other machines within seconds.
 
 ### From other apps
 

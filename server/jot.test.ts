@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { Note } from '../plugin/types'
 import { parseNote, serializeNote } from '../plugin/src/frontmatter'
 import { handler, openHub } from './hub'
-import { type JotDeps, jot, parseArgs } from './jot'
+import { type JotDeps, MAX_BYTES, jot, parseArgs, previewOf, readUpTo } from './jot'
 import { ulid } from '../plugin/src/ulid'
 
 const dirs: string[] = []
@@ -515,5 +515,291 @@ describe('ostrakon jot --ask', () => {
     expect(run.code).toBe(1)
     expect(run.shown).toBe('ostrakon: not saved\nNo single project named "nope". Known: cc.\n@nope call the plumber\n')
     expect(run.saved).toEqual([])
+  })
+})
+
+const stream = (...chunks: (string | Uint8Array)[]) =>
+  new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk)
+      controller.close()
+    },
+  })
+
+describe('ostrakon jot -', () => {
+  const piped = (deps: JotDeps, ...chunks: (string | Uint8Array)[]): JotDeps => ({ ...deps, stdin: () => stream(...chunks) })
+
+  test('parses - as stdin, with or without a project, and - after -- as text', () => {
+    expect(parseArgs(['-'])).toEqual({ stdin: true })
+    expect(parseArgs(['-p', 'cc', '-'])).toEqual({ stdin: true, project: 'cc' })
+    expect(parseArgs(['-', '--project=cc'])).toEqual({ stdin: true, project: 'cc' })
+    expect(parseArgs(['--', '-'])).toEqual({ text: '-' })
+    expect(parseArgs(['-', 'more'])).toEqual({ error: '- reads stdin; to save a lone - as text, put -- before the text' })
+  })
+
+  test('parses --selection as stdin, refusing text or - with it', () => {
+    expect(parseArgs(['--selection'])).toEqual({ stdin: true, selection: true })
+    expect(parseArgs(['-p', 'cc', '--selection', '--'])).toEqual({ stdin: true, selection: true, project: 'cc' })
+    expect(parseArgs(['--selection', '--', 'more'])).toEqual({ error: '--selection takes no text' })
+    expect(parseArgs(['--selection', '-'])).toEqual({ error: '--selection takes no text' })
+  })
+
+  test('drops a trailing CRLF as one newline, and keeps a leading BOM', async () => {
+    const { deps, notes } = setup()
+    await jot(['-'], piped(deps, '\uFEFFa\r\nb\r\n'))
+    expect(notes().map(saved => saved.note.text)).toEqual(['\uFEFFa\r\nb'])
+  })
+
+  test("says it couldn't read stdin rather than throwing", async () => {
+    const { deps } = setup()
+    const broken = new ReadableStream<Uint8Array>({
+      pull() {
+        throw new Error('EISDIR')
+      },
+    })
+    expect(await jot(['-'], { ...deps, stdin: () => broken })).toEqual({ out: [], err: ["ostrakon jot: couldn't read stdin: EISDIR"], code: 1 })
+  })
+
+  test('with --selection, says nothing selected, and prints the start of the text after the answer', async () => {
+    const { deps } = setup()
+    expect((await jot(['--selection'], piped(deps, ' \n'))).err).toEqual(['ostrakon jot: nothing selected'])
+    expect((await jot(['--selection'], piped(deps, 'one\n\ttwo\n'))).out).toEqual(['Saved.', 'one two'])
+  })
+
+  test('the start of the text is 80 characters on one line, cut by character', () => {
+    expect(previewOf('  a\n\n b  ')).toBe('a b')
+    expect(previewOf('é'.repeat(81))).toBe(`${'é'.repeat(80)}…`)
+    expect(previewOf('😀'.repeat(80))).toBe('😀'.repeat(80))
+  })
+
+  test('saves stdin with one trailing newline dropped and the other newlines kept', async () => {
+    const { deps, notes } = setup()
+    expect(await jot(['-'], piped(deps, 'a\nb\n'))).toEqual({ out: ['Saved.'], err: [], code: 0 })
+    expect(notes().map(saved => saved.note.text)).toEqual(['a\nb'])
+
+    const blank = setup()
+    await jot(['-'], piped(blank.deps, '  indented\n\n'))
+    expect(blank.notes().map(saved => saved.note.text)).toEqual(['  indented\n'])
+  })
+
+  test('files it under a project with -p', async () => {
+    const { home, deps, notes } = setup()
+    seed(join(home, '.local/share/ostrakon/notes'), [existing('01JA7K2M3Q9X4ZB6C8D0EFGHJK', cc)])
+    expect((await jot(['-p', 'cc', '-'], piped(deps, 'build log line\n'))).out).toEqual(['Saved to cc.'])
+    const saved = notes().find(entry => entry.note.text === 'build log line')
+    expect(saved?.note.project?.key).toBe(cc.key)
+  })
+
+  test("doesn't read stdin without -", async () => {
+    const { deps, notes } = setup()
+    const untouched: JotDeps = {
+      ...deps,
+      stdin: () => {
+        throw new Error('read stdin')
+      },
+    }
+    expect((await jot(['call', 'the', 'plumber'], untouched)).code).toBe(0)
+    expect(notes().map(saved => saved.note.text)).toEqual(['call the plumber'])
+  })
+
+  test('refuses empty or blank input, and saves nothing', async () => {
+    for (const input of ['', '\n', '  \n\t\n']) {
+      const { home, deps } = setup()
+      expect(await jot(['-'], piped(deps, input))).toEqual({ out: [], err: ['ostrakon jot: nothing to save'], code: 1 })
+      expect(() => readdirSync(join(home, '.local/share/ostrakon/notes'))).toThrow()
+    }
+  })
+
+  test('refuses input over 8 KB, from stdin or as words, and saves nothing', async () => {
+    const tooLong = { out: [], err: ['ostrakon jot: too long: a note holds at most 8 KB'], code: 1 }
+    const { home, deps } = setup()
+    expect(MAX_BYTES).toBe(8192)
+    expect(await jot(['-'], piped(deps, 'x'.repeat(MAX_BYTES + 1)))).toEqual(tooLong)
+    // Counted in bytes: 4097 two-byte letters are over.
+    expect(await jot(['-'], piped(deps, 'é'.repeat(MAX_BYTES / 2 + 1)))).toEqual(tooLong)
+    expect(await jot(['x'.repeat(MAX_BYTES + 1)], deps)).toEqual(tooLong)
+    expect(() => readdirSync(join(home, '.local/share/ostrakon/notes'))).toThrow()
+  })
+
+  test('saves exactly 8 KB, with its trailing newline dropped', async () => {
+    const { deps, notes } = setup()
+    expect((await jot(['-'], piped(deps, `${'x'.repeat(MAX_BYTES)}\n`))).code).toBe(0)
+    expect(notes()[0]?.note.text).toHaveLength(MAX_BYTES)
+  })
+
+  test("refuses input that isn't text", async () => {
+    const { deps } = setup()
+    expect((await jot(['-'], piped(deps, new Uint8Array([0xff, 0xfe, 0x00])))).err).toEqual(["ostrakon jot: that isn't text"])
+    expect((await jot(['-'], piped(deps, 'a\0b'))).err).toEqual(["ostrakon jot: that isn't text"])
+  })
+
+  test('stops reading a stream that never ends once it is over the limit', async () => {
+    let pulls = 0
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls++
+        controller.enqueue(new Uint8Array(1024).fill(121))
+      },
+    })
+    expect((await readUpTo(endless, MAX_BYTES + 1)).over).toBe(true)
+    expect(pulls).toBeLessThan(20)
+    expect(await readUpTo(stream('ab', 'c'), 3)).toEqual({ bytes: new Uint8Array([97, 98, 99]), over: false })
+  })
+
+  test('the command saves what is piped in', () => {
+    const home = temp()
+    const run = Bun.spawnSync(['bash', join(import.meta.dir, '../bin/ostrakon'), 'jot', '-'], {
+      env: { HOME: home, PATH: process.env.PATH ?? '' },
+      stdin: new TextEncoder().encode('a\nb\n'),
+    })
+    expect(run.stdout.toString()).toBe('Saved.\n')
+    const dir = join(home, '.local/share/ostrakon/notes')
+    const [name] = readdirSync(dir)
+    expect(parseNote(readFileSync(join(dir, name ?? ''), 'utf8')).text).toBe('a\nb')
+  })
+
+  test('the command with text and a stdin left open saves the text and exits', async () => {
+    const home = temp()
+    const run = Bun.spawn(['bash', join(import.meta.dir, '../bin/ostrakon'), 'jot', 'from', 'a', 'key'], {
+      env: { HOME: home, PATH: process.env.PATH ?? '' },
+      stdin: 'pipe',
+      stdout: 'pipe',
+    })
+    run.stdin.write('never read\n')
+    const code = await Promise.race([run.exited, Bun.sleep(5000).then(() => 'hung')])
+    if (code === 'hung') run.kill()
+    expect(code).toBe(0)
+    const dir = join(home, '.local/share/ostrakon/notes')
+    const [name] = readdirSync(dir)
+    expect(parseNote(readFileSync(join(dir, name ?? ''), 'utf8')).text).toBe('from a key')
+  })
+})
+
+// bin/jot-selection with only the tools it needs on PATH, and stand-ins for the selection tools and
+// the notifier: each stand-in logs its name and prints the file `selection`, exiting 1 when that's
+// empty (as wl-paste does); the notifier prints its title and body.
+describe('ostrakon jot --selection', () => {
+  const NEEDED = ['bash', 'bun', 'dirname', 'readlink', 'grep', 'uname', 'mktemp', 'rm', 'cat']
+  type Options = {
+    tools: string[]
+    selected?: string | Uint8Array
+    wayland?: boolean
+    darwin?: boolean
+    notifier?: boolean
+    args?: string[]
+    seeded?: Note[]
+  }
+  const select = (opts: Options) => {
+    const home = temp()
+    const bin = temp()
+    const log = join(home, 'used')
+    const selection = join(home, 'selection')
+    writeFileSync(selection, opts.selected ?? '')
+    for (const name of NEEDED) {
+      const found = Bun.which(name)
+      if (found !== null && !(opts.darwin && name === 'uname')) symlinkSync(found, join(bin, name))
+    }
+    for (const tool of opts.tools)
+      writeFileSync(join(bin, tool), `#!/bin/sh\necho "${tool} $*" >> "${log}"\n[ -s "${selection}" ] || exit 1\ncat "${selection}"\n`, { mode: 0o755 })
+    if (opts.darwin) writeFileSync(join(bin, 'uname'), '#!/bin/sh\necho Darwin\n', { mode: 0o755 })
+    if (opts.notifier !== false) writeFileSync(join(bin, 'notify-send'), '#!/bin/sh\nshift 2\nprintf \'%s\\n\' "$@"\n', { mode: 0o755 })
+    const dir = join(home, '.local/share/ostrakon/notes')
+    if (opts.seeded) seed(dir, opts.seeded)
+    const env: Record<string, string> = { HOME: home, PATH: bin }
+    if (opts.wayland) env.WAYLAND_DISPLAY = 'wayland-1'
+    const started = Date.now()
+    const run = Bun.spawnSync([join(bin, 'bash'), join(import.meta.dir, '../bin/ostrakon'), 'jot', ...(opts.args ?? ['--selection'])], { env })
+    const took = Date.now() - started
+    let used = ''
+    try {
+      used = readFileSync(log, 'utf8')
+    } catch {}
+    let saved: Note[] = []
+    try {
+      saved = readdirSync(dir)
+        .map(name => parseNote(readFileSync(join(dir, name), 'utf8')))
+        .filter(note => note.text !== 'older')
+    } catch {}
+    return { code: run.exitCode, shown: run.stdout.toString(), stderr: run.stderr.toString(), used, saved, took }
+  }
+
+  test('on Wayland reads the primary selection with wl-paste, keeps its newlines, and shows its start', () => {
+    const run = select({ tools: ['wl-paste', 'xclip', 'xsel'], wayland: true, selected: 'line one\nline two\n\n' })
+    expect(run.used).toBe('wl-paste -p -n -t text\n')
+    expect(run.code).toBe(0)
+    expect(run.shown).toBe('ostrakon\nSaved.\nline one line two\n')
+    expect(run.saved.map(note => note.text)).toEqual(['line one\nline two\n'])
+  })
+
+  test('on X11 uses xclip, else xsel, and never wl-paste', () => {
+    expect(select({ tools: ['wl-paste', 'xclip', 'xsel'], selected: 'x' }).used).toBe('xclip -o -selection primary\n')
+    expect(select({ tools: ['wl-paste', 'xsel'], selected: 'x' }).used).toBe('xsel -p -o\n')
+  })
+
+  test('on macOS takes the clipboard with pbpaste, and never pbpaste elsewhere', () => {
+    expect(select({ tools: ['pbpaste'], darwin: true, selected: 'x' }).used).toBe('pbpaste \n')
+    const linux = select({ tools: ['pbpaste'], selected: 'x' })
+    expect(linux.used).toBe('')
+    expect(linux.shown).toBe('ostrakon: not saved\njot --selection needs wl-paste (Wayland), or xclip or xsel (X11)\n')
+    expect(linux.saved).toEqual([])
+  })
+
+  test('with nothing selected says so and saves nothing', () => {
+    for (const selected of ['', ' \n ', ' ']) {
+      const run = select({ tools: ['xclip'], selected })
+      expect(run).toMatchObject({ code: 1, shown: 'ostrakon: not saved\nnothing selected\n', saved: [] })
+    }
+  })
+
+  test('files it under a project with -p, given before or after --selection', () => {
+    const seeded = [existing('01JA7K2M3Q9X4ZB6C8D0EFGHJK', cc)]
+    for (const args of [
+      ['--selection', '-p', 'cc'],
+      ['-p', 'cc', '--selection'],
+    ]) {
+      const run = select({ tools: ['xclip'], selected: 'fix the flaky test', args, seeded })
+      expect(run.shown).toBe('ostrakon\nSaved to cc.\nfix the flaky test\n')
+      expect(run.saved.map(note => [note.text, note.project?.key])).toEqual([['fix the flaky test', cc.key]])
+    }
+  })
+
+  test('saves the selection, not a -, with -- after it, and refuses text with it', () => {
+    const dashes = select({ tools: ['xclip'], selected: 'take notes', args: ['--selection', '--'] })
+    expect(dashes.saved.map(note => note.text)).toEqual(['take notes'])
+    const extra = select({ tools: ['xclip'], selected: 'take notes', args: ['--selection', '--', 'extra'] })
+    expect(extra).toMatchObject({ code: 1, shown: 'ostrakon: not saved\n--selection takes no text\n', saved: [] })
+  })
+
+  test("doesn't read the selection when --selection is -p's value", () => {
+    const run = select({ tools: ['xclip'], selected: 'x', args: ['-p', '--selection', 'typed'] })
+    expect(run.used).toBe('')
+    expect(run.saved).toEqual([])
+  })
+
+  test('cuts a long start short, and escapes markup in the notification', () => {
+    expect(select({ tools: ['xclip'], selected: 'y'.repeat(100) }).shown).toBe(`ostrakon\nSaved.\n${'y'.repeat(80)}…\n`)
+    const markup = select({ tools: ['xclip'], selected: '<b>x</b> & y' })
+    expect(markup.shown).toBe('ostrakon\nSaved.\n&lt;b&gt;x&lt;/b&gt; &amp; y\n')
+    expect(markup.saved.map(note => note.text)).toEqual(['<b>x</b> & y'])
+  })
+
+  test('with no notifier, writes the answer to stderr but not the text', () => {
+    const run = select({ tools: ['xclip'], selected: 'hunter2', notifier: false })
+    expect(run.code).toBe(0)
+    expect(run.stderr).toBe('ostrakon Saved.\n')
+    expect(run.saved.map(note => note.text)).toEqual(['hunter2'])
+  })
+
+  test('refuses a selection over 8 KB, or one that is not text, and says why', () => {
+    const tooLong = select({ tools: ['xclip'], selected: 'z'.repeat(MAX_BYTES + 1) })
+    expect(tooLong).toMatchObject({ code: 1, shown: 'ostrakon: not saved\ntoo long: a note holds at most 8 KB\n', saved: [] })
+    const binary = select({ tools: ['xclip'], selected: new Uint8Array([97, 0, 98]) })
+    expect(binary).toMatchObject({ code: 1, shown: "ostrakon: not saved\nthat isn't text\n", saved: [] })
+  })
+
+  test('refuses a very large selection quickly', () => {
+    const run = select({ tools: ['xclip'], selected: 'z'.repeat(20 * 1024 * 1024) })
+    expect(run).toMatchObject({ code: 1, shown: 'ostrakon: not saved\ntoo long: a note holds at most 8 KB\n', saved: [] })
+    expect(run.took).toBeLessThan(3000)
   })
 })
