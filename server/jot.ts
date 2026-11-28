@@ -1,5 +1,6 @@
 // `ostrakon jot [--project <name>] <text>` (bin/ostrakon): saves a note of yours from outside Claude
-// Code, a launcher or a script. It goes into this machine's notes folder the way the pane writes one,
+// Code, a launcher or a script. `-` in place of the text reads it from stdin (bin/jot-selection pipes
+// the desktop selection in that way). It goes into this machine's notes folder the way the pane writes one,
 // so sessions here pick it up, and straight to the hub when one is set up, so the phone and other
 // machines have it at once. A hub that can't be reached is no failure: a session sends it later, when
 // the mod has that hub.
@@ -22,7 +23,11 @@ import { ulid } from '../plugin/src/ulid'
 
 const HUB_TIMEOUT_MS = 3000
 const REFUSED = 'the hub refused the token'
-const USAGE = 'usage: ostrakon jot [--project|-p <name>] <text>'
+const USAGE = 'usage: ostrakon jot [--project|-p <name>] <text | ->'
+// The longest note it saves, in bytes: neither this nor the hub caps a note otherwise, and a pasted
+// log would reach every machine and the phone.
+export const MAX_BYTES = 8 * 1024
+const TOO_LONG = `too long: a note holds at most ${MAX_BYTES / 1024} KB`
 
 export type JotDeps = {
   home: string
@@ -30,6 +35,8 @@ export type JotDeps = {
   host: string
   now: number
   fetch: (url: string, init: RequestInit) => Promise<Response>
+  // Read only for `-`: a caller that leaves stdin open (a hotkey daemon) would otherwise hang jot.
+  stdin?: () => ReadableStream<Uint8Array>
 }
 
 type Settings = { envDir?: string; notesDir?: string; hubUrl?: string; hubToken?: string }
@@ -125,11 +132,12 @@ export const knownProjects = (dir: string): NoteProject[] => {
   return [...newest.values()].map(entry => entry.project)
 }
 
-type Parsed = { text: string; project?: string } | { error: string }
+type Parsed = (({ text: string } | { stdin: true }) & { project?: string }) | { error: string }
 
 export const parseArgs = (args: string[]): Parsed => {
   const words: string[] = []
   let project: string | undefined
+  let stdin = false
   for (let at = 0; at < args.length; at++) {
     const arg = args[at] ?? ''
     if (arg === '--') {
@@ -139,12 +147,51 @@ export const parseArgs = (args: string[]): Parsed => {
     if (arg === '--project' || arg === '-p' || arg.startsWith('--project=')) {
       project = arg.startsWith('--project=') ? arg.slice('--project='.length) : args[++at]
       if (project === undefined || project.trim() === '') return { error: '--project needs a project name' }
-    } else if (arg.startsWith('-') && arg !== '-') return { error: `unknown option: ${arg}` }
+    } else if (arg === '-') stdin = true
+    else if (arg.startsWith('-')) return { error: `unknown option: ${arg}` }
     else words.push(arg)
   }
   const joined = words.join(' ').trim()
-  if (joined === '') return { error: 'nothing to save' }
-  return project === undefined ? { text: joined } : { text: joined, project }
+  if (stdin && joined !== '') return { error: 'give the text or -, not both' }
+  if (!stdin && joined === '') return { error: 'nothing to save' }
+  const source = stdin ? { stdin: true as const } : { text: joined }
+  return project === undefined ? source : { ...source, project }
+}
+
+// Reads a stream to its end, or until it holds more than `max` bytes; past that it stops reading,
+// so `yes | ostrakon jot -` ends.
+export const readUpTo = async (stream: ReadableStream<Uint8Array>, max: number) => {
+  const reader = stream.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(value)
+    size += value.length
+    if (size > max) {
+      await reader.cancel()
+      return { bytes: new Uint8Array(0), over: true }
+    }
+  }
+  return { bytes: Buffer.concat(chunks), over: false }
+}
+
+// The note's text from stdin: one trailing newline dropped, the rest kept as it is.
+const fromStdin = async (deps: JotDeps): Promise<{ text: string } | { error: string }> => {
+  if (deps.stdin === undefined) return { error: 'no stdin to read' }
+  const { bytes, over } = await readUpTo(deps.stdin(), MAX_BYTES + 1)
+  if (over) return { error: TOO_LONG }
+  let text: string
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch {
+    return { error: "that isn't text" }
+  }
+  if (text.includes('\0')) return { error: "that isn't text" }
+  text = text.replace(/\n$/, '')
+  if (text.trim() === '') return { error: 'nothing to save' }
+  return { text }
 }
 
 // What the hub said, or why it said nothing; undefined when it took the note.
@@ -174,6 +221,9 @@ const sendToHub = async (deps: JotDeps, url: string, token: string, note: Note) 
 export const jot = async (args: string[], deps: JotDeps): Promise<{ out: string[]; err: string[]; code: number }> => {
   const parsed = parseArgs(args)
   if ('error' in parsed) return { out: [], err: [`ostrakon jot: ${parsed.error}`, USAGE], code: 2 }
+  const read = 'stdin' in parsed ? await fromStdin(deps) : { text: parsed.text }
+  if ('error' in read) return { out: [], err: [`ostrakon jot: ${read.error}`], code: 1 }
+  if (Buffer.byteLength(read.text) > MAX_BYTES) return { out: [], err: [`ostrakon jot: ${TOO_LONG}`], code: 1 }
   const file = settingsFileOf(deps.home, deps.env)
   let settings: Settings
   try {
@@ -214,7 +264,7 @@ export const jot = async (args: string[], deps: JotDeps): Promise<{ out: string[
     context: {},
     sentAt: null,
     deleted: false,
-    text: parsed.text,
+    text: read.text,
     extra: [],
   }
   // A temp file of its own, then one rename, as the store writes (SPEC §6.2); dot files aren't read as notes.
@@ -265,6 +315,7 @@ if (import.meta.main) {
     host: hostname(),
     now: Date.now(),
     fetch,
+    stdin: () => Bun.stdin.stream(),
   })
   for (const line of result.out) console.log(line)
   for (const line of result.err) console.error(line)
