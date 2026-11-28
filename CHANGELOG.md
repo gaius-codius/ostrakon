@@ -17,6 +17,8 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 - In the pane, Enter pressed straight after ↓ or `j` acts on the row the move went to, even when the list scrolls.
 - In the pane, the selected row and the keyboard focus no longer end up a row apart after `g` or another move scrolls a long list, so Enter acts on the row that's highlighted.
 - In the phone app, the project picker and Move to fit above the keyboard, so their projects aren't hidden under it.
+- In the pane, `g` and ↓ pressed together go to the top and then one row down. Before, the ↓ went one row down from where you were, and the `g` was lost.
+- In the pane, `g` from the bottom row no longer sometimes leaves the list on the bottom row with the keyboard focus on the top row.
 
 ## [0.11.0] - 2026-11-14
 
