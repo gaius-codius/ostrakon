@@ -14,7 +14,7 @@ Add to **Unreleased** as you go; `tools/release.sh` turns it into the next versi
 ### Changed
 
 - `ostrakon jot` refuses a note over 8 KB.
-
+- `ostrakon jot` reads a lone `-` as "read stdin". To save a `-` in the text, put `--` before the text.
 - In the pane, ↓ on the last note goes back to the top of the list, and `k` on the top row goes to the bottom.
 - In the phone app, the project search takes focus when the project picker or Move to opens, so you can type straight away.
 - In the phone app, Enter in the project search picks the first project that matches.

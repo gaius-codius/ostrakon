@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import type { Note } from '../plugin/types'
 import { parseNote, serializeNote } from '../plugin/src/frontmatter'
 import { handler, openHub } from './hub'
-import { type JotDeps, MAX_BYTES, jot, parseArgs, readUpTo } from './jot'
+import { type JotDeps, MAX_BYTES, jot, parseArgs, previewOf, readUpTo } from './jot'
 import { ulid } from '../plugin/src/ulid'
 
 const dirs: string[] = []
@@ -534,7 +534,42 @@ describe('ostrakon jot -', () => {
     expect(parseArgs(['-p', 'cc', '-'])).toEqual({ stdin: true, project: 'cc' })
     expect(parseArgs(['-', '--project=cc'])).toEqual({ stdin: true, project: 'cc' })
     expect(parseArgs(['--', '-'])).toEqual({ text: '-' })
-    expect(parseArgs(['-', 'more'])).toEqual({ error: 'give the text or -, not both' })
+    expect(parseArgs(['-', 'more'])).toEqual({ error: '- reads stdin; to save a lone - as text, put -- before the text' })
+  })
+
+  test('parses --selection as stdin, refusing text or - with it', () => {
+    expect(parseArgs(['--selection'])).toEqual({ stdin: true, selection: true })
+    expect(parseArgs(['-p', 'cc', '--selection', '--'])).toEqual({ stdin: true, selection: true, project: 'cc' })
+    expect(parseArgs(['--selection', '--', 'more'])).toEqual({ error: '--selection takes no text' })
+    expect(parseArgs(['--selection', '-'])).toEqual({ error: '--selection takes no text' })
+  })
+
+  test('drops a trailing CRLF as one newline, and keeps a leading BOM', async () => {
+    const { deps, notes } = setup()
+    await jot(['-'], piped(deps, '\uFEFFa\r\nb\r\n'))
+    expect(notes().map(saved => saved.note.text)).toEqual(['\uFEFFa\r\nb'])
+  })
+
+  test("says it couldn't read stdin rather than throwing", async () => {
+    const { deps } = setup()
+    const broken = new ReadableStream<Uint8Array>({
+      pull() {
+        throw new Error('EISDIR')
+      },
+    })
+    expect(await jot(['-'], { ...deps, stdin: () => broken })).toEqual({ out: [], err: ["ostrakon jot: couldn't read stdin: EISDIR"], code: 1 })
+  })
+
+  test('with --selection, says nothing selected, and prints the start of the text after the answer', async () => {
+    const { deps } = setup()
+    expect((await jot(['--selection'], piped(deps, ' \n'))).err).toEqual(['ostrakon jot: nothing selected'])
+    expect((await jot(['--selection'], piped(deps, 'one\n\ttwo\n'))).out).toEqual(['Saved.', 'one two'])
+  })
+
+  test('the start of the text is 80 characters on one line, cut by character', () => {
+    expect(previewOf('  a\n\n b  ')).toBe('a b')
+    expect(previewOf('é'.repeat(81))).toBe(`${'é'.repeat(80)}…`)
+    expect(previewOf('😀'.repeat(80))).toBe('😀'.repeat(80))
   })
 
   test('saves stdin with one trailing newline dropped and the other newlines kept', async () => {
@@ -641,29 +676,40 @@ describe('ostrakon jot -', () => {
 })
 
 // bin/jot-selection with only the tools it needs on PATH, and stand-ins for the selection tools and
-// the notifier: each stand-in logs its name and prints $SELECTED, exiting 1 when that's empty (as
-// wl-paste does); the notifier prints its title and body.
+// the notifier: each stand-in logs its name and prints the file `selection`, exiting 1 when that's
+// empty (as wl-paste does); the notifier prints its title and body.
 describe('ostrakon jot --selection', () => {
-  const NEEDED = ['bash', 'bun', 'dirname', 'readlink', 'tr', 'grep', 'uname']
-  const select = (opts: { tools: string[]; selected?: string; wayland?: boolean; darwin?: boolean; args?: string[]; seeded?: Note[] }) => {
+  const NEEDED = ['bash', 'bun', 'dirname', 'readlink', 'grep', 'uname', 'mktemp', 'rm', 'cat']
+  type Options = {
+    tools: string[]
+    selected?: string | Uint8Array
+    wayland?: boolean
+    darwin?: boolean
+    notifier?: boolean
+    args?: string[]
+    seeded?: Note[]
+  }
+  const select = (opts: Options) => {
     const home = temp()
     const bin = temp()
     const log = join(home, 'used')
+    const selection = join(home, 'selection')
+    writeFileSync(selection, opts.selected ?? '')
     for (const name of NEEDED) {
       const found = Bun.which(name)
       if (found !== null && !(opts.darwin && name === 'uname')) symlinkSync(found, join(bin, name))
     }
     for (const tool of opts.tools)
-      writeFileSync(join(bin, tool), `#!/bin/sh\necho "${tool} $*" >> "${log}"\n[ -n "$SELECTED" ] || exit 1\nprintf '%s' "$SELECTED"\n`, {
-        mode: 0o755,
-      })
+      writeFileSync(join(bin, tool), `#!/bin/sh\necho "${tool} $*" >> "${log}"\n[ -s "${selection}" ] || exit 1\ncat "${selection}"\n`, { mode: 0o755 })
     if (opts.darwin) writeFileSync(join(bin, 'uname'), '#!/bin/sh\necho Darwin\n', { mode: 0o755 })
-    writeFileSync(join(bin, 'notify-send'), '#!/bin/sh\nshift 2\nprintf \'%s\\n\' "$@"\n', { mode: 0o755 })
+    if (opts.notifier !== false) writeFileSync(join(bin, 'notify-send'), '#!/bin/sh\nshift 2\nprintf \'%s\\n\' "$@"\n', { mode: 0o755 })
     const dir = join(home, '.local/share/ostrakon/notes')
     if (opts.seeded) seed(dir, opts.seeded)
-    const env: Record<string, string> = { HOME: home, PATH: bin, SELECTED: opts.selected ?? '' }
+    const env: Record<string, string> = { HOME: home, PATH: bin }
     if (opts.wayland) env.WAYLAND_DISPLAY = 'wayland-1'
+    const started = Date.now()
     const run = Bun.spawnSync([join(bin, 'bash'), join(import.meta.dir, '../bin/ostrakon'), 'jot', ...(opts.args ?? ['--selection'])], { env })
+    const took = Date.now() - started
     let used = ''
     try {
       used = readFileSync(log, 'utf8')
@@ -674,15 +720,15 @@ describe('ostrakon jot --selection', () => {
         .map(name => parseNote(readFileSync(join(dir, name), 'utf8')))
         .filter(note => note.text !== 'older')
     } catch {}
-    return { code: run.exitCode, shown: run.stdout.toString(), used, saved }
+    return { code: run.exitCode, shown: run.stdout.toString(), stderr: run.stderr.toString(), used, saved, took }
   }
 
   test('on Wayland reads the primary selection with wl-paste, keeps its newlines, and shows its start', () => {
-    const run = select({ tools: ['wl-paste', 'xclip', 'xsel'], wayland: true, selected: 'line one\nline two\n' })
-    expect(run.used).toBe('wl-paste -p -n\n')
+    const run = select({ tools: ['wl-paste', 'xclip', 'xsel'], wayland: true, selected: 'line one\nline two\n\n' })
+    expect(run.used).toBe('wl-paste -p -n -t text\n')
     expect(run.code).toBe(0)
     expect(run.shown).toBe('ostrakon\nSaved.\nline one line two\n')
-    expect(run.saved.map(note => note.text)).toEqual(['line one\nline two'])
+    expect(run.saved.map(note => note.text)).toEqual(['line one\nline two\n'])
   })
 
   test('on X11 uses xclip, else xsel, and never wl-paste', () => {
@@ -699,9 +745,9 @@ describe('ostrakon jot --selection', () => {
   })
 
   test('with nothing selected says so and saves nothing', () => {
-    for (const selected of ['', ' \n ']) {
+    for (const selected of ['', ' \n ', ' ']) {
       const run = select({ tools: ['xclip'], selected })
-      expect(run).toMatchObject({ code: 1, shown: 'ostrakon: not saved\nNothing selected.\n', saved: [] })
+      expect(run).toMatchObject({ code: 1, shown: 'ostrakon: not saved\nnothing selected\n', saved: [] })
     }
   })
 
@@ -717,13 +763,43 @@ describe('ostrakon jot --selection', () => {
     }
   })
 
-  test('cuts a long start short in the notification', () => {
-    const run = select({ tools: ['xclip'], selected: 'y'.repeat(100) })
-    expect(run.shown).toBe(`ostrakon\nSaved.\n${'y'.repeat(80)}…\n`)
+  test('saves the selection, not a -, with -- after it, and refuses text with it', () => {
+    const dashes = select({ tools: ['xclip'], selected: 'take notes', args: ['--selection', '--'] })
+    expect(dashes.saved.map(note => note.text)).toEqual(['take notes'])
+    const extra = select({ tools: ['xclip'], selected: 'take notes', args: ['--selection', '--', 'extra'] })
+    expect(extra).toMatchObject({ code: 1, shown: 'ostrakon: not saved\n--selection takes no text\n', saved: [] })
   })
 
-  test('refuses a selection over 8 KB and says why', () => {
-    const run = select({ tools: ['xclip'], selected: 'z'.repeat(MAX_BYTES + 1) })
+  test("doesn't read the selection when --selection is -p's value", () => {
+    const run = select({ tools: ['xclip'], selected: 'x', args: ['-p', '--selection', 'typed'] })
+    expect(run.used).toBe('')
+    expect(run.saved).toEqual([])
+  })
+
+  test('cuts a long start short, and escapes markup in the notification', () => {
+    expect(select({ tools: ['xclip'], selected: 'y'.repeat(100) }).shown).toBe(`ostrakon\nSaved.\n${'y'.repeat(80)}…\n`)
+    const markup = select({ tools: ['xclip'], selected: '<b>x</b> & y' })
+    expect(markup.shown).toBe('ostrakon\nSaved.\n&lt;b&gt;x&lt;/b&gt; &amp; y\n')
+    expect(markup.saved.map(note => note.text)).toEqual(['<b>x</b> & y'])
+  })
+
+  test('with no notifier, writes the answer to stderr but not the text', () => {
+    const run = select({ tools: ['xclip'], selected: 'hunter2', notifier: false })
+    expect(run.code).toBe(0)
+    expect(run.stderr).toBe('ostrakon Saved.\n')
+    expect(run.saved.map(note => note.text)).toEqual(['hunter2'])
+  })
+
+  test('refuses a selection over 8 KB, or one that is not text, and says why', () => {
+    const tooLong = select({ tools: ['xclip'], selected: 'z'.repeat(MAX_BYTES + 1) })
+    expect(tooLong).toMatchObject({ code: 1, shown: 'ostrakon: not saved\ntoo long: a note holds at most 8 KB\n', saved: [] })
+    const binary = select({ tools: ['xclip'], selected: new Uint8Array([97, 0, 98]) })
+    expect(binary).toMatchObject({ code: 1, shown: "ostrakon: not saved\nthat isn't text\n", saved: [] })
+  })
+
+  test('refuses a very large selection quickly', () => {
+    const run = select({ tools: ['xclip'], selected: 'z'.repeat(20 * 1024 * 1024) })
     expect(run).toMatchObject({ code: 1, shown: 'ostrakon: not saved\ntoo long: a note holds at most 8 KB\n', saved: [] })
+    expect(run.took).toBeLessThan(3000)
   })
 })

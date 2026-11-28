@@ -1,50 +1,63 @@
 #!/usr/bin/env bash
 # `ostrakon jot --selection [-p <name>]`: saves the text highlighted on the desktop (the primary
-# selection) through `ostrakon jot -`, and shows the answer as a notification with the start of the
-# text, so you see what was saved. Bind it to a key (README). Never the clipboard on Linux: it is
-# often older and unrelated. macOS has no primary selection, so there it takes the clipboard.
-set -uo pipefail
+# selection), and shows the answer as a notification with the start of the text, so you see what
+# was saved. Bind it to a key (README). Never the clipboard on Linux: it is often older and
+# unrelated. macOS has no primary selection, so there it takes the clipboard.
+#
+# The selection goes straight from the tool into jot, never into a shell variable: jot stops reading
+# past its size cap, and keeps newlines and bytes as they are.
+set -u
+# Bash 5.2 reads & in a ${x//a/b} replacement as the match; the markup escaping below needs it literal.
+shopt -u patsub_replacement 2>/dev/null
 
 ROOT=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
 has() { command -v "$1" >/dev/null; }
 
-tell() { # title body
-  if has notify-send; then notify-send -a ostrakon "$1" "$2"
-  elif has osascript; then osascript - "$1" "$2" <<<'on run argv
+tell() { # title body [preview]: the preview goes only into a notification, never to stderr
+  local body=$2${3:+
+$3}
+  if has notify-send; then
+    # Most Linux notification daemons read the body as markup.
+    body=${body//&/&amp;} body=${body//</&lt;} body=${body//>/&gt;}
+    notify-send -a ostrakon "$1" "$body" && return 0
+  elif has osascript; then
+    osascript - "$1" "$body" <<<'on run argv
 display notification (item 2 of argv) with title (item 1 of argv)
-end run'
-  else printf '%s %s\n' "$1" "$2" >&2; fi
+end run' && return 0
+  fi
+  printf '%s %s\n' "$1" "$2" >&2
 }
+
+if ! has bun; then
+  tell "ostrakon: not saved" "jot --selection needs Bun (https://bun.sh)"
+  exit 1
+fi
 
 # The first tool that reads this desktop's selection.
 if [ "$(uname -s)" = Darwin ]; then read_selection=(pbpaste)
-elif [ -n "${WAYLAND_DISPLAY:-}" ] && has wl-paste; then read_selection=(wl-paste -p -n)
+elif [ -n "${WAYLAND_DISPLAY:-}" ] && has wl-paste; then read_selection=(wl-paste -p -n -t text)
 elif has xclip; then read_selection=(xclip -o -selection primary)
 elif has xsel; then read_selection=(xsel -p -o)
 else
   tell "ostrakon: not saved" "jot --selection needs wl-paste (Wayland), or xclip or xsel (X11)"
   exit 1
 fi
+# wl-paste can hang when the compositor won't give it focus.
+if has timeout; then read_selection=(timeout 5 "${read_selection[@]}"); fi
 
-# The tools exit non-zero when nothing is selected: the same as an empty selection.
-text=$("${read_selection[@]}" 2>/dev/null)
-if [ -z "${text//[[:space:]]/}" ]; then
-  tell "ostrakon: not saved" "Nothing selected."
-  exit 1
-fi
+# jot's stderr holds only its own messages, never the note's text. A tool that finds nothing
+# selected exits non-zero with nothing on stdout, and jot says "nothing selected".
+err=$(mktemp) || exit 1
+trap 'rm -f "$err"' EXIT
+out=$("${read_selection[@]}" 2>/dev/null | bun "$ROOT/server/jot.ts" jot ${1+"$@"} 2>"$err")
+code=$?
+problem=$(grep -v '^usage:' "$err")
 
-# The start of the text on one line, for the notification.
-start=$(tr -s '[:space:]' ' ' <<<"$text")
-start=${start# }
-start=${start% }
-[ ${#start} -le 80 ] || start="${start:0:80}…"
-
-if answer=$(printf '%s' "$text" | "$ROOT/bin/ostrakon" jot "$@" - 2>&1); then
-  tell ostrakon "$answer
-$start"
+if [ $code -eq 0 ]; then
+  # jot prints what it did, then the start of the text.
+  tell ostrakon "${out%%$'\n'*}${problem:+
+$problem}" "${out#*$'\n'}"
 else
-  # The reason without the usage line.
-  reason=$(grep -v '^usage:' <<<"$answer")
-  tell "ostrakon: not saved" "${reason#ostrakon jot: }"
+  tell "ostrakon: not saved" "${problem#ostrakon jot: }"
   exit 1
 fi
