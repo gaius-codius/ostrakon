@@ -159,3 +159,16 @@ export const pagedSlot = (view: FocusView, key: string) =>
       view.page.lines.findIndex(line => line.key === key),
     ),
   )
+
+// A person's move of one row from the ring's row `from`, as the terminal took it, in a window of
+// `rows` rows: onto the row below or above, onto the edge sentinel beside the first or last row, or
+// on past the last row onto the action layer. 1 down, -1 up, 0 anything else (a click on another
+// row or on a sentinel away from it, a move off the search field).
+export const stepOf = (move: FocusMove, from: string | undefined, rows: number): -1 | 0 | 1 => {
+  if (!from?.startsWith('slot-')) return 0
+  const at = Number(from.slice(5))
+  const isLast = at === rows - 1
+  if (move.kind === 'land') return move.slot === at + 1 ? 1 : move.slot === at - 1 ? -1 : 0
+  if (move.kind === 'edge') return move.isDown ? (isLast ? 1 : 0) : at === 0 ? -1 : 0
+  return move.kind === 'layer' && isLast ? 1 : 0
+}

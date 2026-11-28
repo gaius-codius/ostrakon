@@ -1170,6 +1170,96 @@ test('⏎ pressed at once after a move acts on the row the move went to', async 
   await ui.unmount()
 })
 
+test('g and ↓ at once go to the top, then one row down from there', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  // To the top row, cc's heading, and down to its second note, in slot 2.
+  await ui.press({ key: 'key-g' })
+  await ui.press({ key: 'key-j' })
+  await ui.press({ key: 'key-j' })
+  // g, and the ↓ the terminal took from slot 2 before g's move landed: slot 3, infra's heading.
+  const focus = (element: string) => $.ui.focus({ component: 'Pane', requestId: PANE.requestId, element, origin: { kind: 'person' } })
+  await Promise.all([ui.press({ key: 'key-g' }), focus('slot-3')])
+  // On cc's first note, d archives it.
+  await ui.press({ key: 'key-d' })
+  expect(noteIn(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH01').status).toBe('archived')
+  expect(noteIn(dir, '01JA7K2M3Q9X4ZB6C8D0EFGH03').status).toBe('open')
+  await ui.unmount()
+})
+
+test('⏎ with g and ↓ at once acts on the row the step goes to, not the one the ring was left on', async ($, on) => {
+  const dir = fixture()
+  await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  await ui.press({ key: 'key-g' })
+  await ui.press({ key: 'key-j' })
+  await ui.press({ key: 'key-j' })
+  // ⏎ presses slot 3, where the terminal left the ring: infra's heading, which would fold.
+  const focus = (element: string) => $.ui.focus({ component: 'Pane', requestId: PANE.requestId, element, origin: { kind: 'person' } })
+  const moves = [ui.press({ key: 'key-g' }), focus('slot-3')]
+  for (let i = 0; i < 20; i++) await Promise.resolve()
+  await Promise.all([...moves, ui.press({ key: 'slot-3' })])
+  // It opens cc's first note in the reader instead.
+  expect(await ui.find({ type: 'Button', key: 'read' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /check why the cache test is flaky/ })).toBeDefined()
+  await ui.unmount()
+})
+
+// The poll's realign reads the view, then the stored cursor. A g between the two read as a note
+// leaving the list, and the realign put the row before the g back.
+test("g while the poll's realign is reading goes to the top, and the realign doesn't put the old row back", async ($, on) => {
+  const dir = fixture()
+  // Once armed, the poll's realign (the next read of isOpen) gets the pane as it is, then waits
+  // with it until open.
+  let open = () => {}
+  const gate = new Promise<void>(resolve => (open = resolve))
+  let phase: 'off' | 'armed' | 'next' | 'held' = 'off'
+  const isHeld = () => phase === 'held'
+  on('state.get', async (_, e, next) => {
+    const key = (e as { key?: string }).key
+    if (phase === 'armed' && key === 'isOpen') phase = 'next'
+    else if (phase === 'next' && key === 'pane') {
+      phase = 'held'
+      const answer = await next(e)
+      await gate
+      return answer
+    }
+    return next(e)
+  })
+  const { clock } = await startSession($, on, dir)
+  await run($, 'jot', '')
+  const ui = await mountPane($)
+  await ui.press({ key: 'key-app:toggleDiffPreSession' })
+  await ui.input({ key: 'q', text: '', kind: 'submit' })
+  // To the bottom row, infra's note.
+  await ui.press({ key: 'key-g' })
+  await ui.press({ key: 'key-g' })
+  expect(await ui.find({ type: 'Text', text: /^ to prompt$/ })).toBeDefined()
+  phase = 'armed'
+  await clock.advance(2000)
+  for (let i = 0; i < 1000 && !isHeld(); i++) await Promise.resolve()
+  expect(isHeld()).toBe(true)
+  // g, to the top row, while the realign holds the bottom row's view. In turn, it waits for the
+  // realign; before, it ran at once, and the realign put the bottom row back after it.
+  let isPressed = false
+  const pressed = ui.press({ key: 'key-g' }).then(() => (isPressed = true))
+  for (let i = 0; i < 1000 && !isPressed; i++) await Promise.resolve()
+  open()
+  await pressed
+  await clock.advance(50)
+  // On cc's heading: its footer leads with fold, and d isn't a key there.
+  expect(await ui.find({ type: 'Text', text: /^ fold$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ to prompt$/ })).toBeUndefined()
+  await ui.unmount()
+})
+
 test('the ↓ arrow on the bottom row goes round to the top too', async ($, on) => {
   const dir = fixture()
   await startSession($, on, dir)

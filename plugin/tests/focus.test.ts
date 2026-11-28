@@ -2,7 +2,7 @@ import { describe, expect, test } from 'claude-code/testing'
 
 import type { PaneState } from '../types'
 import type { FocusEvent, FocusView } from '../src/focus'
-import { focusMove, leaveMode, needsView, pagedSlot, routeFocus } from '../src/focus'
+import { focusMove, leaveMode, needsView, pagedSlot, routeFocus, stepOf } from '../src/focus'
 import { freshPane } from '../src/model'
 import { DOWN_KEY, EDIT_KEY, MOVE_KEY, READ_DOWN_KEY, READ_KEY, READ_UP_KEY, SEARCH_KEY, SHEET_KEY, TARGET_KEY, UP_KEY } from '../src/ui/pane'
 
@@ -159,5 +159,26 @@ describe('focus', () => {
     expect(land(person('key-t'), READ_KEY)).toEqual({ to: READ_KEY, last: READ_KEY })
     const reading: PaneState = { ...freshPane(), mode: 'read', reading: 'n1' }
     expect(leaveMode(reading, READ_KEY).mode).toBe('read')
+  })
+
+  test("a step is a move of one row from the ring's row: to the next row, an edge sentinel, or on past the last row", () => {
+    // A window of four rows.
+    const step = (element: string, from: string | undefined) => stepOf(focusMove(person(element)), from, 4)
+    expect(step('slot-2', 'slot-1')).toBe(1)
+    expect(step('slot-0', 'slot-1')).toBe(-1)
+    expect(step(DOWN_KEY, 'slot-3')).toBe(1)
+    expect(step(UP_KEY, 'slot-0')).toBe(-1)
+    // On past the window's last row, onto the action layer drawn after it.
+    expect(step('key-e', 'slot-3')).toBe(1)
+    // A click two rows off, on a sentinel or the action layer from a row away from it, or a move
+    // off the search field, isn't a step.
+    expect(step('slot-3', 'slot-1')).toBe(0)
+    expect(step(DOWN_KEY, 'slot-1')).toBe(0)
+    expect(step(UP_KEY, 'slot-2')).toBe(0)
+    expect(step('key-e', 'slot-1')).toBe(0)
+    expect(step('slot-0', SEARCH_KEY)).toBe(0)
+    expect(step('key-e', SEARCH_KEY)).toBe(0)
+    expect(step('slot-1', undefined)).toBe(0)
+    expect(step(SEARCH_KEY, 'slot-0')).toBe(0)
   })
 })
